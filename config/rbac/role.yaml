@@ -1,0 +1,59 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - fence-agents.medik8s.io
+  resources:
+  - fenceagentsremediations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - fence-agents.medik8s.io
+  resources:
+  - fenceagentsremediations/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - fence-agents.medik8s.io
+  resources:
+  - fenceagentsremediations/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - fence-agents.medik8s.io
+  resources:
+  - fenceagentsremediationtemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - fence-agents.medik8s.io
+  resources:
+  - fenceagentsremediationtemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - fence-agents.medik8s.io
+  resources:
+  - fenceagentsremediationtemplates/status
+  verbs:
+  - get
+  - patch
+  - update
