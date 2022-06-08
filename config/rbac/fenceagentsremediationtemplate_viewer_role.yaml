@@ -1,0 +1,20 @@
+# permissions for end users to view fenceagentsremediationtemplates.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fenceagentsremediationtemplate-viewer-role
+rules:
+- apiGroups:
+  - fence-agents.medik8s.io
+  resources:
+  - fenceagentsremediationtemplates
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - fence-agents.medik8s.io
+  resources:
+  - fenceagentsremediationtemplates/status
+  verbs:
+  - get
