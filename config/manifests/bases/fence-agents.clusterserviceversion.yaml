@@ -1,0 +1,63 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: fence-agents.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: FenceAgentsRemediation is the Schema for the fenceagentsremediations
+        API
+      displayName: Fence Agents Remediation
+      kind: FenceAgentsRemediation
+      name: fenceagentsremediations.fence-agents.medik8s.io
+      version: v1alpha1
+    - description: FenceAgentsRemediationTemplate is the Schema for the fenceagentsremediationtemplates
+        API
+      displayName: Fence Agents Remediation Template
+      kind: FenceAgentsRemediationTemplate
+      name: fenceagentsremediationtemplates.fence-agents.medik8s.io
+      version: v1alpha1
+  description: A mechanism designed around an existing set of upstream fencing agents
+    for environments with a traditional API end-point (eg. IPMI) for power cycling
+    cluster nodes
+  displayName: Fence Agents Remediation Operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - fencing
+  - remediation
+  - auto-healing
+  - recovery
+  - high-availability
+  - baremetal
+  - FAR
+  links:
+  - name: Fence Agents
+    url: https://fence-agents.domain
+  maintainers:
+  - email: medik8s@googlegroups.com
+    name: medik8s team
+  maturity: alpha
+  provider:
+    name: medik8s
+    url: https://www.medik8s.io/
+  version: 0.0.0

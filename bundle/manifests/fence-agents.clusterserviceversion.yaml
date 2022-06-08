@@ -1,0 +1,252 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "fence-agents.medik8s.io/v1alpha1",
+          "kind": "FenceAgentsRemediation",
+          "metadata": {
+            "name": "fenceagentsremediation-sample"
+          },
+          "spec": null
+        },
+        {
+          "apiVersion": "fence-agents.medik8s.io/v1alpha1",
+          "kind": "FenceAgentsRemediationTemplate",
+          "metadata": {
+            "name": "fenceagentsremediationtemplate-sample"
+          },
+          "spec": null
+        }
+      ]
+    capabilities: Basic Install
+    operators.operatorframework.io/builder: operator-sdk-v1.21.0+git
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
+  name: fence-agents.v0.0.1
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: FenceAgentsRemediation is the Schema for the fenceagentsremediations
+        API
+      displayName: Fence Agents Remediation
+      kind: FenceAgentsRemediation
+      name: fenceagentsremediations.fence-agents.medik8s.io
+      version: v1alpha1
+    - description: FenceAgentsRemediationTemplate is the Schema for the fenceagentsremediationtemplates
+        API
+      displayName: Fence Agents Remediation Template
+      kind: FenceAgentsRemediationTemplate
+      name: fenceagentsremediationtemplates.fence-agents.medik8s.io
+      version: v1alpha1
+  description: A mechanism designed around an existing set of upstream fencing agents
+    for environments with a traditional API end-point (eg. IPMI) for power cycling
+    cluster nodes
+  displayName: Fence Agents Remediation Operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - fence-agents.medik8s.io
+          resources:
+          - fenceagentsremediations
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - fence-agents.medik8s.io
+          resources:
+          - fenceagentsremediations/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - fence-agents.medik8s.io
+          resources:
+          - fenceagentsremediations/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - fence-agents.medik8s.io
+          resources:
+          - fenceagentsremediationtemplates
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - fence-agents.medik8s.io
+          resources:
+          - fenceagentsremediationtemplates/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - fence-agents.medik8s.io
+          resources:
+          - fenceagentsremediationtemplates/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        serviceAccountName: fence-agents-controller-manager
+      deployments:
+      - label:
+          control-plane: controller-manager
+        name: fence-agents-controller-manager
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              control-plane: controller-manager
+          strategy: {}
+          template:
+            metadata:
+              annotations:
+                kubectl.kubernetes.io/default-container: manager
+              labels:
+                control-plane: controller-manager
+            spec:
+              containers:
+              - args:
+                - --secure-listen-address=0.0.0.0:8443
+                - --upstream=http://127.0.0.1:8080/
+                - --logtostderr=true
+                - --v=0
+                image: gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0
+                name: kube-rbac-proxy
+                ports:
+                - containerPort: 8443
+                  name: https
+                  protocol: TCP
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 128Mi
+                  requests:
+                    cpu: 5m
+                    memory: 64Mi
+              - args:
+                - --health-probe-bind-address=:8081
+                - --metrics-bind-address=127.0.0.1:8080
+                - --leader-elect
+                command:
+                - /manager
+                image: controller:latest
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: manager
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: 8081
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 128Mi
+                  requests:
+                    cpu: 10m
+                    memory: 64Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+              securityContext:
+                runAsNonRoot: true
+              serviceAccountName: fence-agents-controller-manager
+              terminationGracePeriodSeconds: 10
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        serviceAccountName: fence-agents-controller-manager
+    strategy: deployment
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - fencing
+  - remediation
+  - auto-healing
+  - recovery
+  - high-availability
+  - baremetal
+  - FAR
+  links:
+  - name: Fence Agents
+    url: https://fence-agents.domain
+  maintainers:
+  - email: medik8s@googlegroups.com
+    name: medik8s team
+  maturity: alpha
+  provider:
+    name: medik8s
+    url: https://www.medik8s.io/
+  version: 0.0.1
