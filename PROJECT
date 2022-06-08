@@ -1,0 +1,9 @@
+domain: medik8s.io
+layout:
+- go.kubebuilder.io/v3
+plugins:
+  manifests.sdk.operatorframework.io/v2: {}
+  scorecard.sdk.operatorframework.io/v2: {}
+projectName: fence-agents
+repo: github.com/mshitrit/fence-agents
+version: "3"
