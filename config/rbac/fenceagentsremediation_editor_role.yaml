@@ -1,0 +1,24 @@
+# permissions for end users to edit fenceagentsremediations.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fenceagentsremediation-editor-role
+rules:
+- apiGroups:
+  - fence-agents.medik8s.io
+  resources:
+  - fenceagentsremediations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - fence-agents.medik8s.io
+  resources:
+  - fenceagentsremediations/status
+  verbs:
+  - get

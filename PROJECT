@@ -6,4 +6,14 @@ plugins:
   scorecard.sdk.operatorframework.io/v2: {}
 projectName: fence-agents
 repo: github.com/mshitrit/fence-agents
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: medik8s.io
+  group: fence-agents
+  kind: FenceAgentsRemediation
+  path: github.com/mshitrit/fence-agents/api/v1alpha1
+  version: v1alpha1
 version: "3"
