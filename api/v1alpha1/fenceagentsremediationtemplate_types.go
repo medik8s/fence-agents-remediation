@@ -23,6 +23,9 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type parameterName string
+type nodeName string
+
 // FenceAgentsRemediationTemplateSpec defines the desired state of FenceAgentsRemediationTemplate
 type FenceAgentsRemediationTemplateSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -30,6 +33,19 @@ type FenceAgentsRemediationTemplateSpec struct {
 
 	// Foo is an example field of FenceAgentsRemediationTemplate. Edit fenceagentsremediationtemplate_types.go to remove/update
 	Foo string `json:"foo,omitempty"`
+
+	// Agent is the type of fence agent that will be used
+	Agent string `json:"agent"`
+
+	// SharedParameters are passed to the fencing agent no matter which node is fenced (i.e they are common for all the nodes)
+	SharedParameters map[parameterName]string `json:"sharedparameters,omitempty"`
+
+	// NodeParameters are node specific they are passed to the fencing agent according to the node that is fenced
+	NodeParameters map[parameterName]NodeValues `json:"nodeparameters,omitempty"`
+}
+
+type NodeValues struct {
+	NodeNameValueMapping map[nodeName]string `json:"nodenamevaluemapping"`
 }
 
 // FenceAgentsRemediationTemplateStatus defines the observed state of FenceAgentsRemediationTemplate
