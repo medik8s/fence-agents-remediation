@@ -24,7 +24,7 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 type parameterName string
-type nodeName string
+type NodeName string
 
 // FenceAgentsRemediationTemplateSpec defines the desired state of FenceAgentsRemediationTemplate
 type FenceAgentsRemediationTemplateSpec struct {
@@ -45,7 +45,7 @@ type FenceAgentsRemediationTemplateSpec struct {
 }
 
 type NodeValues struct {
-	NodeNameValueMapping map[nodeName]string `json:"nodenamevaluemapping"`
+	NodeNameValueMapping map[NodeName]string `json:"nodenamevaluemapping"`
 }
 
 // FenceAgentsRemediationTemplateStatus defines the observed state of FenceAgentsRemediationTemplate

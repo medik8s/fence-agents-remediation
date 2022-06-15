@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"path/filepath"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -26,7 +27,6 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -42,6 +42,17 @@ var k8sClient client.Client
 var testEnv *envtest.Environment
 
 func TestAPIs(t *testing.T) {
+	//TODO mshitrit remove
+	//fmt.Println("Start Buffer Test")
+	//var metrics bytes.Buffer
+	//metrics.WriteString("Hello World")
+	//metrics.WriteString("\n")
+	//metrics.WriteString("Hello World Again \n")
+	//metrics.WriteString("Hello World ")
+	//metrics.WriteString("Third Time")
+	//fmt.Print(metrics.String())
+	//fmt.Println("\nDone Buffer Test")
+
 	RegisterFailHandler(Fail)
 
 	RunSpecsWithDefaultAndCustomReporters(t,

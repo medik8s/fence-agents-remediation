@@ -17,19 +17,31 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
-
+	"fmt"
+	"github.com/go-logr/logr"
+	"github.com/mshitrit/fence-agents/api/v1alpha1"
+	"github.com/mshitrit/fence-agents/pkg/cli"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"net/http"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+)
 
-	fenceagentsv1alpha1 "github.com/mshitrit/fence-agents/api/v1alpha1"
+var (
+	//TODO mshitrit plant the label on the pod
+	faPodLabels = map[string]string{"app": "fence-agent-operator"}
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
 type FenceAgentsRemediationReconciler struct {
 	client.Client
+	Log    logr.Logger
 	Scheme *runtime.Scheme
 }
 
@@ -47,16 +59,91 @@ type FenceAgentsRemediationReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.2/pkg/reconcile
 func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	far := &v1alpha1.FenceAgentsRemediation{}
+	if err := r.Get(ctx, req.NamespacedName, far); err != nil {
+		if apiErrors.IsNotFound(err) {
+			// FAR is deleted, stop reconciling
+			r.Log.Info("FAR already deleted")
+			return ctrl.Result{}, nil
+		}
+		r.Log.Error(err, "failed to get FAR")
+		return ctrl.Result{}, err
+	}
+
+	farTemplate := &v1alpha1.FenceAgentsRemediationTemplate{}
+	if err := r.Get(ctx, req.NamespacedName, farTemplate); err != nil {
+		r.Log.Error(err, "failed to get FAR template")
+		return ctrl.Result{}, err
+	}
+
+	pod, err := r.getFAPod(req.NamespacedName.Namespace)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	//Create the file
+	ex, err := cli.NewExecuter(pod)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	faParams := buildFenceAgentParamFile(farTemplate, far)
+	cmd := []string{"echo", "-e", faParams.String(), "|", farTemplate.Spec.Agent}
+	//echo -e "params" | fence_ipmilan
+	if _, _, err := ex.Execute(cmd); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	//Use the file to trigger fencing
+	//cat param.file | fence_ipmilan
 
 	return ctrl.Result{}, nil
+}
+
+func buildFenceAgentParamFile(farTemplate *v1alpha1.FenceAgentsRemediationTemplate, far *v1alpha1.FenceAgentsRemediation) bytes.Buffer {
+	var fenceAgentParams bytes.Buffer
+	for paramName, paramVal := range farTemplate.Spec.SharedParameters {
+		fenceAgentParams.WriteString(fmt.Sprintf("%s=%s", paramName, paramVal))
+	}
+
+	nodeName := v1alpha1.NodeName(far.Name)
+	for paramName, nodeVal := range farTemplate.Spec.NodeParameters {
+		fenceAgentParams.WriteString(fmt.Sprintf("%s=%s", paramName, nodeVal.NodeNameValueMapping[nodeName]))
+	}
+	return fenceAgentParams
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *FenceAgentsRemediationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&fenceagentsv1alpha1.FenceAgentsRemediation{}).
+		For(&v1alpha1.FenceAgentsRemediation{}).
 		Complete(r)
+}
+
+func (r *FenceAgentsRemediationReconciler) getFAPod(namespace string) (*corev1.Pod, error) {
+
+	pods := new(corev1.PodList)
+
+	haPodLabelsSelector, _ := metav1.LabelSelectorAsSelector(
+		&metav1.LabelSelector{MatchLabels: faPodLabels})
+	options := client.ListOptions{
+		LabelSelector: haPodLabelsSelector,
+		Namespace:     namespace,
+	}
+	if err := r.Client.List(context.Background(), pods, &options); err != nil {
+		r.Log.Error(err, "failed fetching Fence Agent layer pod")
+		return nil, err
+	}
+	if len(pods.Items) == 0 {
+		r.Log.Info("No Fence Agent pods were found")
+		podNotFoundErr := &errors.StatusError{ErrStatus: metav1.Status{
+			Status: metav1.StatusFailure,
+			Code:   http.StatusNotFound,
+			Reason: metav1.StatusReasonNotFound,
+		}}
+		return nil, podNotFoundErr
+	}
+	return &pods.Items[0], nil
+
 }
