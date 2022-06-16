@@ -31,9 +31,6 @@ type FenceAgentsRemediationTemplateSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of FenceAgentsRemediationTemplate. Edit fenceagentsremediationtemplate_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
-
 	// Agent is the type of fence agent that will be used
 	Agent string `json:"agent"`
 

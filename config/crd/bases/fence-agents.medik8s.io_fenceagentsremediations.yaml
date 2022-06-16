@@ -35,11 +35,6 @@ spec:
             type: object
           spec:
             description: FenceAgentsRemediationSpec defines the desired state of FenceAgentsRemediation
-            properties:
-              foo:
-                description: Foo is an example field of FenceAgentsRemediation. Edit
-                  fenceagentsremediation_types.go to remove/update
-                type: string
             type: object
           status:
             description: FenceAgentsRemediationStatus defines the observed state of

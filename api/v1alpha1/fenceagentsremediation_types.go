@@ -27,9 +27,6 @@ import (
 type FenceAgentsRemediationSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of FenceAgentsRemediation. Edit fenceagentsremediation_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
 }
 
 // FenceAgentsRemediationStatus defines the observed state of FenceAgentsRemediation

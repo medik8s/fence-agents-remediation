@@ -36,10 +36,30 @@ spec:
             description: FenceAgentsRemediationTemplateSpec defines the desired state
               of FenceAgentsRemediationTemplate
             properties:
-              foo:
-                description: Foo is an example field of FenceAgentsRemediationTemplate.
-                  Edit fenceagentsremediationtemplate_types.go to remove/update
+              agent:
+                description: Agent is the type of fence agent that will be used
                 type: string
+              nodeparameters:
+                additionalProperties:
+                  properties:
+                    nodenamevaluemapping:
+                      additionalProperties:
+                        type: string
+                      type: object
+                  required:
+                  - nodenamevaluemapping
+                  type: object
+                description: NodeParameters are node specific they are passed to the
+                  fencing agent according to the node that is fenced
+                type: object
+              sharedparameters:
+                additionalProperties:
+                  type: string
+                description: SharedParameters are passed to the fencing agent no matter
+                  which node is fenced (i.e they are common for all the nodes)
+                type: object
+            required:
+            - agent
             type: object
           status:
             description: FenceAgentsRemediationTemplateStatus defines the observed

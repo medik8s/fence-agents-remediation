@@ -40,10 +40,6 @@ spec:
               agent:
                 description: Agent is the type of fence agent that will be used
                 type: string
-              foo:
-                description: Foo is an example field of FenceAgentsRemediationTemplate.
-                  Edit fenceagentsremediationtemplate_types.go to remove/update
-                type: string
               nodeparameters:
                 additionalProperties:
                   properties:
