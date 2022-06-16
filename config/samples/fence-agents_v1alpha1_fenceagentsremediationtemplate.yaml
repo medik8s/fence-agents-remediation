@@ -3,4 +3,18 @@ kind: FenceAgentsRemediationTemplate
 metadata:
   name: fenceagentsremediationtemplate-sample
 spec:
-  # TODO(user): Add fields here
+  agent: fence_ipmilan
+  sharedparameters:
+    username: "admin"
+    password: "password"
+    lanplus: "1"
+    pcmk_host_list: "cluster2"
+  nodeparameters:
+    ip:
+      worker-0: "192.168.126.1"
+      worker-1: "192.168.126.2"
+      worker-2: "192.168.126.3"
+    port:
+      worker-0: "9222"
+      worker-1: "9223"
+      worker-2: "9224"
