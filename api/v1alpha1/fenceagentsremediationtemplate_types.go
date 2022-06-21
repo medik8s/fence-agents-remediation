@@ -38,11 +38,7 @@ type FenceAgentsRemediationTemplateSpec struct {
 	SharedParameters map[parameterName]string `json:"sharedparameters,omitempty"`
 
 	// NodeParameters are node specific they are passed to the fencing agent according to the node that is fenced
-	NodeParameters map[parameterName]NodeValues `json:"nodeparameters,omitempty"`
-}
-
-type NodeValues struct {
-	NodeNameValueMapping map[NodeName]string `json:"nodenamevaluemapping"`
+	NodeParameters map[parameterName]map[NodeName]string `json:"nodeparameters,omitempty"`
 }
 
 // FenceAgentsRemediationTemplateStatus defines the observed state of FenceAgentsRemediationTemplate

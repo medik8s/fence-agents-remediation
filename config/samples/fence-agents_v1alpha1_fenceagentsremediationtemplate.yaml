@@ -1,7 +1,7 @@
 apiVersion: fence-agents.medik8s.io/v1alpha1
 kind: FenceAgentsRemediationTemplate
 metadata:
-  name: fenceagentsremediationtemplate-sample
+  name: fenceagentsremediationtemplate-default
 spec:
   agent: fence_ipmilan
   sharedparameters:

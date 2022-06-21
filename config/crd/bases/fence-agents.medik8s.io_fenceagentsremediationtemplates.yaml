@@ -42,13 +42,8 @@ spec:
                 type: string
               nodeparameters:
                 additionalProperties:
-                  properties:
-                    nodenamevaluemapping:
-                      additionalProperties:
-                        type: string
-                      type: object
-                  required:
-                  - nodenamevaluemapping
+                  additionalProperties:
+                    type: string
                   type: object
                 description: NodeParameters are node specific they are passed to the
                   fencing agent according to the node that is fenced

@@ -18,7 +18,27 @@ metadata:
           "metadata": {
             "name": "fenceagentsremediationtemplate-sample"
           },
-          "spec": null
+          "spec": {
+            "agent": "fence_ipmilan",
+            "nodeparameters": {
+              "ip": {
+                "worker-0": "192.168.126.1",
+                "worker-1": "192.168.126.2",
+                "worker-2": "192.168.126.3"
+              },
+              "port": {
+                "worker-0": "9222",
+                "worker-1": "9223",
+                "worker-2": "9224"
+              }
+            },
+            "sharedparameters": {
+              "lanplus": "1",
+              "password": "password",
+              "pcmk_host_list": "cluster2",
+              "username": "admin"
+            }
+          }
         }
       ]
     capabilities: Basic Install

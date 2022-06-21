@@ -33,6 +33,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	//TODO mshitrit verify that template is created with this name
+	fenceAgentsTemplateName = "fenceagentsremediationtemplate-default"
+)
+
 var (
 	//TODO mshitrit plant the label on the pod
 	faPodLabels = map[string]string{"app": "fence-agent-operator"}
@@ -70,9 +75,9 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "failed to get FAR")
 		return ctrl.Result{}, err
 	}
-
+	key := client.ObjectKey{Namespace: req.Namespace, Name: fenceAgentsTemplateName}
 	farTemplate := &v1alpha1.FenceAgentsRemediationTemplate{}
-	if err := r.Get(ctx, req.NamespacedName, farTemplate); err != nil {
+	if err := r.Get(ctx, key, farTemplate); err != nil {
 		r.Log.Error(err, "failed to get FAR template")
 		return ctrl.Result{}, err
 	}
@@ -108,8 +113,8 @@ func buildFenceAgentParamFile(farTemplate *v1alpha1.FenceAgentsRemediationTempla
 	}
 
 	nodeName := v1alpha1.NodeName(far.Name)
-	for paramName, nodeVal := range farTemplate.Spec.NodeParameters {
-		fenceAgentParams.WriteString(fmt.Sprintf("%s=%s", paramName, nodeVal.NodeNameValueMapping[nodeName]))
+	for paramName, nodeMap := range farTemplate.Spec.NodeParameters {
+		fenceAgentParams.WriteString(fmt.Sprintf("%s=%s", paramName, nodeMap[nodeName]))
 	}
 	return fenceAgentParams
 }
