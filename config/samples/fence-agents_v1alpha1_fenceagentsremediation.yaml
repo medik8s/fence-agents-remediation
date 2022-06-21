@@ -1,6 +1,6 @@
 apiVersion: fence-agents.medik8s.io/v1alpha1
 kind: FenceAgentsRemediation
 metadata:
-  name: fenceagentsremediation-sample
+  name: worker-1
 spec:
   # TODO(user): Add fields here

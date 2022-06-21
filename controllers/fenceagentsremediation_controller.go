@@ -87,7 +87,6 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, err
 	}
 
-	//Create the file
 	ex, err := cli.NewExecuter(pod)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -109,13 +108,14 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 func buildFenceAgentParamFile(farTemplate *v1alpha1.FenceAgentsRemediationTemplate, far *v1alpha1.FenceAgentsRemediation) bytes.Buffer {
 	var fenceAgentParams bytes.Buffer
 	for paramName, paramVal := range farTemplate.Spec.SharedParameters {
-		fenceAgentParams.WriteString(fmt.Sprintf("%s=%s", paramName, paramVal))
+		fenceAgentParams.WriteString(fmt.Sprintf("%s=%s\n", paramName, paramVal))
 	}
 
 	nodeName := v1alpha1.NodeName(far.Name)
 	for paramName, nodeMap := range farTemplate.Spec.NodeParameters {
-		fenceAgentParams.WriteString(fmt.Sprintf("%s=%s", paramName, nodeMap[nodeName]))
+		fenceAgentParams.WriteString(fmt.Sprintf("%s=%s\n", paramName, nodeMap[nodeName]))
 	}
+
 	return fenceAgentParams
 }
 
@@ -130,10 +130,10 @@ func (r *FenceAgentsRemediationReconciler) getFAPod(namespace string) (*corev1.P
 
 	pods := new(corev1.PodList)
 
-	haPodLabelsSelector, _ := metav1.LabelSelectorAsSelector(
+	podLabelsSelector, _ := metav1.LabelSelectorAsSelector(
 		&metav1.LabelSelector{MatchLabels: faPodLabels})
 	options := client.ListOptions{
-		LabelSelector: haPodLabelsSelector,
+		LabelSelector: podLabelsSelector,
 		Namespace:     namespace,
 	}
 	if err := r.Client.List(context.Background(), pods, &options); err != nil {
