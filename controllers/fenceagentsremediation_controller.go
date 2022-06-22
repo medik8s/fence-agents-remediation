@@ -16,6 +16,8 @@ limitations under the License.
 
 package controllers
 
+//TODO mshitrit make sure fence agents and other necessary executables are installed in the pod
+
 import (
 	"bytes"
 	"context"

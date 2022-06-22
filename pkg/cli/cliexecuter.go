@@ -102,7 +102,7 @@ func (e *executer) Execute(command []string) (stdout, stderr string, err error) 
 		Tty:    false,
 	})
 	if err != nil {
-		e.Log.Error(err, "Failed to run exec command", "stdout", stdoutBuf.String(), "stderr", stderrBuf.String())
+		e.Log.Error(err, "Failed to run exec command", "command", command, "stdout", stdoutBuf.String(), "stderr", stderrBuf.String())
 	}
 	return stdoutBuf.String(), stderrBuf.String(), err
 }
