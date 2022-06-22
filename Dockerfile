@@ -1,5 +1,16 @@
 # Build the manager binary
-FROM golang:1.17 as builder
+FROM quay.io/centos/centos:stream8 AS builder
+RUN dnf install golang -y
+
+# Ensure correct Go version
+ENV GO_VERSION=1.18
+RUN go install golang.org/dl/go${GO_VERSION}@latest
+RUN ~/go/bin/go${GO_VERSION} download
+RUN /bin/cp -f ~/go/bin/go${GO_VERSION} /usr/bin/go
+RUN go version
+
+# Add Fence Agents
+RUN dnf install -y fence-agents-all
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -19,11 +30,10 @@ COPY pkg/ pkg/
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager main.go
 
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
+
+FROM registry.access.redhat.com/ubi8/ubi:latest
+
 WORKDIR /
 COPY --from=builder /workspace/manager .
-USER 65532:65532
 
 ENTRYPOINT ["/manager"]

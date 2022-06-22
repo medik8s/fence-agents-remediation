@@ -41,7 +41,6 @@ const (
 )
 
 var (
-	//TODO mshitrit plant the label on the pod
 	faPodLabels = map[string]string{"app": "fence-agents-remediation-operator"}
 )
 
@@ -100,12 +99,10 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	faParams := buildFenceAgentParamFile(farTemplate, far)
 	cmd := []string{"echo", "-e", faParams.String(), "|", farTemplate.Spec.Agent}
 	//echo -e "params" | fence_ipmilan
+	//cat param.file | fence_ipmilan
 	if _, _, err := ex.Execute(cmd); err != nil {
 		return ctrl.Result{}, err
 	}
-
-	//Use the file to trigger fencing
-	//cat param.file | fence_ipmilan
 
 	return ctrl.Result{}, nil
 }

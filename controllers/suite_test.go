@@ -42,17 +42,6 @@ var k8sClient client.Client
 var testEnv *envtest.Environment
 
 func TestAPIs(t *testing.T) {
-	//TODO mshitrit remove
-	//fmt.Println("Start Buffer Test")
-	//var metrics bytes.Buffer
-	//metrics.WriteString("Hello World")
-	//metrics.WriteString("\n")
-	//metrics.WriteString("Hello World Again \n")
-	//metrics.WriteString("Hello World ")
-	//metrics.WriteString("Third Time")
-	//fmt.Print(metrics.String())
-	//fmt.Println("\nDone Buffer Test")
-
 	RegisterFailHandler(Fail)
 
 	RunSpecsWithDefaultAndCustomReporters(t,
