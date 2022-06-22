@@ -8,7 +8,7 @@ metadata:
           "apiVersion": "fence-agents.medik8s.io/v1alpha1",
           "kind": "FenceAgentsRemediation",
           "metadata": {
-            "name": "fenceagentsremediation-sample"
+            "name": "worker-1"
           },
           "spec": null
         },
@@ -16,7 +16,7 @@ metadata:
           "apiVersion": "fence-agents.medik8s.io/v1alpha1",
           "kind": "FenceAgentsRemediationTemplate",
           "metadata": {
-            "name": "fenceagentsremediationtemplate-sample"
+            "name": "fenceagentsremediationtemplate-default"
           },
           "spec": {
             "agent": "fence_ipmilan",
@@ -74,6 +74,17 @@ spec:
       clusterPermissions:
       - rules:
         - apiGroups:
+          - ""
+          resources:
+          - pods
+          verbs:
+          - delete
+          - deletecollection
+          - get
+          - list
+          - update
+          - watch
+        - apiGroups:
           - fence-agents.medik8s.io
           resources:
           - fenceagentsremediations
@@ -100,6 +111,18 @@ spec:
           - patch
           - update
         - apiGroups:
+          - fence-agents.medik8s.io
+          resources:
+          - fenceagentsremediationtemplates
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
           - authentication.k8s.io
           resources:
           - tokenreviews
@@ -111,11 +134,11 @@ spec:
           - subjectaccessreviews
           verbs:
           - create
-        serviceAccountName: fence-agents-controller-manager
+        serviceAccountName: fence-agents-remediation-controller-manager
       deployments:
       - label:
           control-plane: controller-manager
-        name: fence-agents-controller-manager
+        name: fence-agents-remediation-controller-manager
         spec:
           replicas: 1
           selector:
@@ -179,7 +202,7 @@ spec:
                   allowPrivilegeEscalation: false
               securityContext:
                 runAsNonRoot: true
-              serviceAccountName: fence-agents-controller-manager
+              serviceAccountName: fence-agents-remediation-controller-manager
               terminationGracePeriodSeconds: 10
       permissions:
       - rules:
@@ -214,7 +237,7 @@ spec:
           verbs:
           - create
           - patch
-        serviceAccountName: fence-agents-controller-manager
+        serviceAccountName: fence-agents-remediation-controller-manager
     strategy: deployment
   installModes:
   - supported: false

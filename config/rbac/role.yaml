@@ -6,6 +6,17 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - delete
+  - deletecollection
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
   - fence-agents.medik8s.io
   resources:
   - fenceagentsremediations
@@ -31,3 +42,15 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - fence-agents.medik8s.io
+  resources:
+  - fenceagentsremediationtemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
