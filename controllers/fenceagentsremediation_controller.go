@@ -50,6 +50,7 @@ type FenceAgentsRemediationReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+//+kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;delete;deletecollection
 //+kubebuilder:rbac:groups=fence-agents.medik8s.io,resources=fenceagentsremediationtemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=fence-agents.medik8s.io,resources=fenceagentsremediations,verbs=get;list;watch;create;update;patch;delete
@@ -71,7 +72,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	if err := r.Get(ctx, req.NamespacedName, far); err != nil {
 		if apiErrors.IsNotFound(err) {
 			// FAR is deleted, stop reconciling
-			r.Log.Info("FAR already deleted")
+			r.Log.Info("Fence Agents Remediation is already deleted")
 			return ctrl.Result{}, nil
 		}
 		r.Log.Error(err, "failed to get FAR")

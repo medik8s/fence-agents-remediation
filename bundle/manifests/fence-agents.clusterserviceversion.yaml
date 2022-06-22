@@ -85,6 +85,12 @@ spec:
           - update
           - watch
         - apiGroups:
+          - ""
+          resources:
+          - pods/exec
+          verbs:
+          - create
+        - apiGroups:
           - fence-agents.medik8s.io
           resources:
           - fenceagentsremediations
