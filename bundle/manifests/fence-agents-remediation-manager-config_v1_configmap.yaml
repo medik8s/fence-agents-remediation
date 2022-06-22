@@ -14,4 +14,6 @@ data:
       resourceName: cb305759.medik8s.io
 kind: ConfigMap
 metadata:
+  labels:
+    app: fence-agents-remediation-operator
   name: fence-agents-remediation-manager-config

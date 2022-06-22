@@ -10,7 +10,8 @@ namePrefix: fence-agents-remediation-
 
 # Labels to add to all resources and selectors.
 #commonLabels:
-#  someName: someValue
+commonLabels:
+  app: "fence-agents-remediation-operator"
 
 bases:
 - ../crd

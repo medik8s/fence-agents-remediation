@@ -42,7 +42,7 @@ const (
 
 var (
 	//TODO mshitrit plant the label on the pod
-	faPodLabels = map[string]string{"app": "fence-agent-operator"}
+	faPodLabels = map[string]string{"app": "fence-agents-remediation-operator"}
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
