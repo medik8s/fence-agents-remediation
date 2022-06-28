@@ -12,6 +12,10 @@ RUN go version
 # Add Fence Agents
 RUN dnf install -y fence-agents-all
 
+# Add user with root privilages - remove later on
+RUN useradd mshitrit
+RUN usermod -aG wheel mshitrit
+
 WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.mod
