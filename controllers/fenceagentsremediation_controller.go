@@ -68,12 +68,14 @@ type FenceAgentsRemediationReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.2/pkg/reconcile
 func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	r.Log.Info("started reconcile")
+	defer r.Log.Info("finished reconcile")
 
 	far := &v1alpha1.FenceAgentsRemediation{}
 	if err := r.Get(ctx, req.NamespacedName, far); err != nil {
 		if apiErrors.IsNotFound(err) {
 			// FAR is deleted, stop reconciling
-			r.Log.Info("Fence Agents Remediation is already deleted")
+			r.Log.Info("Fence Agents Remediation not found, nothing to do")
 			return ctrl.Result{}, nil
 		}
 		r.Log.Error(err, "failed to get FAR")
