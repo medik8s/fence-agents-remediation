@@ -24,9 +24,9 @@ func NewExecuter(pod *corev1.Pod) (Executer, error) {
 		return nil, err
 	}
 
-	containerName := pod.Spec.Containers[0].Name
+	//containerName := pod.Spec.Containers[0].Name
 	ce := executer{pod: pod,
-		containerName: containerName,
+		containerName: "manager",
 		Log:           logger,
 	}
 	if err := ce.buildK8sClient(); err != nil {
@@ -39,7 +39,7 @@ type executer struct {
 	Log             logr.Logger
 	kClient         *kubernetes.Clientset
 	k8sClientConfig *restclient.Config
-	containerName   string //= "pacemaker"
+	containerName   string
 	pod             *corev1.Pod
 }
 
@@ -65,7 +65,6 @@ func (e *executer) buildK8sClient() error {
 	return nil
 }
 
-// execCmdOnPacemaker exec command on specific pod and wait the command's output.
 func (e *executer) Execute(command []string) (stdout, stderr string, err error) {
 	if err := e.buildK8sClient(); err != nil {
 		return "", "", err
