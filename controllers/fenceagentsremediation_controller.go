@@ -19,7 +19,6 @@ package controllers
 //TODO mshitrit make sure fence agents and other necessary executables are installed in the pod
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"github.com/go-logr/logr"
@@ -98,10 +97,9 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, err
 	}
 
-	faParams := buildFenceAgentParamFile(farTemplate, far)
-	cmd := []string{"echo", "-e", faParams.String(), "|", farTemplate.Spec.Agent}
-	//echo -e "params" | fence_ipmilan
-	//cat param.file | fence_ipmilan
+	faParams := buildFenceAgentParams(farTemplate, far)
+	cmd := append([]string{farTemplate.Spec.Agent}, faParams...)
+	//fence_ipmilan --ip=192.168.111.1 --ipport=6233 --username=admin --password=password --action=status --lanplus --verbose
 	if _, _, err := ex.Execute(cmd); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -109,15 +107,16 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	return ctrl.Result{}, nil
 }
 
-func buildFenceAgentParamFile(farTemplate *v1alpha1.FenceAgentsRemediationTemplate, far *v1alpha1.FenceAgentsRemediation) bytes.Buffer {
-	var fenceAgentParams bytes.Buffer
+func buildFenceAgentParams(farTemplate *v1alpha1.FenceAgentsRemediationTemplate, far *v1alpha1.FenceAgentsRemediation) []string {
+	var fenceAgentParams []string
 	for paramName, paramVal := range farTemplate.Spec.SharedParameters {
-		writeParamToBuf(fenceAgentParams, string(paramName), paramVal)
+		fenceAgentParams = appendParamToSlice(fenceAgentParams, string(paramName), paramVal)
+
 	}
 
 	nodeName := v1alpha1.NodeName(far.Name)
 	for paramName, nodeMap := range farTemplate.Spec.NodeParameters {
-		writeParamToBuf(fenceAgentParams, string(paramName), nodeMap[nodeName])
+		fenceAgentParams = appendParamToSlice(fenceAgentParams, string(paramName), nodeMap[nodeName])
 	}
 
 	return fenceAgentParams
@@ -157,10 +156,11 @@ func (r *FenceAgentsRemediationReconciler) getFAPod(namespace string) (*corev1.P
 
 }
 
-func writeParamToBuf(fenceAgentParams bytes.Buffer, paramName string, paramVal string) {
+func appendParamToSlice(fenceAgentParams []string, paramName string, paramVal string) []string {
 	if paramVal != "" {
-		fenceAgentParams.WriteString(fmt.Sprintf("%s=%s\n", paramName, paramVal))
+		fenceAgentParams = append(fenceAgentParams, fmt.Sprintf("%s=%s", paramName, paramVal))
 	} else {
-		fenceAgentParams.WriteString(paramName)
+		fenceAgentParams = append(fenceAgentParams, paramName)
 	}
+	return fenceAgentParams
 }
