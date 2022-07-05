@@ -112,12 +112,12 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 func buildFenceAgentParamFile(farTemplate *v1alpha1.FenceAgentsRemediationTemplate, far *v1alpha1.FenceAgentsRemediation) bytes.Buffer {
 	var fenceAgentParams bytes.Buffer
 	for paramName, paramVal := range farTemplate.Spec.SharedParameters {
-		fenceAgentParams.WriteString(fmt.Sprintf("%s=%s\n", paramName, paramVal))
+		writeParamToBuf(fenceAgentParams, string(paramName), paramVal)
 	}
 
 	nodeName := v1alpha1.NodeName(far.Name)
 	for paramName, nodeMap := range farTemplate.Spec.NodeParameters {
-		fenceAgentParams.WriteString(fmt.Sprintf("%s=%s\n", paramName, nodeMap[nodeName]))
+		writeParamToBuf(fenceAgentParams, string(paramName), nodeMap[nodeName])
 	}
 
 	return fenceAgentParams
@@ -155,4 +155,12 @@ func (r *FenceAgentsRemediationReconciler) getFAPod(namespace string) (*corev1.P
 	}
 	return &pods.Items[0], nil
 
+}
+
+func writeParamToBuf(fenceAgentParams bytes.Buffer, paramName string, paramVal string) {
+	if paramVal != "" {
+		fenceAgentParams.WriteString(fmt.Sprintf("%s=%s\n", paramName, paramVal))
+	} else {
+		fenceAgentParams.WriteString(paramName)
+	}
 }
