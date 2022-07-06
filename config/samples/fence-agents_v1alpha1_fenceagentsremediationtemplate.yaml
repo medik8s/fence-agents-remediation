@@ -9,7 +9,7 @@ spec:
     --password: "password"
     --lanplus: ""
     --action: "status"
-    -ip: "192.168.111.1"
+    --ip: "192.168.111.1"
   nodeparameters:
     --ipport:
       worker-0: "6233"
