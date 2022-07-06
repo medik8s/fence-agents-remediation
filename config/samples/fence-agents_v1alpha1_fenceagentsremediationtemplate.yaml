@@ -8,7 +8,7 @@ spec:
     --username: "admin"
     --password: "password"
     --lanplus: ""
-    --action: "status"
+    --action: "reboot"
     --ip: "192.168.111.1"
   nodeparameters:
     --ipport:

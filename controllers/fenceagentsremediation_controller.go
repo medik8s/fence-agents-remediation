@@ -16,8 +16,6 @@ limitations under the License.
 
 package controllers
 
-//TODO mshitrit make sure fence agents and other necessary executables are installed in the pod
-
 import (
 	"context"
 	"fmt"
@@ -59,7 +57,6 @@ type FenceAgentsRemediationReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
 // the FenceAgentsRemediation object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
@@ -87,7 +84,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, err
 	}
 
-	pod, err := r.getFAPod(req.NamespacedName.Namespace)
+	pod, err := r.getFenceAgentsPod(req.NamespacedName.Namespace)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -129,7 +126,7 @@ func (r *FenceAgentsRemediationReconciler) SetupWithManager(mgr ctrl.Manager) er
 		Complete(r)
 }
 
-func (r *FenceAgentsRemediationReconciler) getFAPod(namespace string) (*corev1.Pod, error) {
+func (r *FenceAgentsRemediationReconciler) getFenceAgentsPod(namespace string) (*corev1.Pod, error) {
 
 	pods := new(corev1.PodList)
 
