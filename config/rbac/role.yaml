@@ -23,7 +23,7 @@ rules:
   verbs:
   - create
 - apiGroups:
-  - fence-agents.medik8s.io
+  - fence-agents-remediation.medik8s.io
   resources:
   - fenceagentsremediations
   verbs:
@@ -35,13 +35,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - fence-agents.medik8s.io
+  - fence-agents-remediation.medik8s.io
   resources:
   - fenceagentsremediations/finalizers
   verbs:
   - update
 - apiGroups:
-  - fence-agents.medik8s.io
+  - fence-agents-remediation.medik8s.io
   resources:
   - fenceagentsremediations/status
   verbs:
@@ -49,7 +49,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - fence-agents.medik8s.io
+  - fence-agents-remediation.medik8s.io
   resources:
   - fenceagentsremediationtemplates
   verbs:

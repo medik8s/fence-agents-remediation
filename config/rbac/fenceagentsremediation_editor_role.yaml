@@ -5,7 +5,7 @@ metadata:
   name: fenceagentsremediation-editor-role
 rules:
 - apiGroups:
-  - fence-agents.medik8s.io
+  - fence-agents-remediation.medik8s.io
   resources:
   - fenceagentsremediations
   verbs:
@@ -17,7 +17,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - fence-agents.medik8s.io
+  - fence-agents-remediation.medik8s.io
   resources:
   - fenceagentsremediations/status
   verbs:

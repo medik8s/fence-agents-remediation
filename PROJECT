@@ -4,25 +4,25 @@ layout:
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}
-projectName: fence-agents
-repo: github.com/mshitrit/fence-agents
+projectName: fence-agents-remediation
+repo: github.com/mshitrit/fence-agents-remediation
 resources:
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
   domain: medik8s.io
-  group: fence-agents
+  group: fence-agents-remediation
   kind: FenceAgentsRemediation
-  path: github.com/mshitrit/fence-agents/api/v1alpha1
+  path: github.com/mshitrit/fence-agents-remediation/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
   domain: medik8s.io
-  group: fence-agents
+  group: fence-agents-remediation
   kind: FenceAgentsRemediationTemplate
-  path: github.com/mshitrit/fence-agents/api/v1alpha1
+  path: github.com/mshitrit/fence-agents-remediation/api/v1alpha1
   version: v1alpha1
 version: "3"

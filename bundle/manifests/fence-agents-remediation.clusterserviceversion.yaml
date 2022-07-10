@@ -5,7 +5,7 @@ metadata:
     alm-examples: |-
       [
         {
-          "apiVersion": "fence-agents.medik8s.io/v1alpha1",
+          "apiVersion": "fence-agents-remediation.medik8s.io/v1alpha1",
           "kind": "FenceAgentsRemediation",
           "metadata": {
             "name": "worker-1"
@@ -13,7 +13,7 @@ metadata:
           "spec": null
         },
         {
-          "apiVersion": "fence-agents.medik8s.io/v1alpha1",
+          "apiVersion": "fence-agents-remediation.medik8s.io/v1alpha1",
           "kind": "FenceAgentsRemediationTemplate",
           "metadata": {
             "name": "fenceagentsremediationtemplate-default"
@@ -40,7 +40,7 @@ metadata:
     capabilities: Basic Install
     operators.operatorframework.io/builder: operator-sdk-v1.21.0+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: fence-agents.v0.0.1
+  name: fence-agents-remediation.v0.0.1
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -50,13 +50,13 @@ spec:
         API
       displayName: Fence Agents Remediation
       kind: FenceAgentsRemediation
-      name: fenceagentsremediations.fence-agents.medik8s.io
+      name: fenceagentsremediations.fence-agents-remediation.medik8s.io
       version: v1alpha1
     - description: FenceAgentsRemediationTemplate is the Schema for the fenceagentsremediationtemplates
         API
       displayName: Fence Agents Remediation Template
       kind: FenceAgentsRemediationTemplate
-      name: fenceagentsremediationtemplates.fence-agents.medik8s.io
+      name: fenceagentsremediationtemplates.fence-agents-remediation.medik8s.io
       version: v1alpha1
   description: A mechanism designed around an existing set of upstream fencing agents
     for environments with a traditional API end-point (eg. IPMI) for power cycling
@@ -87,7 +87,7 @@ spec:
           verbs:
           - create
         - apiGroups:
-          - fence-agents.medik8s.io
+          - fence-agents-remediation.medik8s.io
           resources:
           - fenceagentsremediations
           verbs:
@@ -99,13 +99,13 @@ spec:
           - update
           - watch
         - apiGroups:
-          - fence-agents.medik8s.io
+          - fence-agents-remediation.medik8s.io
           resources:
           - fenceagentsremediations/finalizers
           verbs:
           - update
         - apiGroups:
-          - fence-agents.medik8s.io
+          - fence-agents-remediation.medik8s.io
           resources:
           - fenceagentsremediations/status
           verbs:
@@ -113,7 +113,7 @@ spec:
           - patch
           - update
         - apiGroups:
-          - fence-agents.medik8s.io
+          - fence-agents-remediation.medik8s.io
           resources:
           - fenceagentsremediationtemplates
           verbs:
@@ -263,7 +263,7 @@ spec:
   - FAR
   links:
   - name: Fence Agents
-    url: https://fence-agents.domain
+    url: https://fence-agents-remediation.domain
   maintainers:
   - email: medik8s@googlegroups.com
     name: medik8s team
