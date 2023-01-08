@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 // Package v1alpha1 contains API Schema definitions for the fence-agents-remediation v1alpha1 API group
-//+kubebuilder:object:generate=true
-//+groupName=fence-agents-remediation.medik8s.io
+// +kubebuilder:object:generate=true
+// +groupName=fence-agents-remediation.medik8s.io
 package v1alpha1
 
 import (
