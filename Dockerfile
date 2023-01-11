@@ -1,5 +1,8 @@
 # Build the manager binary
 FROM quay.io/centos/centos:stream9 AS builder
+RUN dnf install -y dnf-plugins-core 
+RUN dnf config-manager --set-enabled highavailability
+RUN dnf install -y fence-agents-all-4.10.0 python39 --installroot=/installed-far-directory --releasever=/
 RUN dnf install -y golang
 
 # Ensure correct Go version
@@ -33,5 +36,7 @@ FROM registry.access.redhat.com/ubi9/ubi-micro:latest
 WORKDIR /
 COPY --from=builder /workspace/manager .
 
+# Add Fence Agents
+COPY --from=builder /installed-far-directory .
 
 ENTRYPOINT ["/manager"]
