@@ -1,6 +1,6 @@
 # Build the manager binary
-FROM quay.io/centos/centos:stream8 AS builder
-RUN dnf install golang -y
+FROM quay.io/centos/centos:stream9 AS builder
+RUN dnf install -y golang
 
 # Ensure correct Go version
 ENV GO_VERSION=1.18
@@ -28,16 +28,10 @@ COPY pkg/ pkg/
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager main.go
 
 
-FROM registry.access.redhat.com/ubi8/ubi:latest
+FROM registry.access.redhat.com/ubi9/ubi-micro:latest
 
 WORKDIR /
 COPY --from=builder /workspace/manager .
 
-# Add Fence Agents
-RUN dnf install -y fence-agents-all
-# Add privileged user for debugging
-RUN adduser mshitrit
-RUN usermod -aG wheel mshitrit
-RUN echo mshitrit:workDec20 | chpasswd
 
 ENTRYPOINT ["/manager"]
