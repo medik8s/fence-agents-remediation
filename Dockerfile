@@ -35,8 +35,9 @@ COPY --from=builder /workspace/manager .
 
 # Add Fence Agents
 RUN microdnf install -y yum-utils
-RUN yum-config-manager --set-enabled rhel-9-for-x86_64-highavailability-rpms
-RUN microdnf install -y fence-agents-all-4.10.0
+# RUN yum-config-manager --set-enabled rhel-9-for-x86_64-highavailability-rpms
+RUN dnf config-manager --set-enabled rhel-9-for-x86_64-highavailability-rpms
+RUN dnf install -y fence-agents-all-4.10.0
 
 # COPY --from=builder /etc/yum.repos.d/centos-addons.repo .
 # RUN dnf -y --enablerepo=highavailability install fence-agents-all 
