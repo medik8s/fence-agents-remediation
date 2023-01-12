@@ -1,8 +1,5 @@
 # Build the manager binary
 FROM quay.io/centos/centos:stream9 AS builder
-RUN dnf install -y dnf-plugins-core 
-RUN dnf config-manager --set-enabled highavailability
-RUN dnf install -y fence-agents-all-4.10.0 python39 --installroot=/installed/fence-python --releasever=/
 RUN dnf install -y golang
 
 # Ensure correct Go version
@@ -31,14 +28,15 @@ COPY pkg/ pkg/
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager main.go
 
 
-FROM registry.access.redhat.com/ubi9/ubi-micro:9.1.0
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.1.0
 
 WORKDIR /
 COPY --from=builder /workspace/manager .
 
 # Add Fence Agents
-COPY --from=builder /installed .
-ENV PATH="$PATH:/fence-python/bin:/fence-python/sbin"
+RUN microdnf install -y yum-utils
+RUN yum-config-manager --set-enabled rhel-9-for-x86_64-highavailability-rpms
+RUN microdnf install -y fence-agents-all-4.10.0
 
 # COPY --from=builder /etc/yum.repos.d/centos-addons.repo .
 # RUN dnf -y --enablerepo=highavailability install fence-agents-all 
