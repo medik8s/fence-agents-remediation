@@ -9,7 +9,7 @@ RUN ~/go/bin/go${GO_VERSION} download
 RUN /bin/cp -f ~/go/bin/go${GO_VERSION} /usr/bin/go
 RUN go version
 
-WORKDIR /workspace
+WORKDIR /
 # Copy the Go Modules manifests
 COPY go.mod go.mod
 COPY go.sum go.sum
@@ -27,17 +27,7 @@ COPY pkg/ pkg/
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager main.go
 
-
-FROM registry.access.redhat.com/ubi8/ubi:latest
-
-WORKDIR /
-COPY --from=builder /workspace/manager .
-
 # Add Fence Agents
 RUN dnf install -y fence-agents-all
-# Add privileged user for debugging
-RUN adduser mshitrit
-RUN usermod -aG wheel mshitrit
-RUN echo mshitrit:workDec20 | chpasswd
 
 ENTRYPOINT ["/manager"]
