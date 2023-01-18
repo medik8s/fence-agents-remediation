@@ -129,8 +129,20 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
+.PHONY: go-tidy
+go-tidy: # Run go mod tidy - add missing and remove unused modules.
+	go mod tidy
+
+.PHONY: go-vendor
+go-vendor:  # Run go mod vendor - make vendored copy of dependencies.
+	go mod vendor
+
+.PHONY: go-verify
+go-verify: go-tidy go-vendor # Run go mod verify - verify dependencies have expected content
+	go mod verify
+
 .PHONY: test
-test: manifests generate fmt vet envtest ## Run tests.
+test: manifests generate go-verify fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
 
 ##@ Build
