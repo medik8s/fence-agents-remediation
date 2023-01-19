@@ -271,19 +271,18 @@ bundle-push: ## Push the bundle image.
 
 .PHONY: opm
 opm: ## Download opm locally if necessary.
-	$(call operator-framework-install-tool, $(OPM), $(OPM_DIR),github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/$${OS}-$${ARCH}-opm)
+	$(call url-install-tool, $(OPM), $(OPM_DIR),github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/$${OS}-$${ARCH}-opm)
 
 .PHONY: operator-sdk
 operator-sdk: ## Download operator-sdk locally if necessary.
-	$(call operator-framework-install-tool, $(OPERATOR_SDK), $(OPERATOR_SDK_DIR),github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$${OS}_$${ARCH})
+	$(call url-install-tool, $(OPERATOR_SDK), $(OPERATOR_SDK_DIR),github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$${OS}_$${ARCH})
 
-# operator-framework-install-tool will delete old package $2, then download $3 to $1.
-define operator-framework-install-tool
+# url-install-tool will delete old package $2, then download $3 to $1.
+define url-install-tool
 @[ -f $(1) ]|| { \
 	set -e ;\
 	rm -rf $(2) ;\
 	mkdir -p $(dir $(1)) ;\
-	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
 	curl -sSLo $(1) $(3) ;\
 	chmod +x $(1) ;\
 	}
