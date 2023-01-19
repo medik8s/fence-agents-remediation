@@ -8,6 +8,8 @@ CONTROLLER_GEN_VERSION ?= v0.8.0
 ENVTEST_VERSION ?= v0.0.0-20221022092956-090611b34874
 # See https://pkg.go.dev/golang.org/x/tools/cmd/goimports?tab=versions for the last version
 OPM_VERSION ?= v1.26.2
+# See github.com/operator-framework/operator-sdk/releases for the last version
+OPERATOR_SDK_VERSION ?= v1.26.0
 
 # IMAGE_REGISTRY used to indicate the registery/group for the operator, bundle and catalog
 IMAGE_REGISTRY ?= quay.io/medik8s
@@ -214,11 +216,15 @@ $(LOCALBIN):
 KUSTOMIZE_DIR ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN_DIR ?= $(LOCALBIN)/controller-gen
 ENVTEST_DIR ?= $(LOCALBIN)/setup-envtest
+OPM_DIR = $(LOCALBIN)/opm
+OPERATOR_SDK_DIR ?= $(LOCALBIN)/operator-sdk
 
 ## Specific Tool Binaries
 KUSTOMIZE = $(KUSTOMIZE_DIR)/$(KUSTOMIZE_VERSION)/kustomize
 CONTROLLER_GEN = $(CONTROLLER_GEN_DIR)/$(CONTROLLER_GEN_VERSION)/controller-gen
 ENVTEST = $(ENVTEST_DIR)/$(ENVTEST_VERSION)/setup-envtest
+OPM = $(OPM_DIR)/$(OPM_VERSION)/opm
+OPERATOR_SDK = $(OPERATOR_SDK_DIR)/$(OPERATOR_SDK_VERSION)/operator-sdk
 
 .PHONY: kustomize
 kustomize: ## Download kustomize locally if necessary.
@@ -249,11 +255,11 @@ define go-install-tool
 endef
 
 .PHONY: bundle
-bundle: manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
-	operator-sdk generate kustomize manifests -q
+bundle: manifests operator-sdk kustomize ## Generate bundle manifests and metadata, then validate generated files.
+	$(OPERATOR_SDK) generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle $(BUNDLE_GEN_FLAGS)
-	operator-sdk bundle validate ./bundle
+	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
+	$(OPERATOR_SDK) bundle validate ./bundle
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.
@@ -266,6 +272,10 @@ bundle-push: ## Push the bundle image.
 .PHONY: opm
 opm: ## Download opm locally if necessary.
 	$(call operator-framework-install-tool, $(OPM), $(OPM_DIR),github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/$${OS}-$${ARCH}-opm)
+
+.PHONY: operator-sdk
+operator-sdk: ## Download operator-sdk locally if necessary.
+	$(call operator-framework-install-tool, $(OPERATOR_SDK), $(OPERATOR_SDK_DIR),github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$${OS}_$${ARCH})
 
 # operator-framework-install-tool will delete old package $2, then download $3 to $1.
 define operator-framework-install-tool
