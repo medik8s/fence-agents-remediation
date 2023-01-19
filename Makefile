@@ -289,6 +289,10 @@ define operator-framework-install-tool
 	}
 endef
 
+.PHONY: build-tools
+build-tools: ## Download & build all the tools locally if necessary.
+	$(MAKE) kustomize controller-gen envtest opm operator-sdk
+
 
 # Set CATALOG_BASE_IMG to an existing catalog image tag to add $BUNDLE_IMGS to that image.
 ifneq ($(origin CATALOG_BASE_IMG), undefined)
