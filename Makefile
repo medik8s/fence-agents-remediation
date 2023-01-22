@@ -1,3 +1,16 @@
+## Tool Versions
+
+# See https://github.com/kubernetes-sigs/kustomize for the last version
+KUSTOMIZE_VERSION ?= v4@v4.5.7
+# https://github.com/kubernetes-sigs/controller-tools/releases for the last version
+CONTROLLER_GEN_VERSION ?= v0.8.0
+# See https://pkg.go.dev/sigs.k8s.io/controller-runtime/tools/setup-envtest?tab=versions for the last version
+ENVTEST_VERSION ?= v0.0.0-20221022092956-090611b34874
+# See https://pkg.go.dev/golang.org/x/tools/cmd/goimports?tab=versions for the last version
+OPM_VERSION ?= v1.26.2
+# See github.com/operator-framework/operator-sdk/releases for the last version
+OPERATOR_SDK_VERSION ?= v1.26.0
+
 # IMAGE_REGISTRY used to indicate the registery/group for the operator, bundle and catalog
 IMAGE_REGISTRY ?= quay.io/medik8s
 export IMAGE_REGISTRY
@@ -199,37 +212,54 @@ LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
 
-## Tool Binaries
-KUSTOMIZE ?= $(LOCALBIN)/kustomize
-CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
-ENVTEST ?= $(LOCALBIN)/setup-envtest
+## Default Tool Binaries
+KUSTOMIZE_DIR ?= $(LOCALBIN)/kustomize
+CONTROLLER_GEN_DIR ?= $(LOCALBIN)/controller-gen
+ENVTEST_DIR ?= $(LOCALBIN)/setup-envtest
+OPM_DIR = $(LOCALBIN)/opm
+OPERATOR_SDK_DIR ?= $(LOCALBIN)/operator-sdk
 
-## Tool Versions
-KUSTOMIZE_VERSION ?= v3.8.7
-CONTROLLER_TOOLS_VERSION ?= v0.8.0
+## Specific Tool Binaries
+KUSTOMIZE = $(KUSTOMIZE_DIR)/$(KUSTOMIZE_VERSION)/kustomize
+CONTROLLER_GEN = $(CONTROLLER_GEN_DIR)/$(CONTROLLER_GEN_VERSION)/controller-gen
+ENVTEST = $(ENVTEST_DIR)/$(ENVTEST_VERSION)/setup-envtest
+OPM = $(OPM_DIR)/$(OPM_VERSION)/opm
+OPERATOR_SDK = $(OPERATOR_SDK_DIR)/$(OPERATOR_SDK_VERSION)/operator-sdk
 
-KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
-kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
-$(KUSTOMIZE): $(LOCALBIN)
-	curl -s $(KUSTOMIZE_INSTALL_SCRIPT) | bash -s -- $(subst v,,$(KUSTOMIZE_VERSION)) $(LOCALBIN)
+kustomize: ## Download kustomize locally if necessary.
+	$(call go-install-tool,$(KUSTOMIZE),$(KUSTOMIZE_DIR),sigs.k8s.io/kustomize/kustomize/$(KUSTOMIZE_VERSION))
 
 .PHONY: controller-gen
-controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
-$(CONTROLLER_GEN): $(LOCALBIN)
-	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+controller-gen: ## Download controller-gen locally if necessary.
+	$(call go-install-tool,$(CONTROLLER_GEN),$(CONTROLLER_GEN_DIR),sigs.k8s.io/controller-tools/cmd/controller-gen@${CONTROLLER_GEN_VERSION})
 
 .PHONY: envtest
-envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
-$(ENVTEST): $(LOCALBIN)
-	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+envtest: ## Download envtest-setup locally if necessary.
+	$(call go-install-tool,$(ENVTEST),$(ENVTEST_DIR),sigs.k8s.io/controller-runtime/tools/setup-envtest@${ENVTEST_VERSION})
+
+# go-install-tool will delete old package $2, then 'go install' any package $3 to $1.
+define go-install-tool
+@[ -f $(1) ]|| { \
+	set -e ;\
+	rm -rf $(2) ;\
+	TMP_DIR=$$(mktemp -d) ;\
+	cd $$TMP_DIR ;\
+	go mod init tmp ;\
+	BIN_DIR=$$(dirname $(1)) ;\
+	mkdir -p $$BIN_DIR ;\
+	echo "Downloading $(3)" ;\
+	GOBIN=$$BIN_DIR GOFLAGS='' go install $(3) ;\
+	rm -rf $$TMP_DIR ;\
+}
+endef
 
 .PHONY: bundle
-bundle: manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
-	operator-sdk generate kustomize manifests -q
+bundle: manifests operator-sdk kustomize ## Generate bundle manifests and metadata, then validate generated files.
+	$(OPERATOR_SDK) generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle $(BUNDLE_GEN_FLAGS)
-	operator-sdk bundle validate ./bundle
+	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
+	$(OPERATOR_SDK) bundle validate ./bundle
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.
@@ -240,21 +270,28 @@ bundle-push: ## Push the bundle image.
 	$(MAKE) docker-push IMG=$(BUNDLE_IMG)
 
 .PHONY: opm
-OPM = ./bin/opm
 opm: ## Download opm locally if necessary.
-ifeq (,$(wildcard $(OPM)))
-ifeq (,$(shell which opm 2>/dev/null))
-	@{ \
+	$(call url-install-tool, $(OPM), $(OPM_DIR),github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/$${OS}-$${ARCH}-opm)
+
+.PHONY: operator-sdk
+operator-sdk: ## Download operator-sdk locally if necessary.
+	$(call url-install-tool, $(OPERATOR_SDK), $(OPERATOR_SDK_DIR),github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$${OS}_$${ARCH})
+
+# url-install-tool will delete old package $2, then download $3 to $1.
+define url-install-tool
+@[ -f $(1) ]|| { \
 	set -e ;\
-	mkdir -p $(dir $(OPM)) ;\
-	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
-	curl -sSLo $(OPM) https://github.com/operator-framework/operator-registry/releases/download/v1.19.1/$${OS}-$${ARCH}-opm ;\
-	chmod +x $(OPM) ;\
+	rm -rf $(2) ;\
+	mkdir -p $(dir $(1)) ;\
+	curl -sSLo $(1) $(3) ;\
+	chmod +x $(1) ;\
 	}
-else
-OPM = $(shell which opm)
-endif
-endif
+endef
+
+.PHONY: build-tools
+build-tools: ## Download & build all the tools locally if necessary.
+	$(MAKE) kustomize controller-gen envtest opm operator-sdk
+
 
 # Set CATALOG_BASE_IMG to an existing catalog image tag to add $BUNDLE_IMGS to that image.
 ifneq ($(origin CATALOG_BASE_IMG), undefined)
