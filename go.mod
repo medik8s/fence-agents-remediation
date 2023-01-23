@@ -1,4 +1,4 @@
-module github.com/mshitrit/fence-agents
+module github.com/medik8s/fence-agents-remediation
 
 go 1.17
 

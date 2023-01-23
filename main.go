@@ -31,8 +31,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	fenceagentsv1alpha1 "github.com/mshitrit/fence-agents/api/v1alpha1"
-	"github.com/mshitrit/fence-agents/controllers"
+	fenceagentsv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/controllers"
 	//+kubebuilder:scaffold:imports
 )
 

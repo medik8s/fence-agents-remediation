@@ -21,15 +21,16 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"net/http"
+
 	"github.com/go-logr/logr"
-	"github.com/mshitrit/fence-agents/api/v1alpha1"
-	"github.com/mshitrit/fence-agents/pkg/cli"
+	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/pkg/cli"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"net/http"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
