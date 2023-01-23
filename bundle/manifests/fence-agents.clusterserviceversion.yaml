@@ -185,7 +185,7 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
-                image: controller:latest
+                image: quay.io/medik8s/fence-agents-remediation-operator:latest
                 livenessProbe:
                   httpGet:
                     path: /healthz
