@@ -5,7 +5,7 @@ metadata:
   name: fenceagentsremediationtemplate-viewer-role
 rules:
 - apiGroups:
-  - fence-agents.medik8s.io
+  - fence-agents-remediation.medik8s.io
   resources:
   - fenceagentsremediationtemplates
   verbs:
@@ -13,7 +13,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - fence-agents.medik8s.io
+  - fence-agents-remediation.medik8s.io
   resources:
   - fenceagentsremediationtemplates/status
   verbs:

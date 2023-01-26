@@ -1,5 +1,5 @@
 ## Append samples you want in your CSV to this file as resources ##
 resources:
-- fence-agents_v1alpha1_fenceagentsremediation.yaml
-- fence-agents_v1alpha1_fenceagentsremediationtemplate.yaml
+- fence-agents-remediation_v1alpha1_fenceagentsremediation.yaml
+- fence-agents-remediation_v1alpha1_fenceagentsremediationtemplate.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples
