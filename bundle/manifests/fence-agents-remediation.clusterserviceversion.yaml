@@ -41,6 +41,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
+    createdAt: "2023-01-26T14:43:44Z"
     operators.operatorframework.io/builder: operator-sdk-v1.26.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
   name: fence-agents-remediation.v0.0.1
@@ -63,7 +64,7 @@ spec:
       version: v1alpha1
   description: Run existing set of upstream fencing agents for environments with a
     traditional API end-point (eg. IPMI) for power cycling cluster nodes.
-  displayName: fence-agents-remediation
+  displayName: Fence Agents Remediation Operator
   icon:
   - base64data: ""
     mediatype: ""
@@ -268,7 +269,9 @@ spec:
   - baremetal
   links:
   - name: Fence Agents Remediation
-    url: https://fence-agents-remediation.domain
+    url: https://medik8s.io
+  - name: Source Code
+    url: https://github.com/medik8s/fence-agents-remediation
   maintainers:
   - email: medik8s@googlegroups.com
     name: Medik8s Team
