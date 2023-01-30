@@ -41,9 +41,15 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2023-01-26T14:43:44Z"
+    categories: OpenShift Optional
+    containerImage: ""
+    createdAt: "2023-01-30T09:57:47Z"
+    description: Fence Agents Remediation Operator for remeidating nodes using upstream
+      fence-agents.
     operators.operatorframework.io/builder: operator-sdk-v1.26.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
+    repository: https://github.com/medik8s/fence-agents-remediation
+    support: Medik8s
   name: fence-agents-remediation.v0.0.1
   namespace: placeholder
 spec:
