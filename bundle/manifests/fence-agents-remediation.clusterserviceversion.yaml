@@ -43,7 +43,7 @@ metadata:
     capabilities: Basic Install
     categories: OpenShift Optional
     containerImage: ""
-    createdAt: "2023-01-30T09:57:47Z"
+    createdAt: ""
     description: Fence Agents Remediation Operator for remeidating nodes using upstream
       fence-agents.
     operators.operatorframework.io/builder: operator-sdk-v1.26.0
