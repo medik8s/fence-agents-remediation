@@ -53,10 +53,10 @@ type FenceAgentsRemediationReconciler struct {
 
 //+kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;delete;deletecollection
-//+kubebuilder:rbac:groups=fence-agents.medik8s.io,resources=fenceagentsremediationtemplates,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=fence-agents.medik8s.io,resources=fenceagentsremediations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=fence-agents.medik8s.io,resources=fenceagentsremediations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=fence-agents.medik8s.io,resources=fenceagentsremediations/finalizers,verbs=update
+//+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

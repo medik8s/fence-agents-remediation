@@ -5,7 +5,7 @@ metadata:
     alm-examples: |-
       [
         {
-          "apiVersion": "fence-agents.medik8s.io/v1alpha1",
+          "apiVersion": "fence-agents-remediation.medik8s.io/v1alpha1",
           "kind": "FenceAgentsRemediation",
           "metadata": {
             "name": "worker-1"
@@ -13,7 +13,7 @@ metadata:
           "spec": null
         },
         {
-          "apiVersion": "fence-agents.medik8s.io/v1alpha1",
+          "apiVersion": "fence-agents-remediation.medik8s.io/v1alpha1",
           "kind": "FenceAgentsRemediationTemplate",
           "metadata": {
             "name": "fenceagentsremediationtemplate-default"
@@ -41,9 +41,10 @@ metadata:
         }
       ]
     capabilities: Basic Install
+    createdAt: "2023-01-26T14:43:44Z"
     operators.operatorframework.io/builder: operator-sdk-v1.26.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: fence-agents.v0.0.1
+  name: fence-agents-remediation.v0.0.1
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -53,17 +54,16 @@ spec:
         API
       displayName: Fence Agents Remediation
       kind: FenceAgentsRemediation
-      name: fenceagentsremediations.fence-agents.medik8s.io
+      name: fenceagentsremediations.fence-agents-remediation.medik8s.io
       version: v1alpha1
     - description: FenceAgentsRemediationTemplate is the Schema for the fenceagentsremediationtemplates
         API
       displayName: Fence Agents Remediation Template
       kind: FenceAgentsRemediationTemplate
-      name: fenceagentsremediationtemplates.fence-agents.medik8s.io
+      name: fenceagentsremediationtemplates.fence-agents-remediation.medik8s.io
       version: v1alpha1
-  description: A mechanism designed around an existing set of upstream fencing agents
-    for environments with a traditional API end-point (eg. IPMI) for power cycling
-    cluster nodes
+  description: Run existing set of upstream fencing agents for environments with a
+    traditional API end-point (eg. IPMI) for power cycling cluster nodes.
   displayName: Fence Agents Remediation Operator
   icon:
   - base64data: ""
@@ -90,7 +90,7 @@ spec:
           verbs:
           - create
         - apiGroups:
-          - fence-agents.medik8s.io
+          - fence-agents-remediation.medik8s.io
           resources:
           - fenceagentsremediations
           verbs:
@@ -102,13 +102,13 @@ spec:
           - update
           - watch
         - apiGroups:
-          - fence-agents.medik8s.io
+          - fence-agents-remediation.medik8s.io
           resources:
           - fenceagentsremediations/finalizers
           verbs:
           - update
         - apiGroups:
-          - fence-agents.medik8s.io
+          - fence-agents-remediation.medik8s.io
           resources:
           - fenceagentsremediations/status
           verbs:
@@ -116,7 +116,7 @@ spec:
           - patch
           - update
         - apiGroups:
-          - fence-agents.medik8s.io
+          - fence-agents-remediation.medik8s.io
           resources:
           - fenceagentsremediationtemplates
           verbs:
@@ -257,21 +257,26 @@ spec:
   - supported: true
     type: AllNamespaces
   keywords:
+  - medik8s
   - fencing
-  - remediation
   - auto-healing
   - recovery
   - high-availability
+  - fence-agents
+  - fence-agents-remediation
+  - remediation
+  - far
   - baremetal
-  - FAR
   links:
-  - name: Fence Agents
-    url: https://fence-agents.domain
+  - name: Fence Agents Remediation
+    url: https://medik8s.io
+  - name: Source Code
+    url: https://github.com/medik8s/fence-agents-remediation
   maintainers:
   - email: medik8s@googlegroups.com
-    name: medik8s team
+    name: Medik8s Team
   maturity: alpha
   provider:
-    name: medik8s
-    url: https://www.medik8s.io/
+    name: Medik8s
+    url: https://github.com/medik8s
   version: 0.0.1

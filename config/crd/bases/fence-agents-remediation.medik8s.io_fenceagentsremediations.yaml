@@ -5,9 +5,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.8.0
   creationTimestamp: null
-  name: fenceagentsremediations.fence-agents.medik8s.io
+  name: fenceagentsremediations.fence-agents-remediation.medik8s.io
 spec:
-  group: fence-agents.medik8s.io
+  group: fence-agents-remediation.medik8s.io
   names:
     kind: FenceAgentsRemediation
     listKind: FenceAgentsRemediationList

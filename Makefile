@@ -64,7 +64,7 @@ OPERATOR_NAME ?= fence-agents-remediation
 # This variable is used to construct full image tags for bundle and catalog images.
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
-# medik8s.io/fence-agents-bundle:$VERSION and medik8s.io/fence-agents-catalog:$VERSION.
+# medik8s.io/fence-agents-remediation-bundle:$VERSION and medik8s.io/fence-agents-remediation-catalog:$VERSION.
 IMAGE_TAG_BASE ?= $(IMAGE_REGISTRY)/$(OPERATOR_NAME)
 
 # BUNDLE_IMG defines the image:tag used for the bundle.

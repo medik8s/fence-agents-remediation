@@ -1,4 +1,4 @@
-apiVersion: fence-agents.medik8s.io/v1alpha1
+apiVersion: fence-agents-remediation.medik8s.io/v1alpha1
 kind: FenceAgentsRemediation
 metadata:
   name: worker-1
