@@ -7,7 +7,7 @@ metadata:
     categories: OpenShift Optional
     containerImage: ""
     createdAt: ""
-    description: Fence Agents Remediation Operator for remeidating nodes using upstream
+    description: Fence Agents Remediation Operator for remediating nodes using upstream
       fence-agents.
     repository: https://github.com/medik8s/fence-agents-remediation
     support: Medik8s
