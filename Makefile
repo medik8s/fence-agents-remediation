@@ -297,6 +297,7 @@ define url-install-tool
 	set -e ;\
 	rm -rf $(2) ;\
 	mkdir -p $(dir $(1)) ;\
+	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
 	curl -sSLo $(1) $(3) ;\
 	chmod +x $(1) ;\
 	}
