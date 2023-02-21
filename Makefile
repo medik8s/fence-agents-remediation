@@ -171,7 +171,10 @@ fix-imports: sort-imports
 	$(SORT_IMPORTS) . -w
 
 .PHONY: test
-test: manifests generate go-verify test-imports fmt vet envtest ## Run tests.
+test: test-no-verify verify-unchanged ## Generate and format code, run tests, generate manifests and bundle, and verify no uncommitted changes
+
+.PHONY: test-no-verify
+test-no-verify: manifests generate go-verify fmt vet envtest # Generate and format code, and run tests
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
 
 ##@ Build
@@ -185,7 +188,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 .PHONY: docker-build
-docker-build: test ## Build docker image with the manager.
+docker-build: test-no-verify ## Build docker image with the manager.
 	docker build -t ${IMG} .
 
 .PHONY: docker-push
@@ -323,7 +326,6 @@ endef
 build-tools: ## Download & build all the tools locally if necessary.
 	$(MAKE) kustomize controller-gen envtest opm operator-sdk
 
-
 # Set CATALOG_BASE_IMG to an existing catalog image tag to add $BUNDLE_IMGS to that image.
 ifneq ($(origin CATALOG_BASE_IMG), undefined)
 FROM_INDEX_OPT := --from-index $(CATALOG_BASE_IMG)
@@ -340,3 +342,18 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+##@ Targets used by CI
+
+.PHONY: verify-unchanged
+verify-unchanged: ## Verify there are no un-committed changes
+	./hack/verify-unchanged.sh
+
+.PHONY: container-build 
+container-build: docker-build bundle-build ## Build containers
+
+.PHONY: container-push 
+container-push: docker-push bundle-push catalog-build catalog-push ## Push containers (NOTE: catalog can't be build before bundle was pushed)
+
+.PHONY: container-build-and-push
+container-build-and-push: container-build container-push ## Build and push all the four images to quay (docker, bundle, and catalog).
