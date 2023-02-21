@@ -222,7 +222,7 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 ## Some addition to bundle creation in the bundle
 
 .PHONY: bundle-update
-bundle-update: ## Update containerImage, and createdAt fields in the bundle's CSV
+bundle-update: operator-sdk ## Update containerImage, and createdAt fields in the bundle's CSV, then validate the bundle directory
 	sed -r -i "s|containerImage: .*|containerImage: $(IMG)|;" ./bundle/manifests/$(OPERATOR_NAME).clusterserviceversion.yaml
 	sed -r -i "s|createdAt: .*|createdAt: `date '+%Y-%m-%d %T'`|;" ./bundle/manifests/$(OPERATOR_NAME).clusterserviceversion.yaml
 	$(OPERATOR_SDK) bundle validate ./bundle
