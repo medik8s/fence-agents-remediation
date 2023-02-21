@@ -171,7 +171,10 @@ fix-imports: sort-imports
 	$(SORT_IMPORTS) . -w
 
 .PHONY: test
-test: manifests generate go-verify test-imports fmt vet envtest ## Run tests.
+test: test-no-verify verify-unchanged ## Generate and format code, run tests, generate manifests and bundle, and verify no uncommitted changes
+
+.PHONY: test-no-verify
+test-no-verify: manifests generate go-verify fmt vet envtest # Generate and format code, and run tests
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
 
 ##@ Build
@@ -185,7 +188,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 .PHONY: docker-build
-docker-build: test ## Build docker image with the manager.
+docker-build: test-no-verify ## Build docker image with the manager.
 	docker build -t ${IMG} .
 
 .PHONY: docker-push
@@ -341,6 +344,10 @@ catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
 
 ##@ Targets used by CI
+
+.PHONY: verify-unchanged
+verify-unchanged: ## Verify there are no un-committed changes
+	./hack/verify-unchanged.sh
 
 .PHONY: container-build 
 container-build: docker-build bundle-build ## Build containers
