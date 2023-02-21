@@ -10,6 +10,8 @@ ENVTEST_VERSION ?= v0.0.0-20221022092956-090611b34874
 OPM_VERSION ?= v1.26.2
 # See github.com/operator-framework/operator-sdk/releases for the last version
 OPERATOR_SDK_VERSION ?= v1.26.0
+# See https://github.com/slintes/sort-imports/releases for the last version
+SORT_IMPORTS_VERSION = v0.1.0
 
 # IMAGE_REGISTRY used to indicate the registery/group for the operator, bundle and catalog
 IMAGE_REGISTRY ?= quay.io/medik8s
@@ -160,8 +162,16 @@ go-vendor:  # Run go mod vendor - make vendored copy of dependencies.
 go-verify: go-tidy go-vendor # Run go mod verify - verify dependencies have expected content
 	go mod verify
 
+# Check for sorted imports
+test-imports: sort-imports
+	$(SORT_IMPORTS) .
+
+# Sort imports
+fix-imports: sort-imports
+	$(SORT_IMPORTS) . -w
+
 .PHONY: test
-test: manifests generate go-verify fmt vet envtest ## Run tests.
+test: manifests generate go-verify test-imports fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
 
 ##@ Build
@@ -231,6 +241,7 @@ CONTROLLER_GEN_DIR ?= $(LOCALBIN)/controller-gen
 ENVTEST_DIR ?= $(LOCALBIN)/setup-envtest
 OPM_DIR = $(LOCALBIN)/opm
 OPERATOR_SDK_DIR ?= $(LOCALBIN)/operator-sdk
+SORT_IMPORTS_DIR ?= $(LOCALBIN)/sort-imports
 
 ## Specific Tool Binaries
 KUSTOMIZE = $(KUSTOMIZE_DIR)/$(KUSTOMIZE_VERSION)/kustomize
@@ -238,6 +249,7 @@ CONTROLLER_GEN = $(CONTROLLER_GEN_DIR)/$(CONTROLLER_GEN_VERSION)/controller-gen
 ENVTEST = $(ENVTEST_DIR)/$(ENVTEST_VERSION)/setup-envtest
 OPM = $(OPM_DIR)/$(OPM_VERSION)/opm
 OPERATOR_SDK = $(OPERATOR_SDK_DIR)/$(OPERATOR_SDK_VERSION)/operator-sdk
+SORT_IMPORTS = $(SORT_IMPORTS_DIR)/$(SORT_IMPORTS_VERSION)/sort-imports
 
 .PHONY: kustomize
 kustomize: ## Download kustomize locally if necessary.
@@ -250,6 +262,10 @@ controller-gen: ## Download controller-gen locally if necessary.
 .PHONY: envtest
 envtest: ## Download envtest-setup locally if necessary.
 	$(call go-install-tool,$(ENVTEST),$(ENVTEST_DIR),sigs.k8s.io/controller-runtime/tools/setup-envtest@${ENVTEST_VERSION})
+
+.PHONY: sort-imports
+sort-imports: ## Download sort-imports locally if necessary.
+	$(call go-install-tool,$(SORT_IMPORTS),$(SORT_IMPORTS_DIR),github.com/slintes/sort-imports@$(SORT_IMPORTS_VERSION))
 
 # go-install-tool will delete old package $2, then 'go install' any package $3 to $1.
 define go-install-tool
