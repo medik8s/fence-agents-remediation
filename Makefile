@@ -323,7 +323,6 @@ endef
 build-tools: ## Download & build all the tools locally if necessary.
 	$(MAKE) kustomize controller-gen envtest opm operator-sdk
 
-
 # Set CATALOG_BASE_IMG to an existing catalog image tag to add $BUNDLE_IMGS to that image.
 ifneq ($(origin CATALOG_BASE_IMG), undefined)
 FROM_INDEX_OPT := --from-index $(CATALOG_BASE_IMG)
@@ -340,3 +339,14 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+##@ Targets used by CI
+
+.PHONY: container-build 
+container-build: docker-build bundle-build ## Build containers
+
+.PHONY: container-push 
+container-push: docker-push bundle-push catalog-build catalog-push ## Push containers (NOTE: catalog can't be build before bundle was pushed)
+
+.PHONY: container-build-and-push
+container-build-and-push: container-build container-push ## Build and push all the four images to quay (docker, bundle, and catalog).
