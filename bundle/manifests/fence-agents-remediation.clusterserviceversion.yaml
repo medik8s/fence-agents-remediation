@@ -149,18 +149,6 @@ spec:
           - patch
           - update
         - apiGroups:
-          - fence-agents-remediation.medik8s.io
-          resources:
-          - fenceagentsremediationtemplates
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
           - authentication.k8s.io
           resources:
           - tokenreviews
