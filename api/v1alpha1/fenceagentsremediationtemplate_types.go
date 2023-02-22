@@ -43,10 +43,10 @@ type FenceAgentsRemediationTemplateStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 // FenceAgentsRemediationTemplate is the Schema for the fenceagentsremediationtemplates API
+// +operator-sdk:csv:customresourcedefinitions:resources={{"FenceAgentsRemediationTemplate","v1alpha1","fenceagentsremediationtemplates"}}
 type FenceAgentsRemediationTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

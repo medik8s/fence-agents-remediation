@@ -40,6 +40,10 @@ spec:
       displayName: Fence Agents Remediation Template
       kind: FenceAgentsRemediationTemplate
       name: fenceagentsremediationtemplates.fence-agents-remediation.medik8s.io
+      resources:
+      - kind: FenceAgentsRemediationTemplate
+        name: fenceagentsremediationtemplates
+        version: v1alpha1
       specDescriptors:
       - description: Template defines the desired state of FenceAgentsRemediationTemplate
         displayName: Template

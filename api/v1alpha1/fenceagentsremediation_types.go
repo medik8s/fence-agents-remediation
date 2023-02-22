@@ -59,9 +59,9 @@ type FenceAgentsRemediation struct {
 	Status FenceAgentsRemediationStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-
+// +kubebuilder:object:root=true
 // FenceAgentsRemediationList contains a list of FenceAgentsRemediation
+// +operator-sdk:csv:customresourcedefinitions:resources={{"FenceAgentsRemediation","v1alpha1","fenceagentsremediations"}}
 type FenceAgentsRemediationList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
