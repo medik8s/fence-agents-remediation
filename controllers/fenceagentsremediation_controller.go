@@ -16,17 +16,15 @@ limitations under the License.
 
 package controllers
 
-//TODO mshitrit make sure fence agents and other necessary executables are installed in the pod
-
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/go-logr/logr"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,11 +33,6 @@ import (
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
-)
-
-const (
-	//TODO mshitrit verify that template is created with this name
-	fenceAgentsTemplateName = "fenceagentsremediationtemplate-default"
 )
 
 var (
@@ -51,6 +44,13 @@ type FenceAgentsRemediationReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *FenceAgentsRemediationReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&v1alpha1.FenceAgentsRemediation{}).
+		Complete(r)
 }
 
 //+kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
@@ -69,69 +69,54 @@ type FenceAgentsRemediationReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.2/pkg/reconcile
 func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Log.Info("started reconcile")
-	defer r.Log.Info("finished reconcile")
+	r.Log.Info("Begin FenceAgentsRemediation Reconcile")
+	defer r.Log.Info("Finish FenceAgentsRemediation Reconcile")
+	emptyResult := ctrl.Result{}
 
+	// Fetch the FenceAgentsRemediation instance
 	far := &v1alpha1.FenceAgentsRemediation{}
 	if err := r.Get(ctx, req.NamespacedName, far); err != nil {
 		if apiErrors.IsNotFound(err) {
 			// FAR is deleted, stop reconciling
-			r.Log.Info("Fence Agents Remediation not found, nothing to do")
-			return ctrl.Result{}, nil
+			r.Log.Info("FAR CR is deleted - nothing to do", "CR Name", req.Name, "CR Namespace", req.Namespace)
+			return emptyResult, nil
 		}
-		r.Log.Error(err, "failed to get FAR")
-		return ctrl.Result{}, err
+		r.Log.Error(err, "failed to get FAR CR")
+		return emptyResult, err
 	}
-	key := client.ObjectKey{Namespace: req.Namespace, Name: fenceAgentsTemplateName}
-	farTemplate := &v1alpha1.FenceAgentsRemediationTemplate{}
-	if err := r.Get(ctx, key, farTemplate); err != nil {
-		r.Log.Error(err, "failed to get FAR template")
-		return ctrl.Result{}, err
-	}
-
-	pod, err := r.getFAPod(req.NamespacedName.Namespace)
+	// TODO: Validate FAR CR name to nodeName. Run isNodeNameValid
+	// Fetch the FAR's pod
+	r.Log.Info("Fetch FAR's pod")
+	pod, err := r.getFenceAgentsPod(req.Namespace)
 	if err != nil {
-		return ctrl.Result{}, err
+		return emptyResult, err
 	}
 
+	// Build CLI executer for FAR's pod
+	r.Log.Info("Build CLI executer for FAR's pod")
 	ex, err := cli.NewExecuter(pod)
 	if err != nil {
-		return ctrl.Result{}, err
+		return emptyResult, err
 	}
 
-	faParams := buildFenceAgentParams(farTemplate, far)
-	cmd := append([]string{farTemplate.Spec.Agent}, faParams...)
-	//fence_ipmilan --ip=192.168.111.1 --ipport=6233 --username=admin --password=password --action=status --lanplus --verbose
+	//TODO: Check that FA is excutable? run cli.IsExecuteable
+	r.Log.Info("Create and execute the fence agent", "Fence Agent", far.Spec.Agent)
+	faParams, err := buildFenceAgentParams(far)
+	if err != nil {
+		return emptyResult, err
+	}
+	cmd := append([]string{far.Spec.Agent}, faParams...)
+	// The Fence Agent is excutable and the parameters are valid but we don't know about their values
 	if _, _, err := ex.Execute(cmd); err != nil {
-		return ctrl.Result{}, err
+		//TODO: better seperation between errors from wrong shared parameters values and wrong node parameters values
+		return emptyResult, err
 	}
 
-	return ctrl.Result{}, nil
+	return emptyResult, nil
 }
 
-func buildFenceAgentParams(farTemplate *v1alpha1.FenceAgentsRemediationTemplate, far *v1alpha1.FenceAgentsRemediation) []string {
-	var fenceAgentParams []string
-	for paramName, paramVal := range farTemplate.Spec.SharedParameters {
-		fenceAgentParams = appendParamToSlice(fenceAgentParams, string(paramName), paramVal)
-
-	}
-
-	nodeName := v1alpha1.NodeName(far.Name)
-	for paramName, nodeMap := range farTemplate.Spec.NodeParameters {
-		fenceAgentParams = appendParamToSlice(fenceAgentParams, string(paramName), nodeMap[nodeName])
-	}
-
-	return fenceAgentParams
-}
-
-// SetupWithManager sets up the controller with the Manager.
-func (r *FenceAgentsRemediationReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.FenceAgentsRemediation{}).
-		Complete(r)
-}
-
-func (r *FenceAgentsRemediationReconciler) getFAPod(namespace string) (*corev1.Pod, error) {
+// getFenceAgentsPod fetches the FAR pod based on FAR's label and namespace
+func (r *FenceAgentsRemediationReconciler) getFenceAgentsPod(namespace string) (*corev1.Pod, error) {
 
 	pods := new(corev1.PodList)
 
@@ -143,11 +128,12 @@ func (r *FenceAgentsRemediationReconciler) getFAPod(namespace string) (*corev1.P
 	}
 	if err := r.Client.List(context.Background(), pods, &options); err != nil {
 		r.Log.Error(err, "failed fetching Fence Agent layer pod")
+		// err := errors.New("failed fetching Fence Agent layer pod")
 		return nil, err
 	}
 	if len(pods.Items) == 0 {
 		r.Log.Info("No Fence Agent pods were found")
-		podNotFoundErr := &errors.StatusError{ErrStatus: metav1.Status{
+		podNotFoundErr := &apiErrors.StatusError{ErrStatus: metav1.Status{
 			Status: metav1.StatusFailure,
 			Code:   http.StatusNotFound,
 			Reason: metav1.StatusReasonNotFound,
@@ -158,11 +144,33 @@ func (r *FenceAgentsRemediationReconciler) getFAPod(namespace string) (*corev1.P
 
 }
 
-func appendParamToSlice(fenceAgentParams []string, paramName string, paramVal string) []string {
+// buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR
+func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, error) {
+	var fenceAgentParams []string
+	for paramName, paramVal := range far.Spec.SharedParameters {
+		fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
+	}
+
+	nodeName := v1alpha1.NodeName(far.Name)
+	for paramName, nodeMap := range far.Spec.NodeParameters {
+		if nodeVal, isFound := nodeMap[nodeName]; isFound {
+			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
+		} else {
+			err := errors.New("node parameter is required, and cannot be empty")
+			return nil, err
+		}
+	}
+	return fenceAgentParams, nil
+}
+
+// appendParamToSlice appends parameters in a key-value manner, when value can be empty
+func appendParamToSlice(fenceAgentParams []string, paramName v1alpha1.ParameterName, paramVal string) []string {
 	if paramVal != "" {
 		fenceAgentParams = append(fenceAgentParams, fmt.Sprintf("%s=%s", paramName, paramVal))
 	} else {
-		fenceAgentParams = append(fenceAgentParams, paramName)
+		fenceAgentParams = append(fenceAgentParams, string(paramName))
 	}
 	return fenceAgentParams
 }
+
+// TODO: Add isNodeNameValid function which call listNodeNames to validate the FAR's name with the cluster node names
