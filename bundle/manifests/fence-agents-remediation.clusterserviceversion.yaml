@@ -10,14 +10,6 @@ metadata:
           "metadata": {
             "name": "worker-1"
           },
-          "spec": null
-        },
-        {
-          "apiVersion": "fence-agents-remediation.medik8s.io/v1alpha1",
-          "kind": "FenceAgentsRemediationTemplate",
-          "metadata": {
-            "name": "fenceagentsremediationtemplate-default"
-          },
           "spec": {
             "agent": "fence_ipmilan",
             "nodeparameters": {
@@ -37,6 +29,16 @@ metadata:
               "--password": "password",
               "--username": "admin"
             }
+          }
+        },
+        {
+          "apiVersion": "fence-agents-remediation.medik8s.io/v1alpha1",
+          "kind": "FenceAgentsRemediationTemplate",
+          "metadata": {
+            "name": "fenceagentsremediationtemplate-default"
+          },
+          "spec": {
+            "template": {}
           }
         }
       ]

@@ -3,18 +3,4 @@ kind: FenceAgentsRemediationTemplate
 metadata:
   name: fenceagentsremediationtemplate-default
 spec:
-  agent: fence_ipmilan
-  sharedparameters:
-    --username: "admin"
-    --password: "password"
-    --lanplus: ""
-    --action: "reboot"
-    --ip: "192.168.111.1"
-  nodeparameters:
-    --ipport:
-      master-0: "6230"
-      master-1: "6231"
-      master-2: "6232"
-      worker-0: "6233"
-      worker-1: "6234"
-      worker-2: "6235"
+  template: {}
