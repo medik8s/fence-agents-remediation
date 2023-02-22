@@ -36,6 +36,26 @@ spec:
             type: object
           spec:
             description: FenceAgentsRemediationSpec defines the desired state of FenceAgentsRemediation
+            properties:
+              agent:
+                description: Agent is the type of fence agent that will be used
+                type: string
+              nodeparameters:
+                additionalProperties:
+                  additionalProperties:
+                    type: string
+                  type: object
+                description: NodeParameters are node specific they are passed to the
+                  fencing agent according to the node that is fenced
+                type: object
+              sharedparameters:
+                additionalProperties:
+                  type: string
+                description: SharedParameters are passed to the fencing agent no matter
+                  which node is fenced (i.e they are common for all the nodes)
+                type: object
+            required:
+            - agent
             type: object
           status:
             description: FenceAgentsRemediationStatus defines the observed state of

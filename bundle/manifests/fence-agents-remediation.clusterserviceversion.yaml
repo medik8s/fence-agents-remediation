@@ -61,12 +61,39 @@ spec:
       displayName: Fence Agents Remediation
       kind: FenceAgentsRemediation
       name: fenceagentsremediations.fence-agents-remediation.medik8s.io
+      specDescriptors:
+      - description: Agent is the type of fence agent that will be used
+        displayName: Agent
+        path: agent
+      - description: NodeParameters are node specific they are passed to the fencing
+          agent according to the node that is fenced
+        displayName: Node Parameters
+        path: nodeparameters
+      - description: SharedParameters are passed to the fencing agent no matter which
+          node is fenced (i.e they are common for all the nodes)
+        displayName: Shared Parameters
+        path: sharedparameters
       version: v1alpha1
     - description: FenceAgentsRemediationTemplate is the Schema for the fenceagentsremediationtemplates
         API
       displayName: Fence Agents Remediation Template
       kind: FenceAgentsRemediationTemplate
       name: fenceagentsremediationtemplates.fence-agents-remediation.medik8s.io
+      specDescriptors:
+      - description: Template defines the desired state of FenceAgentsRemediationTemplate
+        displayName: Template
+        path: template
+      - description: Agent is the type of fence agent that will be used
+        displayName: Agent
+        path: template.spec.agent
+      - description: NodeParameters are node specific they are passed to the fencing
+          agent according to the node that is fenced
+        displayName: Node Parameters
+        path: template.spec.nodeparameters
+      - description: SharedParameters are passed to the fencing agent no matter which
+          node is fenced (i.e they are common for all the nodes)
+        displayName: Shared Parameters
+        path: template.spec.sharedparameters
       version: v1alpha1
   description: Run existing set of upstream fencing agents for environments with a
     traditional API end-point (eg. IPMI) for power cycling cluster nodes.

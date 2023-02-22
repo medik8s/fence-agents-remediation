@@ -23,10 +23,22 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type ParameterName string
+type NodeName string
+
 // FenceAgentsRemediationSpec defines the desired state of FenceAgentsRemediation
 type FenceAgentsRemediationSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Agent is the type of fence agent that will be used
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	Agent string `json:"agent"`
+
+	// SharedParameters are passed to the fencing agent no matter which node is fenced (i.e they are common for all the nodes)
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	SharedParameters map[ParameterName]string `json:"sharedparameters,omitempty"`
+
+	// NodeParameters are node specific they are passed to the fencing agent according to the node that is fenced
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	NodeParameters map[ParameterName]map[NodeName]string `json:"nodeparameters,omitempty"`
 }
 
 // FenceAgentsRemediationStatus defines the observed state of FenceAgentsRemediation
