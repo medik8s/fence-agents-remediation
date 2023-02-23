@@ -176,7 +176,7 @@ test: test-no-verify verify-unchanged ## Generate and format code, run tests, ge
 
 .PHONY: test-no-verify
 test-no-verify: manifests generate go-verify fmt vet envtest ginkgo # Generate and format code, and run tests
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)"  $(GINKGO) -v -r --keepGoing -requireSuite -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR)/$(ENVTEST_VERSION) -p path)"  $(GINKGO) -v -r --keepGoing -requireSuite -coverprofile cover.out
 
 ##@ Build
 

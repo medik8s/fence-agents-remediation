@@ -81,7 +81,7 @@ var _ = Describe("FAR Controller", func() {
 		//Scenarios
 
 		BeforeEach(func() {
-			// Create fenceAgentsPod and FAR Template
+			// Create fenceAgentsPod and FAR
 			Expect(k8sClient.Create(context.Background(), fenceAgentsPod)).NotTo(HaveOccurred())
 			Expect(k8sClient.Create(context.Background(), underTestFAR)).NotTo(HaveOccurred())
 		})
@@ -134,7 +134,7 @@ func indexOf(element string, data []string) int {
 	return -1
 }
 
-// newFenceAgentsRemediationTemplate assign the input to the FenceAgentsRemediationTemplate's Spec
+// newFenceAgentsRemediation assign the input to the FenceAgentsRemediation's Spec
 func newFenceAgentsRemediation(nodeName string, agent string, sharedparameters map[v1alpha1.ParameterName]string, nodeparameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) *v1alpha1.FenceAgentsRemediation {
 	return &v1alpha1.FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: defaultNamespace},
