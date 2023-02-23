@@ -12,6 +12,10 @@ OPM_VERSION ?= v1.26.2
 OPERATOR_SDK_VERSION ?= v1.26.0
 # See https://github.com/slintes/sort-imports/releases for the last version
 SORT_IMPORTS_VERSION = v0.1.0
+# See https://github.com/onsi/ginkgo/releases for the last version
+GINKGO_VERSION ?= v1.16.5
+# ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
+ENVTEST_K8S_VERSION = 1.23
 
 # IMAGE_REGISTRY used to indicate the registery/group for the operator, bundle and catalog
 IMAGE_REGISTRY ?= quay.io/medik8s
@@ -89,9 +93,6 @@ USE_IMAGE_DIGESTS ?= false
 ifeq ($(USE_IMAGE_DIGESTS), true)
 	BUNDLE_GEN_FLAGS += --use-image-digests
 endif
-
-# ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.23
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -174,8 +175,8 @@ fix-imports: sort-imports
 test: test-no-verify verify-unchanged ## Generate and format code, run tests, generate manifests and bundle, and verify no uncommitted changes
 
 .PHONY: test-no-verify
-test-no-verify: manifests generate go-verify fmt vet envtest # Generate and format code, and run tests
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
+test-no-verify: manifests generate go-verify fmt vet envtest ginkgo # Generate and format code, and run tests
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)"  $(GINKGO) -v -r --keepGoing -requireSuite -coverprofile cover.out
 
 ##@ Build
 
@@ -242,6 +243,7 @@ $(LOCALBIN):
 KUSTOMIZE_DIR ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN_DIR ?= $(LOCALBIN)/controller-gen
 ENVTEST_DIR ?= $(LOCALBIN)/setup-envtest
+GINKGO_DIR ?= $(LOCALBIN)/ginkgo
 OPM_DIR = $(LOCALBIN)/opm
 OPERATOR_SDK_DIR ?= $(LOCALBIN)/operator-sdk
 SORT_IMPORTS_DIR ?= $(LOCALBIN)/sort-imports
@@ -250,6 +252,7 @@ SORT_IMPORTS_DIR ?= $(LOCALBIN)/sort-imports
 KUSTOMIZE = $(KUSTOMIZE_DIR)/$(KUSTOMIZE_VERSION)/kustomize
 CONTROLLER_GEN = $(CONTROLLER_GEN_DIR)/$(CONTROLLER_GEN_VERSION)/controller-gen
 ENVTEST = $(ENVTEST_DIR)/$(ENVTEST_VERSION)/setup-envtest
+GINKGO = $(GINKGO_DIR)/$(GINKGO_VERSION)/ginkgo
 OPM = $(OPM_DIR)/$(OPM_VERSION)/opm
 OPERATOR_SDK = $(OPERATOR_SDK_DIR)/$(OPERATOR_SDK_VERSION)/operator-sdk
 SORT_IMPORTS = $(SORT_IMPORTS_DIR)/$(SORT_IMPORTS_VERSION)/sort-imports
@@ -262,9 +265,13 @@ kustomize: ## Download kustomize locally if necessary.
 controller-gen: ## Download controller-gen locally if necessary.
 	$(call go-install-tool,$(CONTROLLER_GEN),$(CONTROLLER_GEN_DIR),sigs.k8s.io/controller-tools/cmd/controller-gen@${CONTROLLER_GEN_VERSION})
 
-.PHONY: envtest
+.PHONY: envtest ## This library helps write integration tests for your controllers by setting up and starting an instance of etcd and the Kubernetes API server, without kubelet, controller-manager or other components.
 envtest: ## Download envtest-setup locally if necessary.
 	$(call go-install-tool,$(ENVTEST),$(ENVTEST_DIR),sigs.k8s.io/controller-runtime/tools/setup-envtest@${ENVTEST_VERSION})
+
+.PHONY: ginkgo
+ginkgo: ## Download ginkgo locally if necessary.
+	$(call go-install-tool,$(GINKGO),$(GINKGO_DIR),github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION})
 
 .PHONY: sort-imports
 sort-imports: ## Download sort-imports locally if necessary.
@@ -324,7 +331,7 @@ endef
 
 .PHONY: build-tools
 build-tools: ## Download & build all the tools locally if necessary.
-	$(MAKE) kustomize controller-gen envtest opm operator-sdk
+	$(MAKE) kustomize controller-gen envtest ginkgo opm operator-sdk
 
 # Set CATALOG_BASE_IMG to an existing catalog image tag to add $BUNDLE_IMGS to that image.
 ifneq ($(origin CATALOG_BASE_IMG), undefined)
