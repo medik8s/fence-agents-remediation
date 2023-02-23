@@ -15,68 +15,39 @@ import (
 )
 
 type Executer interface {
-	Execute(command []string) (stdout string, stderr string, err error)
+	Execute(pod *corev1.Pod, command []string) (stdout string, stderr string, err error)
 }
 
 type executer struct {
-	Log             logr.Logger
-	kClient         *kubernetes.Clientset
-	k8sClientConfig *restclient.Config
-	containerName   string
-	pod             *corev1.Pod
+	log       logr.Logger
+	config    *restclient.Config
+	clientSet *kubernetes.Clientset
 }
 
-// NewExecuter verifies that the pod has running containers and it builds the executer struct
-func NewExecuter(pod *corev1.Pod) (Executer, error) {
-	logger := ctrl.Log.WithName("controllers").WithName("Executer")
-	if len(pod.Spec.Containers) == 0 {
-		err := errors.New("create cli executer failed")
-		logger.Error(err, "No container found in Pod", "Pod Name", pod.Name)
+var _ Executer = executer{}
+
+// NewExecuter builds the executer
+func NewExecuter(config *restclient.Config) (Executer, error) {
+	logger := ctrl.Log.WithName("executer")
+
+	clientSet, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		logger.Error(err, "failed building k8s client")
 		return nil, err
 	}
 
-	//containerName := pod.Spec.Containers[0].Name
-	ce := executer{pod: pod,
-		containerName: "manager",
-		Log:           logger,
-	}
-	if err := ce.buildK8sClient(); err != nil {
-		return nil, err
-	}
-	return &ce, nil
+	return &executer{
+		log:       logger,
+		config:    config,
+		clientSet: clientSet,
+	}, nil
 }
-
-// buildK8sClient reutrn nil when it successfuly built a Kubernetes client for CLI executer, otherwise an error
-func (e *executer) buildK8sClient() error {
-	//client was already built, then stop here
-	if e.kClient != nil {
-		return nil
-	}
-
-	if config, err := restclient.InClusterConfig(); err != nil {
-		e.Log.Error(err, "failed getting cluster config")
-		return err
-	} else {
-		e.k8sClientConfig = config
-
-		if clientSet, err := kubernetes.NewForConfig(e.k8sClientConfig); err != nil {
-			e.Log.Error(err, "failed building k8s client")
-			return err
-		} else {
-			e.kClient = clientSet
-		}
-	}
-	return nil
-}
-
-// // IsExecuteable checks whether the Fence Agent is executeable
-// func (e *executer) IsExecuteable(command []string) (stdout, stderr string, err error) {
-
-// }
 
 // Execute builds and runs a Post request on contianer for SPDY (shell) executor
-func (e *executer) Execute(command []string) (stdout string, stderr string, err error) {
-	if err := e.buildK8sClient(); err != nil {
+func (e executer) Execute(pod *corev1.Pod, command []string) (stdout string, stderr string, err error) {
+	if len(pod.Spec.Containers) == 0 {
+		err := errors.New("create cli executer failed")
+		e.log.Error(err, "No container found in Pod", "Pod Name", pod.Name)
 		return "", "", err
 	}
 
@@ -85,16 +56,19 @@ func (e *executer) Execute(command []string) (stdout string, stderr string, err 
 		stderrBuf bytes.Buffer
 	)
 
-	req := e.kClient.CoreV1().RESTClient().Post().
-		Resource("pods").
-		Name(e.pod.Name).
-		Namespace(e.pod.Namespace).
-		SubResource("exec").
-		Param("container", e.containerName)
+	//containerName := pod.Spec.Containers[0].Name
+	containerName := "manager"
 
 	// Build the Post request for SPDY (shell) executor
+	req := e.clientSet.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(pod.Name).
+		Namespace(pod.Namespace).
+		SubResource("exec").
+		Param("container", containerName)
+
 	req.VersionedParams(&corev1.PodExecOptions{
-		Container: e.containerName,
+		Container: containerName,
 		Command:   command,
 		Stdin:     false,
 		Stdout:    true,
@@ -102,21 +76,22 @@ func (e *executer) Execute(command []string) (stdout string, stderr string, err 
 		TTY:       false,
 	}, scheme.ParameterCodec)
 
-	// Execute the Post request for SPDY (shell) executor
-	execSPDY, err := remotecommand.NewSPDYExecutor(e.k8sClientConfig, "POST", req.URL())
+	execSPDY, err := remotecommand.NewSPDYExecutor(e.config, "POST", req.URL())
 	if err != nil {
-		e.Log.Error(err, "failed building SPDY (shell) executor")
+		e.log.Error(err, "failed building SPDY (shell) executor")
 		return "", "", err
 	}
+
+	// Execute the Post request for SPDY (shell) executor
 	err = execSPDY.Stream(remotecommand.StreamOptions{
 		Stdout: &stdoutBuf,
 		Stderr: &stderrBuf,
 		Tty:    false,
 	})
 	if err != nil {
-		e.Log.Error(err, "Failed to run exec command", "command", command, "stdout", stdoutBuf.String(), "stderr", stderrBuf.String())
+		e.log.Error(err, "Failed to run exec command", "command", command, "stdout", stdoutBuf.String(), "stderr", stderrBuf.String())
 	} else {
-		e.Log.Info("Command has been executed successfully", "command", command, "standard output", stdoutBuf.String())
+		e.log.Info("Command has been executed successfully", "command", command, "standard output", stdoutBuf.String())
 	}
 	return stdoutBuf.String(), stderrBuf.String(), err
 }
