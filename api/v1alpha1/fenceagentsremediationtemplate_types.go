@@ -23,22 +23,18 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-type parameterName string
-type NodeName string
+type FenceAgentsRemediationTemplateResource struct {
+	Spec FenceAgentsRemediationSpec `json:"spec"`
+}
 
 // FenceAgentsRemediationTemplateSpec defines the desired state of FenceAgentsRemediationTemplate
 type FenceAgentsRemediationTemplateSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Agent is the type of fence agent that will be used
-	Agent string `json:"agent"`
-
-	// SharedParameters are passed to the fencing agent no matter which node is fenced (i.e they are common for all the nodes)
-	SharedParameters map[parameterName]string `json:"sharedparameters,omitempty"`
-
-	// NodeParameters are node specific they are passed to the fencing agent according to the node that is fenced
-	NodeParameters map[parameterName]map[NodeName]string `json:"nodeparameters,omitempty"`
+	// Template defines the desired state of FenceAgentsRemediationTemplate
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	Template FenceAgentsRemediationTemplateResource `json:"template"`
 }
 
 // FenceAgentsRemediationTemplateStatus defines the observed state of FenceAgentsRemediationTemplate
@@ -47,10 +43,10 @@ type FenceAgentsRemediationTemplateStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 // FenceAgentsRemediationTemplate is the Schema for the fenceagentsremediationtemplates API
+// +operator-sdk:csv:customresourcedefinitions:resources={{"FenceAgentsRemediationTemplate","v1alpha1","fenceagentsremediationtemplates"}}
 type FenceAgentsRemediationTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
