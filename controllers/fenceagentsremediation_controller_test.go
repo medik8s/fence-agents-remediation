@@ -45,11 +45,23 @@ var _ = Describe("FAR Controller", func() {
 		underTestFAR *v1alpha1.FenceAgentsRemediation
 	)
 
-	testFields := []string{"--username", "--password", "--action", "--ip", "--lanplus", "--ipport"}
-	testValues := []string{"admin", "password", "reboot", "192.168.111.1", ""}
-	nodeFields := []string{"master-0", "master-1", "master-2", "worker-0", "worker-1", "worker-2"}
-	nodeValues := []string{"6230", "6231", "6232", "6233", "6234", "6235"}
-	testShareParam, testNodeParam := buildFARParameters(testFields, testValues, nodeFields, nodeValues, validNodeName)
+	testShareParam := map[v1alpha1.ParameterName]string{
+		"--username": "admin",
+		"--password": "password",
+		"--action":   "reboot",
+		"--ip":       "192.168.111.1",
+		"--lanplus":  "",
+	}
+	testNodeParam := map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{
+		"--ipport": {
+			"master-0": "6230",
+			"master-1": "6231",
+			"master-2": "6232",
+			"worker-0": "6233",
+			"worker-1": "6234",
+			"worker-2": "6235",
+		},
+	}
 	underTestFAR = newFenceAgentsRemediation(validNodeName, " ", testShareParam, testNodeParam)
 	fenceAgentsPod := buildFarPod()
 
@@ -97,38 +109,6 @@ var _ = Describe("FAR Controller", func() {
 		})
 	})
 })
-
-// buildFARParameters from string to arrays to two string maps (key-value manner)
-func buildFARParameters(fields []string, values []string, nodeFields []string, nodeValues []string, node string) (map[v1alpha1.ParameterName]string, map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) {
-	testShareParam := make(map[v1alpha1.ParameterName]string)
-	testNodeParam := make(map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string)
-	i := 0
-	for i = 0; i < len(values); i++ {
-		field := v1alpha1.ParameterName(fields[i])
-		testShareParam[field] = values[i]
-	}
-
-	nodeName := v1alpha1.NodeName(node)
-	numNodeParam := len(fields) - len(values)
-	for j := 0; j < numNodeParam; j++ {
-		if indexOf(node, nodeFields) > -1 {
-			field := v1alpha1.ParameterName(fields[i+j])
-			testNodeParam[field] = make(map[v1alpha1.NodeName]string)
-			testNodeParam[field][nodeName] = nodeValues[indexOf(node, nodeFields)]
-		}
-	}
-	return testShareParam, testNodeParam
-}
-
-// indexOf return the index of element in data array. If it is not found, return -1
-func indexOf(element string, data []string) int {
-	for i, v := range data {
-		if element == v {
-			return i
-		}
-	}
-	return -1
-}
 
 // newFenceAgentsRemediation assign the input to the FenceAgentsRemediation's Spec
 func newFenceAgentsRemediation(nodeName string, agent string, sharedparameters map[v1alpha1.ParameterName]string, nodeparameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) *v1alpha1.FenceAgentsRemediation {
