@@ -31,17 +31,13 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
-	"github.com/medik8s/fence-agents-remediation/pkg/cli"
+	// "github.com/medik8s/fence-agents-remediation/pkg/cli"
 )
 
 const (
 	defaultNamespace = "default"
 	dummyNodeName    = "dummy-node"
 	validNodeName    = "worker-0"
-)
-
-var (
-	executedCommand []string
 )
 
 var _ = Describe("FAR Controller", func() {
@@ -163,7 +159,7 @@ func buildFarPod() *corev1.Pod {
 // cliCommandsEquality creates the command for CLI and compares it with the production command
 func cliCommandsEquality(far *v1alpha1.FenceAgentsRemediation) (bool, error) {
 	//fence_ipmilan --ip=192.168.111.1 --ipport=6233 --username=admin --password=password --action=status --lanplus
-	if executedCommand == nil {
+	if mocksExecuter.command == nil {
 		return false, errors.New("executedCommand is null")
 	}
 	expectedCommand, err := buildFenceAgentParams(far)
@@ -172,30 +168,28 @@ func cliCommandsEquality(far *v1alpha1.FenceAgentsRemediation) (bool, error) {
 	}
 	expectedCommand = append([]string{far.Spec.Agent}, expectedCommand...)
 
-	fmt.Printf("%s is the executedCommand in prod, and %s is the expected command in test.\n", executedCommand, expectedCommand)
-	sort.Strings(executedCommand)
+	fmt.Printf("%s is the command from production environment, and %s is the expected command from test environment.\n", mocksExecuter.command, expectedCommand)
+	sort.Strings(mocksExecuter.command)
 	sort.Strings(expectedCommand)
-	return reflect.DeepEqual(executedCommand, expectedCommand), nil
+	return reflect.DeepEqual(mocksExecuter.command, expectedCommand), nil
 }
 
 // Implements Execute function to mock/test Execute of FenceAgentsRemediationReconciler
 type mockExecuter struct {
-	expected []string
-	mockLog  logr.Logger
+	command []string
+	mockLog logr.Logger
 }
 
 // newMockExecuter is a dummy function for testing
-func newMockExecuter() cli.Executer {
+func newMockExecuter() *mockExecuter {
 	mockLogger := ctrl.Log.WithName("mockExecuter")
-	mockExpected := []string{"mockExecuter"}
-	mockE := mockExecuter{expected: mockExpected, mockLog: mockLogger}
+	mockE := mockExecuter{mockLog: mockLogger}
 	return &mockE
 }
 
-// Execute is a dummy function for testing which stores the production command in the global variable
-func (e *mockExecuter) Execute(_ *corev1.Pod, command []string) (stdout string, stderr string, err error) {
-	executedCommand = command
-	e.expected = command
-	e.mockLog.Info("Executed command has been saved", "executedCommand", executedCommand)
+// Execute is a dummy function for testing which stores the production command
+func (m *mockExecuter) Execute(_ *corev1.Pod, command []string) (stdout string, stderr string, err error) {
+	m.command = command
+	m.mockLog.Info("Executed command has been stored", "command", m.command)
 	return "", "", nil
 }

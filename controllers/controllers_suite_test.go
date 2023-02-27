@@ -43,6 +43,7 @@ var k8sManager manager.Manager
 var testEnv *envtest.Environment
 var ctx context.Context
 var cancel context.CancelFunc
+var mocksExecuter *mockExecuter
 
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -73,12 +74,12 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
-
+	mocksExecuter = newMockExecuter()
 	err = (&FenceAgentsRemediationReconciler{
 		Client:   k8sClient,
 		Log:      k8sManager.GetLogger().WithName("test far reconciler"),
 		Scheme:   k8sManager.GetScheme(),
-		Executor: newMockExecuter(),
+		Executor: mocksExecuter,
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
 
