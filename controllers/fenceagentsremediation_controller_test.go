@@ -65,17 +65,19 @@ var _ = Describe("FAR Controller", func() {
 	underTestFAR = newFenceAgentsRemediation(validNodeName, " ", testShareParam, testNodeParam)
 	fenceAgentsPod := buildFarPod()
 
-	Context("Functionaility", func() {
-		When("testing buildFenceAgentParams", func() {
-			It("should fail when FAR's name isn't a node name", func() {
-				underTestFAR.ObjectMeta.Name = dummyNodeName
-				_, err := buildFenceAgentParams(underTestFAR)
-				Expect(err).To(HaveOccurred())
-			})
-			It("should succeed when FAR pod has been created", func() {
-				underTestFAR.ObjectMeta.Name = validNodeName
-				_, err := buildFenceAgentParams(underTestFAR)
-				Expect(err).NotTo(HaveOccurred())
+	Context("Functionality", func() {
+		Context("buildFenceAgentParams", func() {
+			When("FAR's name isn't a node name", func() {
+				It("should fail", func() {
+					underTestFAR.ObjectMeta.Name = dummyNodeName
+					_, err := buildFenceAgentParams(underTestFAR)
+					Expect(err).To(HaveOccurred())
+				})
+				It("should succeed", func() {
+					underTestFAR.ObjectMeta.Name = validNodeName
+					_, err := buildFenceAgentParams(underTestFAR)
+					Expect(err).NotTo(HaveOccurred())
+				})
 			})
 		})
 		When("creating a resource", func() {
@@ -140,15 +142,13 @@ func buildFarPod() *corev1.Pod {
 func cliCommandsEquality(far *v1alpha1.FenceAgentsRemediation) (bool, error) {
 	//fence_ipmilan --ip=192.168.111.1 --ipport=6233 --username=admin --password=password --action=status --lanplus
 	if mocksExecuter.command == nil {
-		return false, errors.New("executedCommand is null")
+		return false, errors.New("The command from mocksExecuter is null")
 	}
-	expectedCommand, err := buildFenceAgentParams(far)
-	if err != nil {
-		return false, err
-	}
-	expectedCommand = append([]string{far.Spec.Agent}, expectedCommand...)
 
-	fmt.Printf("%s is the command from production environment, and %s is the expected command from test environment.\n", mocksExecuter.command, expectedCommand)
+	// hardcode expected command
+	expectedCommand := []string{" ", "--lanplus", "--password=password", "--username=admin", "--action=reboot", "--ip=192.168.111.1", "--ipport=6233"}
+
+	fmt.Printf("%s is the command from production environment, and %s is the hardcoded expected command from test environment.\n", mocksExecuter.command, expectedCommand)
 	sort.Strings(mocksExecuter.command)
 	sort.Strings(expectedCommand)
 	return reflect.DeepEqual(mocksExecuter.command, expectedCommand), nil
