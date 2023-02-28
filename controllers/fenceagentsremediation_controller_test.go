@@ -38,6 +38,7 @@ const (
 	defaultNamespace = "default"
 	dummyNodeName    = "dummy-node"
 	validNodeName    = "worker-0"
+	fenceAgentIPMI   = "fence_ipmilan"
 )
 
 var _ = Describe("FAR Controller", func() {
@@ -62,7 +63,7 @@ var _ = Describe("FAR Controller", func() {
 			"worker-2": "6235",
 		},
 	}
-	underTestFAR = newFenceAgentsRemediation(validNodeName, " ", testShareParam, testNodeParam)
+	underTestFAR = newFenceAgentsRemediation(validNodeName, fenceAgentIPMI, testShareParam, testNodeParam)
 	fenceAgentsPod := buildFarPod()
 
 	Context("Functionality", func() {
@@ -140,13 +141,13 @@ func buildFarPod() *corev1.Pod {
 
 // cliCommandsEquality creates the command for CLI and compares it with the production command
 func cliCommandsEquality(far *v1alpha1.FenceAgentsRemediation) (bool, error) {
-	//fence_ipmilan --ip=192.168.111.1 --ipport=6233 --username=admin --password=password --action=status --lanplus
 	if mocksExecuter.command == nil {
 		return false, errors.New("The command from mocksExecuter is null")
 	}
 
 	// hardcode expected command
-	expectedCommand := []string{" ", "--lanplus", "--password=password", "--username=admin", "--action=reboot", "--ip=192.168.111.1", "--ipport=6233"}
+	//fence_ipmilan --ip=192.168.111.1 --ipport=6233 --username=admin --password=password --action=status --lanplus
+	expectedCommand := []string{fenceAgentIPMI, "--lanplus", "--password=password", "--username=admin", "--action=reboot", "--ip=192.168.111.1", "--ipport=6233"}
 
 	fmt.Printf("%s is the command from production environment, and %s is the hardcoded expected command from test environment.\n", mocksExecuter.command, expectedCommand)
 	sort.Strings(mocksExecuter.command)
