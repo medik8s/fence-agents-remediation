@@ -33,7 +33,9 @@ import (
 
 	fenceagentsv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/controllers"
+
 	//+kubebuilder:scaffold:imports
+	"github.com/medik8s/fence-agents-remediation/pkg/cli"
 )
 
 var (
@@ -78,10 +80,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	executer, err := cli.NewExecuter(mgr.GetConfig())
+	if err != nil {
+		setupLog.Error(err, "unable to create executer")
+		os.Exit(1)
+	}
+
 	if err = (&controllers.FenceAgentsRemediationReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("FenceAgentsRemediation"),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Log:      ctrl.Log.WithName("controllers").WithName("FenceAgentsRemediation"),
+		Scheme:   mgr.GetScheme(),
+		Executor: executer,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "FenceAgentsRemediation")
 		os.Exit(1)

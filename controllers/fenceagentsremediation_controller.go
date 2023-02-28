@@ -42,8 +42,9 @@ var (
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
 type FenceAgentsRemediationReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log      logr.Logger
+	Scheme   *runtime.Scheme
+	Executor cli.Executer
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -91,15 +92,8 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	if err != nil {
 		return emptyResult, err
 	}
-
-	// Build CLI executer for FAR's pod
-	r.Log.Info("Build CLI executer for FAR's pod")
-	ex, err := cli.NewExecuter(pod)
-	if err != nil {
-		return emptyResult, err
-	}
-
 	//TODO: Check that FA is excutable? run cli.IsExecuteable
+
 	r.Log.Info("Create and execute the fence agent", "Fence Agent", far.Spec.Agent)
 	faParams, err := buildFenceAgentParams(far)
 	if err != nil {
@@ -107,7 +101,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	}
 	cmd := append([]string{far.Spec.Agent}, faParams...)
 	// The Fence Agent is excutable and the parameters are valid but we don't know about their values
-	if _, _, err := ex.Execute(cmd); err != nil {
+	if _, _, err := r.Executor.Execute(pod, cmd); err != nil {
 		//TODO: better seperation between errors from wrong shared parameters values and wrong node parameters values
 		return emptyResult, err
 	}
@@ -128,7 +122,6 @@ func (r *FenceAgentsRemediationReconciler) getFenceAgentsPod(namespace string) (
 	}
 	if err := r.Client.List(context.Background(), pods, &options); err != nil {
 		r.Log.Error(err, "failed fetching Fence Agent layer pod")
-		// err := errors.New("failed fetching Fence Agent layer pod")
 		return nil, err
 	}
 	if len(pods.Items) == 0 {
@@ -141,7 +134,6 @@ func (r *FenceAgentsRemediationReconciler) getFenceAgentsPod(namespace string) (
 		return nil, podNotFoundErr
 	}
 	return &pods.Items[0], nil
-
 }
 
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR
