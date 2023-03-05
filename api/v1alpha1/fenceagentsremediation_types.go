@@ -50,6 +50,7 @@ type FenceAgentsRemediationStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
+// +operator-sdk:csv:customresourcedefinitions:resources={{"FenceAgentsRemediation","v1alpha1","fenceagentsremediations"}}
 // FenceAgentsRemediation is the Schema for the fenceagentsremediations API
 type FenceAgentsRemediation struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -61,7 +62,6 @@ type FenceAgentsRemediation struct {
 
 // +kubebuilder:object:root=true
 // FenceAgentsRemediationList contains a list of FenceAgentsRemediation
-// +operator-sdk:csv:customresourcedefinitions:resources={{"FenceAgentsRemediation","v1alpha1","fenceagentsremediations"}}
 type FenceAgentsRemediationList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

@@ -22,6 +22,10 @@ spec:
       displayName: Fence Agents Remediation
       kind: FenceAgentsRemediation
       name: fenceagentsremediations.fence-agents-remediation.medik8s.io
+      resources:
+      - kind: FenceAgentsRemediation
+        name: fenceagentsremediations
+        version: v1alpha1
       specDescriptors:
       - description: Agent is the type of fence agent that will be used
         displayName: Agent
