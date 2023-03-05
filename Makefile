@@ -7,6 +7,8 @@ CONTROLLER_GEN_VERSION ?= v0.8.0
 # See https://pkg.go.dev/sigs.k8s.io/controller-runtime/tools/setup-envtest?tab=versions for the last version
 ENVTEST_VERSION ?= v0.0.0-20221022092956-090611b34874
 # See https://pkg.go.dev/golang.org/x/tools/cmd/goimports?tab=versions for the last version
+GOIMPORTS_VERSION ?= v0.6.0
+# See github.com/operator-framework/operator-registry/releases for the last version
 OPM_VERSION ?= v1.26.2
 # See github.com/operator-framework/operator-sdk/releases for the last version
 OPERATOR_SDK_VERSION ?= v1.26.0
@@ -144,11 +146,11 @@ generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 .PHONY: fmt
-fmt: ## Run go fmt against code.
-	go fmt ./...
+fmt: goimports ## Run go goimports against code - goimports = go fmt + fixing imports.
+	$(GOIMPORTS) -w  ./main.go ./pkg ./api ./controllers
 
 .PHONY: vet
-vet: ## Run go vet against code.
+vet: ## Run go vet against code - report likely mistakes in packages.
 	go vet ./...
 
 .PHONY: go-tidy
@@ -244,6 +246,7 @@ KUSTOMIZE_DIR ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN_DIR ?= $(LOCALBIN)/controller-gen
 ENVTEST_DIR ?= $(LOCALBIN)/setup-envtest
 GINKGO_DIR ?= $(LOCALBIN)/ginkgo
+GOIMPORTS_DIR ?= $(LOCALBIN)/goimports
 OPM_DIR = $(LOCALBIN)/opm
 OPERATOR_SDK_DIR ?= $(LOCALBIN)/operator-sdk
 SORT_IMPORTS_DIR ?= $(LOCALBIN)/sort-imports
@@ -253,6 +256,7 @@ KUSTOMIZE = $(KUSTOMIZE_DIR)/$(KUSTOMIZE_VERSION)/kustomize
 CONTROLLER_GEN = $(CONTROLLER_GEN_DIR)/$(CONTROLLER_GEN_VERSION)/controller-gen
 ENVTEST = $(ENVTEST_DIR)/$(ENVTEST_VERSION)/setup-envtest
 GINKGO = $(GINKGO_DIR)/$(GINKGO_VERSION)/ginkgo
+GOIMPORTS = $(GOIMPORTS_DIR)/$(GOIMPORTS_VERSION)/goimports
 OPM = $(OPM_DIR)/$(OPM_VERSION)/opm
 OPERATOR_SDK = $(OPERATOR_SDK_DIR)/$(OPERATOR_SDK_VERSION)/operator-sdk
 SORT_IMPORTS = $(SORT_IMPORTS_DIR)/$(SORT_IMPORTS_VERSION)/sort-imports
@@ -272,6 +276,10 @@ envtest: ## Download envtest-setup locally if necessary.
 .PHONY: ginkgo
 ginkgo: ## Download ginkgo locally if necessary.
 	$(call go-install-tool,$(GINKGO),$(GINKGO_DIR),github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION})
+
+.PHONY: goimports
+goimports: ## Download goimports locally if necessary.
+	$(call go-install-tool,$(GOIMPORTS),$(GOIMPORTS_DIR),golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION})
 
 .PHONY: sort-imports
 sort-imports: ## Download sort-imports locally if necessary.
@@ -302,7 +310,7 @@ bundle: manifests operator-sdk kustomize ## Generate bundle manifests and metada
 	$(OPERATOR_SDK) bundle validate ./bundle
 
 .PHONY: bundle-build
-bundle-build: bundle-update ## Build the bundle image.
+bundle-build: bundle bundle-update ## Build the bundle image.
 	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
