@@ -16,7 +16,7 @@ rules:
 - apiGroups:
   - fence-agents-remediation.medik8s.io
   resources:
-  - fenceagentsremediation
+  - fenceagentsremediations
   verbs:
   - get
   - list
