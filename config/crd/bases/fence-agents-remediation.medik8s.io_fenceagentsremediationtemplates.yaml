@@ -12,8 +12,10 @@ spec:
     kind: FenceAgentsRemediationTemplate
     listKind: FenceAgentsRemediationTemplateList
     plural: fenceagentsremediationtemplates
+    shortNames:
+    - fart
     singular: fenceagentsremediationtemplate
-  scope: Namespaced
+  scope: Cluster
   versions:
   - name: v1alpha1
     schema:

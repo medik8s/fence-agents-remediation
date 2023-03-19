@@ -13,8 +13,10 @@ spec:
     kind: FenceAgentsRemediation
     listKind: FenceAgentsRemediationList
     plural: fenceagentsremediations
+    shortNames:
+    - far
     singular: fenceagentsremediation
-  scope: Namespaced
+  scope: Cluster
   versions:
   - name: v1alpha1
     schema:

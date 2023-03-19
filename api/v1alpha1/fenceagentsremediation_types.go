@@ -49,6 +49,7 @@ type FenceAgentsRemediationStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:resource:scope=Cluster,shortName=far
 
 // +operator-sdk:csv:customresourcedefinitions:resources={{"FenceAgentsRemediation","v1alpha1","fenceagentsremediations"}}
 // FenceAgentsRemediation is the Schema for the fenceagentsremediations API
