@@ -21,6 +21,7 @@ COPY controllers/ controllers/
 COPY hack/ hack/
 COPY pkg/ pkg/
 COPY version/ version/
+COPY vendor/ vendor/
 
 # for getting version info
 COPY .git/ .git/
