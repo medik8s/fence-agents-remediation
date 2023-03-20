@@ -183,8 +183,8 @@ test-no-verify: manifests generate go-verify fmt vet envtest ginkgo # Generate a
 ##@ Build
 
 .PHONY: build
-build: generate fmt vet ## Build manager binary.
-	go build -o bin/manager main.go
+build: ## Build manager binary.
+	./hack/build.sh
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
