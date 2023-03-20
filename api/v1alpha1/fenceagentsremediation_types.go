@@ -28,15 +28,15 @@ type NodeName string
 
 // FenceAgentsRemediationSpec defines the desired state of FenceAgentsRemediation
 type FenceAgentsRemediationSpec struct {
-	// Agent is the type of fence agent that will be used
+	// Agent is the name of fence agent that will be used
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Agent string `json:"agent"`
 
-	// SharedParameters are passed to the fencing agent no matter which node is fenced (i.e they are common for all the nodes)
+	// SharedParameters are passed to the fencing agent regardless of which node is about to be fenced (i.e., they are common for all the nodes)
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	SharedParameters map[ParameterName]string `json:"sharedparameters,omitempty"`
 
-	// NodeParameters are node specific they are passed to the fencing agent according to the node that is fenced
+	// NodeParameters are passed to the fencing agent according to the node that is fenced, since they are node specific
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	NodeParameters map[ParameterName]map[NodeName]string `json:"nodeparameters,omitempty"`
 }
@@ -49,6 +49,7 @@ type FenceAgentsRemediationStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:resource:scope=Cluster,shortName=far
 
 // +operator-sdk:csv:customresourcedefinitions:resources={{"FenceAgentsRemediation","v1alpha1","fenceagentsremediations"}}
 // FenceAgentsRemediation is the Schema for the fenceagentsremediations API

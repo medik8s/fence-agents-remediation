@@ -12,8 +12,10 @@ spec:
     kind: FenceAgentsRemediationTemplate
     listKind: FenceAgentsRemediationTemplateList
     plural: fenceagentsremediationtemplates
+    shortNames:
+    - fart
     singular: fenceagentsremediationtemplate
-  scope: Namespaced
+  scope: Cluster
   versions:
   - name: v1alpha1
     schema:
@@ -45,7 +47,7 @@ spec:
                       of FenceAgentsRemediation
                     properties:
                       agent:
-                        description: Agent is the type of fence agent that will be
+                        description: Agent is the name of fence agent that will be
                           used
                         type: string
                       nodeparameters:
@@ -53,15 +55,16 @@ spec:
                           additionalProperties:
                             type: string
                           type: object
-                        description: NodeParameters are node specific they are passed
-                          to the fencing agent according to the node that is fenced
+                        description: NodeParameters are passed to the fencing agent
+                          according to the node that is fenced, since they are node
+                          specific
                         type: object
                       sharedparameters:
                         additionalProperties:
                           type: string
                         description: SharedParameters are passed to the fencing agent
-                          no matter which node is fenced (i.e they are common for
-                          all the nodes)
+                          regardless of which node is about to be fenced (i.e., they
+                          are common for all the nodes)
                         type: object
                     required:
                     - agent
