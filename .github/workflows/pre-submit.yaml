@@ -1,5 +1,10 @@
-# Understanding the workflow file - https://docs.github.com/en/actions/learn-github-actions/understanding-github-actions#understanding-the-workflow-file
+---
 name: Pre Submit # workflow name
+#
+# Documentation:
+# https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions#understanding-the-workflow-file
+#
+
 on: # on events
   push:
     branches:
@@ -19,7 +24,13 @@ jobs: # jobs to run
       with:
         fetch-depth: 0
 
-    - name: Run Unit Tests
+    - name: Set up Go # https://github.com/actions/setup-go/blob/main/action.yml
+      uses: actions/setup-go@v4
+      with: 
+        go-version-file: 'go.mod' 
+        cache-dependency-path: 'go.sum' 
+
+    - name: Run checks and unit tests
       run: make test
 
     - name: Build Images
