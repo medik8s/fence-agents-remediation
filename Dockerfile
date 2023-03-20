@@ -1,6 +1,6 @@
 # Build the manager binary
 FROM quay.io/centos/centos:stream8 AS builder
-RUN dnf install golang -y
+RUN dnf install git golang -y
 
 # Ensure correct Go version
 ENV GO_VERSION=1.18
