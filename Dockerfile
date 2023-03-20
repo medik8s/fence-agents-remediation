@@ -1,6 +1,6 @@
 # Build the manager binary
 FROM quay.io/centos/centos:stream8 AS builder
-RUN dnf install golang -y
+RUN dnf install git golang -y
 
 # Ensure correct Go version
 ENV GO_VERSION=1.18
@@ -13,19 +13,21 @@ WORKDIR /
 # Copy the Go Modules manifests
 COPY go.mod go.mod
 COPY go.sum go.sum
-# cache deps before building and copying source so that we don't need to re-download as much
-# and so that source changes don't invalidate our downloaded layer
-RUN go mod download
-
 
 # Copy the go source
 COPY main.go main.go
 COPY api/ api/
 COPY controllers/ controllers/
+COPY hack/ hack/
 COPY pkg/ pkg/
+COPY version/ version/
+COPY vendor/ vendor/
+
+# for getting version info
+COPY .git/ .git/
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager main.go
+RUN ./hack/build.sh
 
 # Add Fence Agents
 RUN dnf install -y fence-agents-all
