@@ -32,4 +32,5 @@ RUN ./hack/build.sh
 # Add Fence Agents
 RUN dnf install -y fence-agents-all
 
+USER 65532:65532
 ENTRYPOINT ["/manager"]
