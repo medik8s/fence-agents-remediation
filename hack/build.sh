@@ -13,4 +13,4 @@ LDFLAGS="-s -w "
 LDFLAGS+="-X github.com/medik8s/fence-agents-remediation/version.Version=${VERSION} "
 LDFLAGS+="-X github.com/medik8s/fence-agents-remediation/version.GitCommit=${COMMIT} "
 LDFLAGS+="-X github.com/medik8s/fence-agents-remediation/version.BuildDate=${BUILD_DATE} "
-GOFLAGS=-mod=vendor CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o bin/manager main.go
+GOFLAGS=-mod=vendor CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o manager main.go
