@@ -14,7 +14,7 @@ import (
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 )
 
-const fenceAgentDummy = "echo"
+const fenceAgentDummyName = "echo"
 
 var _ = Describe("FAR E2e", func() {
 	Context("fence agent - dummy", func() {
@@ -24,7 +24,7 @@ var _ = Describe("FAR E2e", func() {
 		BeforeEach(func() {
 			testShareParam := map[v1alpha1.ParameterName]string{}
 			testNodeParam := map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{}
-			far = createFAR(testNodeName, fenceAgentDummy, testShareParam, testNodeParam)
+			far = createFAR(testNodeName, fenceAgentDummyName, testShareParam, testNodeParam)
 		})
 
 		AfterEach(func() {
@@ -38,14 +38,14 @@ var _ = Describe("FAR E2e", func() {
 	})
 })
 
-// createFAR assigns the input to FenceAgentsRemediation object, creates CR it with offset, and returns the CR object
-func createFAR(nodeName string, agent string, sharedparameters map[v1alpha1.ParameterName]string, nodeparameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) *v1alpha1.FenceAgentsRemediation {
+// createFAR assigns the input to FenceAgentsRemediation object, creates CR with offset, and returns the CR object
+func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.ParameterName]string, nodeParameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) *v1alpha1.FenceAgentsRemediation {
 	far := &v1alpha1.FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName},
 		Spec: v1alpha1.FenceAgentsRemediationSpec{
 			Agent:            agent,
-			SharedParameters: sharedparameters,
-			NodeParameters:   nodeparameters,
+			SharedParameters: sharedParameters,
+			NodeParameters:   nodeParameters,
 		},
 	}
 	ExpectWithOffset(1, k8sClient.Create(context.Background(), far)).ToNot(HaveOccurred())
