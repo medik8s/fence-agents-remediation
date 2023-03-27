@@ -147,7 +147,7 @@ generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 
 .PHONY: fmt
 fmt: goimports ## Run go goimports against code - goimports = go fmt + fixing imports.
-	$(GOIMPORTS) -w  ./main.go ./pkg ./api ./controllers
+	$(GOIMPORTS) -w  ./main.go ./pkg ./api ./controllers ./test
 
 .PHONY: vet
 vet: ## Run go vet against code - report likely mistakes in packages.
@@ -178,7 +178,7 @@ test: test-no-verify verify-unchanged ## Generate and format code, run tests, ge
 
 .PHONY: test-no-verify
 test-no-verify: manifests generate go-verify fmt vet envtest ginkgo # Generate and format code, and run tests
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR)/$(ENVTEST_VERSION) -p path)"  $(GINKGO) -v -r --keepGoing -requireSuite -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR)/$(ENVTEST_VERSION) -p path)"  $(GINKGO) --v -r  --keepGoing -requireSuite -coverprofile cover.out ./controllers
 
 ##@ Build
 
@@ -372,3 +372,8 @@ container-push: docker-push bundle-push catalog-build catalog-push ## Push conta
 
 .PHONY: container-build-and-push
 container-build-and-push: container-build container-push ## Build and push all the four images to quay (docker, bundle, and catalog).
+
+.PHONY: test-e2e
+test-e2e: ginkgo ## Run end to end (E2E) tests
+	@test -n "${KUBECONFIG}" -o -r ${HOME}/.kube/config || (echo "Failed to find kubeconfig in ~/.kube/config or no KUBECONFIG set"; exit 1)
+	$(GINKGO) -r --keepGoing --requireSuite --v  ./test/e2e -coverprofile cover.out
