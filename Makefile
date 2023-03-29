@@ -180,6 +180,11 @@ test: test-no-verify verify-unchanged ## Generate and format code, run tests, ge
 test-no-verify: manifests generate go-verify fmt vet envtest ginkgo # Generate and format code, and run tests
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR)/$(ENVTEST_VERSION) -p path)"  $(GINKGO) --v -r  --keepGoing -requireSuite -coverprofile cover.out ./controllers
 
+.PHONY: bundle-run
+export BUNDLE_RUN_NAMESPACE ?= openshift-operators
+bundle-run: operator-sdk ## Run bundle image. Default NS is "openshift-operators", redefine BUNDLE_RUN_NAMESPACE to override it.
+	$(OPERATOR_SDK) -n $(BUNDLE_RUN_NAMESPACE) run bundle $(BUNDLE_IMG)
+
 ##@ Build
 
 .PHONY: build
