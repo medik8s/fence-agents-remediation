@@ -1,6 +1,9 @@
 # Build the manager binary
 FROM quay.io/centos/centos:stream8 AS builder
-RUN dnf install git golang -y
+RUN dnf install -y dnf-plugins-core \
+    && dnf config-manager --set-enabled ha
+RUN dnf install -y golang git
+
 
 # Ensure correct Go version
 ENV GO_VERSION=1.18
@@ -29,7 +32,7 @@ COPY .git/ .git/
 # Build
 RUN ./hack/build.sh
 
-# Add Fence Agents
-RUN dnf install -y fence-agents-all
+# Add Fence Agents and fence-agents-aws packages
+RUN dnf install -y fence-agents-all fence-agents-aws
 
 ENTRYPOINT ["/manager"]
