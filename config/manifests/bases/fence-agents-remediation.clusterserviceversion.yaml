@@ -73,8 +73,8 @@ spec:
     more advanced user.\n"
   displayName: Fence Agents Remediation Operator
   icon:
-  - base64data: ""
-    mediatype: ""
+  - base64data: base64EncodedIcon
+    mediatype: image/png
   install:
     spec:
       deployments: null
