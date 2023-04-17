@@ -243,6 +243,11 @@ bundle-update: operator-sdk ## Update containerImage, createdAt, and icon fields
 bundle-reset-date: ## Reset bundle's createdAt
 	sed -r -i "s|createdAt: .*|createdAt: \"\"|;" ${BUNDLE_CSV}
 
+.PHONY: bundle-community
+bundle-community: ## Update displayName field in the bundle's CSV
+	sed -r -i "s|displayName: Fence Agents Remediation Operator|displayName: Fence Agents Remediation Operator - Community Edition|;" ${BUNDLE_CSV}
+	$(MAKE) bundle-update
+
 ##@ Build Dependencies
 
 ## Location to install dependencies to
