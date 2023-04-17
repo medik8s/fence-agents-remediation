@@ -228,16 +228,25 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 
 ##@ Bundle Creation Addition
 ## Some addition to bundle creation in the bundle
+DEFAULT_ICON_BASE64 := $(shell base64 --wrap=0 ./config/assets/medik8s_blue_icon.png)
+export ICON_BASE64 ?= ${DEFAULT_ICON_BASE64}
+export BUNDLE_CSV ?="./bundle/manifests/$(OPERATOR_NAME).clusterserviceversion.yaml"
 
 .PHONY: bundle-update
-bundle-update: operator-sdk ## Update containerImage, and createdAt fields in the bundle's CSV, then validate the bundle directory
-	sed -r -i "s|containerImage: .*|containerImage: $(IMG)|;" ./bundle/manifests/$(OPERATOR_NAME).clusterserviceversion.yaml
-	sed -r -i "s|createdAt: .*|createdAt: `date '+%Y-%m-%d %T'`|;" ./bundle/manifests/$(OPERATOR_NAME).clusterserviceversion.yaml
-	$(MAKE)  bundle-validate
+bundle-update: operator-sdk ## Update containerImage, createdAt, and icon fields in the bundle's CSV, then validate the bundle directory
+	sed -r -i "s|containerImage: .*|containerImage: $(IMG)|;" ${BUNDLE_CSV}
+	sed -r -i "s|createdAt: .*|createdAt: `date '+%Y-%m-%d %T'`|;" ${BUNDLE_CSV}
+	sed -r -i "s|base64data:.*|base64data: ${ICON_BASE64}|;" ${BUNDLE_CSV}
+	$(MAKE) bundle-validate
 
 .PHONY: bundle-reset-date
 bundle-reset-date: ## Reset bundle's createdAt
-	sed -r -i "s|createdAt: .*|createdAt: \"\"|;" ./bundle/manifests/$(OPERATOR_NAME).clusterserviceversion.yaml
+	sed -r -i "s|createdAt: .*|createdAt: \"\"|;" ${BUNDLE_CSV}
+
+.PHONY: bundle-community
+bundle-community: ## Update displayName field in the bundle's CSV
+	sed -r -i "s|displayName: Fence Agents Remediation Operator|displayName: Fence Agents Remediation Operator - Community Edition|;" ${BUNDLE_CSV}
+	$(MAKE) bundle-update
 
 ##@ Build Dependencies
 
