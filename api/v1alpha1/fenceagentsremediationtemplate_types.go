@@ -45,7 +45,7 @@ type FenceAgentsRemediationTemplateStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-//+kubebuilder:resource:scope=Cluster,shortName=fart
+//+kubebuilder:resource:shortName=fart
 
 // FenceAgentsRemediationTemplate is the Schema for the fenceagentsremediationtemplates API
 // +operator-sdk:csv:customresourcedefinitions:resources={{"FenceAgentsRemediationTemplate","v1alpha1","fenceagentsremediationtemplates"}}
