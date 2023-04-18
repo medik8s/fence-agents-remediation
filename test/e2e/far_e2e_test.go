@@ -14,7 +14,10 @@ import (
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 )
 
-const fenceAgentDummyName = "echo"
+const (
+	fenceAgentDummyName = "echo"
+	testNamespace       = "openshift-operators"
+)
 
 var _ = Describe("FAR E2e", func() {
 	Context("fence agent - dummy", func() {
@@ -41,7 +44,7 @@ var _ = Describe("FAR E2e", func() {
 // createFAR assigns the input to FenceAgentsRemediation object, creates CR with offset, and returns the CR object
 func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.ParameterName]string, nodeParameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) *v1alpha1.FenceAgentsRemediation {
 	far := &v1alpha1.FenceAgentsRemediation{
-		ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: testNamespace},
 		Spec: v1alpha1.FenceAgentsRemediationSpec{
 			Agent:            agent,
 			SharedParameters: sharedParameters,
