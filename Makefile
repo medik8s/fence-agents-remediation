@@ -384,11 +384,18 @@ verify-unchanged: ## Verify there are no un-committed changes
 .PHONY: container-build 
 container-build: docker-build bundle-build ## Build containers
 
+.PHONY: bundle-build-community
+bundle-build-community: bundle-community ## Run bundle community changes in CSV, and then build the bundle image.
+	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+
+.PHONY: container-build-community
+container-build-community: docker-build bundle-build-community ## Build containers for community
+
 .PHONY: container-push 
 container-push: docker-push bundle-push catalog-build catalog-push ## Push containers (NOTE: catalog can't be build before bundle was pushed)
 
-.PHONY: container-build-and-push
-container-build-and-push: container-build container-push ## Build and push all the four images to quay (docker, bundle, and catalog).
+.PHONY: container-build-and-push-community
+container-build-and-push-community: container-build-community container-push ## Build three images, update CSV for community, and push all the images to Quay (docker, bundle, and catalog).
 
 .PHONY: test-e2e
 test-e2e: ginkgo ## Run end to end (E2E) tests
