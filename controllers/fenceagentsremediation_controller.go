@@ -20,23 +20,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 
 	"github.com/go-logr/logr"
 
-	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
-)
-
-var (
-	faPodLabels = map[string]string{"app": "fence-agents-remediation-operator"}
+	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
@@ -88,7 +82,8 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	// TODO: Validate FAR CR name to nodeName. Run isNodeNameValid
 	// Fetch the FAR's pod
 	r.Log.Info("Fetch FAR's pod")
-	pod, err := r.getFenceAgentsPod(req.Namespace)
+	// pod, err := r.getFenceAgentsPod()
+	pod, err := utils.GetFenceAgentsRemediationPod(req.Name, r.Client)
 	if err != nil {
 		return emptyResult, err
 	}
@@ -107,33 +102,6 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	return emptyResult, nil
-}
-
-// getFenceAgentsPod fetches the FAR pod based on FAR's label and namespace
-func (r *FenceAgentsRemediationReconciler) getFenceAgentsPod(namespace string) (*corev1.Pod, error) {
-
-	pods := new(corev1.PodList)
-
-	podLabelsSelector, _ := metav1.LabelSelectorAsSelector(
-		&metav1.LabelSelector{MatchLabels: faPodLabels})
-	options := client.ListOptions{
-		LabelSelector: podLabelsSelector,
-		Namespace:     namespace,
-	}
-	if err := r.Client.List(context.Background(), pods, &options); err != nil {
-		r.Log.Error(err, "failed fetching Fence Agent layer pod")
-		return nil, err
-	}
-	if len(pods.Items) == 0 {
-		r.Log.Info("No Fence Agent pods were found")
-		podNotFoundErr := &apiErrors.StatusError{ErrStatus: metav1.Status{
-			Status: metav1.StatusFailure,
-			Code:   http.StatusNotFound,
-			Reason: metav1.StatusReasonNotFound,
-		}}
-		return nil, podNotFoundErr
-	}
-	return &pods.Items[0], nil
 }
 
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR

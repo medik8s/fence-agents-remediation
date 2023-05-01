@@ -41,6 +41,8 @@ const (
 	fenceAgentIPMI   = "fence_ipmilan"
 )
 
+var faPodLabels = map[string]string{"app": "fence-agents-remediation-operator"}
+
 var _ = Describe("FAR Controller", func() {
 	var (
 		underTestFAR *v1alpha1.FenceAgentsRemediation
@@ -64,7 +66,6 @@ var _ = Describe("FAR Controller", func() {
 		},
 	}
 	underTestFAR = newFenceAgentsRemediation(validNodeName, fenceAgentIPMI, testShareParam, testNodeParam)
-	fenceAgentsPod := buildFarPod()
 
 	Context("Functionality", func() {
 		Context("buildFenceAgentParams", func() {
@@ -88,6 +89,7 @@ var _ = Describe("FAR Controller", func() {
 		})
 	})
 
+	fenceAgentsPod := buildFarPod()
 	Context("Reconcile", func() {
 		//Scenarios
 
