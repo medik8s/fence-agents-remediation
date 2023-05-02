@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	configv1 "github.com/openshift/api/config/v1"
@@ -64,8 +65,13 @@ func GetAWSNodeInfoList(machineClient *machineclient.MachineV1beta1Client) (map[
 	// creates map for nodeName and AWS instance ID
 	for _, machine := range machineList.Items {
 		nodeName := v1alpha1.NodeName(string(machine.Status.NodeRef.Name))
-		fmt.Printf("node: %s Instance ID: %s \n", nodeName, string(*machine.Spec.ProviderID))
-		nodeList[nodeName] = string(*machine.Spec.ProviderID)
+		providerID := string(*machine.Spec.ProviderID)
+
+		// Get the instance ID from the provider ID aws:///us-east-1b/i-082ac37ab919a82c2 -> i-082ac37ab919a82c2
+		splitedProviderID := strings.Split(providerID, "/i-")
+		instanceID := "i-" + splitedProviderID[1]
+		nodeList[nodeName] = instanceID
+		fmt.Printf("node: %s Instance ID: %s \n", nodeName, instanceID)
 	}
 	return nodeList, nil
 }
