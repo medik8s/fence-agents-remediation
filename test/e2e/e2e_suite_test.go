@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -29,6 +30,9 @@ var (
 	k8sClient     ctrl.Client
 	configClient  configclient.Interface
 	machineClient *machineclient.MachineV1beta1Client
+
+	// The ns the operator is running in
+	operatorNsName string
 )
 
 func TestE2e(t *testing.T) {
@@ -43,6 +47,9 @@ var _ = BeforeSuite(func() {
 	}
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseFlagOptions(&opts)))
 	log = logf.Log
+
+	operatorNsName = os.Getenv("OPERATOR_NS")
+	Expect(operatorNsName).ToNot(BeEmpty(), "OPERATOR_NS env var not set, can't start e2e test")
 
 	// +kubebuilder:scaffold:scheme
 

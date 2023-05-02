@@ -31,8 +31,8 @@ func GetClusterInfo(config configclient.Interface) (*configv1.Infrastructure, er
 	return clusterInfra, nil
 }
 
-// GetCredientals searches for AWS or BMH secret, and then returns it decoded
-func GetCredientals(clientSet *kubernetes.Clientset, secretName, secretKey, secretVal string) (string, string, error) {
+// GetCredentials searches for AWS or BMH secret, and then returns it decoded
+func GetCredentials(clientSet *kubernetes.Clientset, secretName, secretKey, secretVal string) (string, string, error) {
 	// oc get secrets -n openshift-machine-api aws-cloud-credentials -o jsonpath='{.data.aws_access_key_id}' | base64 -d
 	// oc get secrets -n openshift-machine-api aws-cloud-credentials -o jsonpath='{.data.aws_secret_access_key}' | base64 -d
 

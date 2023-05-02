@@ -22,7 +22,6 @@ import (
 
 const (
 	fenceAgentDummyName  = "echo"
-	testNamespace        = "far-install"
 	fenceAgentAWS        = "fence_aws"
 	fenceAgentIPMI       = "fence_ipmilan"
 	fenceAgentAction     = "status"
@@ -44,10 +43,10 @@ var _ = Describe("FAR E2e", func() {
 	)
 	BeforeEach(func() {
 		clusterPlatform, err = farUtils.GetClusterInfo(configClient)
-		clusterPlatformType = string(clusterPlatform.Status.PlatformStatus.Type)
 		if err != nil {
 			Fail("can't identify the cluster platform")
 		}
+		clusterPlatformType = string(clusterPlatform.Status.PlatformStatus.Type)
 		fmt.Printf("\ncluster name: %s and PlatformType: %s \n", string(clusterPlatform.Name), clusterPlatformType)
 	})
 
@@ -128,7 +127,7 @@ var _ = Describe("FAR E2e", func() {
 // createFAR assigns the input to FenceAgentsRemediation object, creates CR, and returns the CR object
 func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.ParameterName]string, nodeParameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) *v1alpha1.FenceAgentsRemediation {
 	far := &v1alpha1.FenceAgentsRemediation{
-		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: testNamespace},
+		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: operatorNsName},
 		Spec: v1alpha1.FenceAgentsRemediationSpec{
 			Agent:            agent,
 			SharedParameters: sharedParameters,
@@ -169,7 +168,7 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 	// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.type}'
 	clusterPlatformType := string(clusterPlatform.Status.PlatformStatus.Type)
 	if clusterPlatformType == "AWS" {
-		accessKey, secretKey, err := farUtils.GetCredientals(clientSet, secretAWS, secretKeyAWS, secretValAWS)
+		accessKey, secretKey, err := farUtils.GetCredentials(clientSet, secretAWS, secretKeyAWS, secretValAWS)
 		if err != nil {
 			fmt.Printf("can't get AWS credentials")
 			return nil, err
@@ -189,7 +188,7 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 		// TODO : get ip from GetCredientals
 		// oc get bmh -n openshift-machine-api ostest-master-0 -o jsonpath='{.spec.bmc.address}'
 		// then parse ip
-		username, password, err := farUtils.GetCredientals(clientSet, secretBMHExample, secretKeyBM, secretValBM)
+		username, password, err := farUtils.GetCredentials(clientSet, secretBMHExample, secretKeyBM, secretValBM)
 		if err != nil {
 			fmt.Printf("can't get BM credentials")
 			return nil, err
