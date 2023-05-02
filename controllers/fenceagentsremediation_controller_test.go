@@ -41,6 +41,11 @@ const (
 	fenceAgentIPMI   = "fence_ipmilan"
 )
 
+var (
+	faPodLabels    = map[string]string{"app": "fence-agents-remediation-operator"}
+	fenceAgentsPod *corev1.Pod
+)
+
 var _ = Describe("FAR Controller", func() {
 	var (
 		underTestFAR *v1alpha1.FenceAgentsRemediation
@@ -64,7 +69,6 @@ var _ = Describe("FAR Controller", func() {
 		},
 	}
 	underTestFAR = newFenceAgentsRemediation(validNodeName, fenceAgentIPMI, testShareParam, testNodeParam)
-	fenceAgentsPod := buildFarPod()
 
 	Context("Functionality", func() {
 		Context("buildFenceAgentParams", func() {
@@ -87,11 +91,11 @@ var _ = Describe("FAR Controller", func() {
 			})
 		})
 	})
-
 	Context("Reconcile", func() {
 		//Scenarios
 
 		BeforeEach(func() {
+			fenceAgentsPod = buildFarPod()
 			// Create fenceAgentsPod and FAR
 			Expect(k8sClient.Create(context.Background(), fenceAgentsPod)).NotTo(HaveOccurred())
 			Expect(k8sClient.Create(context.Background(), underTestFAR)).NotTo(HaveOccurred())

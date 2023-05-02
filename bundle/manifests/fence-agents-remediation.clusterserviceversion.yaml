@@ -221,6 +221,11 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
+                env:
+                - name: DEPLOYMENT_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
                 image: quay.io/medik8s/fence-agents-remediation-operator:latest
                 livenessProbe:
                   httpGet:
