@@ -5,16 +5,17 @@ import (
 	"os"
 )
 
-// GetDeploymentNamespace returns the Namespace this operator is deployed on.
-func GetDeploymentNamespace() (string, error) {
-	// deployNamespaceEnvVar is the constant for env variable DEPLOYMENT_NAMESPACE
-	// which specifies the Namespace to watch.
-	// An empty value means the operator is running with cluster scope.
-	var deployNamespaceEnvVar = "DEPLOYMENT_NAMESPACE"
+// deployNamespaceEnv is a constant for env variable DEPLOYMENT_NAMESPACE
+// which specifies the Namespace that the operator's deployment was installed/run.
+// It has been set using Downward API (https://kubernetes.io/docs/concepts/workloads/pods/downward-api/) in manager.yaml
+const deployNamespaceEnv = "DEPLOYMENT_NAMESPACE"
 
-	ns, found := os.LookupEnv(deployNamespaceEnvVar)
+// GetDeploymentNamespace returns the Namespace this operator is deployed/installed on.
+func GetDeploymentNamespace() (string, error) {
+
+	ns, found := os.LookupEnv(deployNamespaceEnv)
 	if !found {
-		return "", fmt.Errorf("%s must be set", deployNamespaceEnvVar)
+		return "", fmt.Errorf("%s must be set", deployNamespaceEnv)
 	}
 	return ns, nil
 }

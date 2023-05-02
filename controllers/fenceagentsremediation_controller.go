@@ -82,7 +82,6 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	// TODO: Validate FAR CR name to nodeName. Run isNodeNameValid
 	// Fetch the FAR's pod
 	r.Log.Info("Fetch FAR's pod")
-	// pod, err := r.getFenceAgentsPod()
 	pod, err := utils.GetFenceAgentsRemediationPod(req.Name, r.Client)
 	if err != nil {
 		return emptyResult, err
