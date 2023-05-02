@@ -14,7 +14,7 @@ import (
 )
 
 // GetFenceAgentsRemediationPod fetches the FAR pod based on FAR's label and namespace
-func GetFenceAgentsRemediationPod(nodeName string, r client.Reader) (*corev1.Pod, error) {
+func GetFenceAgentsRemediationPod(r client.Reader) (*corev1.Pod, error) {
 	pods := &corev1.PodList{}
 
 	selector := labels.NewSelector()

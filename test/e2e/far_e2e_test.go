@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -11,7 +10,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
-	farController "github.com/medik8s/fence-agents-remediation/controllers"
+	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 	farUtils "github.com/medik8s/fence-agents-remediation/test/e2e/utils"
 
 	corev1 "k8s.io/api/core/v1"
@@ -240,7 +239,11 @@ func buildNodeParameters(clusterPlatformType string) (map[v1alpha1.ParameterName
 func checkFarLogs(logString string) {
 	var pod *corev1.Pod
 	EventuallyWithOffset(1, func() *corev1.Pod {
-		pod = getFenceAgentsPod()
+		pod, err := utils.GetFenceAgentsRemediationPod(k8sClient)
+		if err != nil {
+			log.Error(err, "failed to get pod. Might try again")
+			return nil
+		}
 		return pod
 	}, timeoutLogs, pollInterval).ShouldNot(BeNil(), "can't find the pod after timeout")
 
@@ -252,23 +255,4 @@ func checkFarLogs(logString string) {
 		}
 		return logs
 	}, timeoutLogs, pollInterval).Should(ContainSubstring(logString))
-}
-
-// getFenceAgentsPod fetches the FAR pod based on FAR's label and namespace
-func getFenceAgentsPod() *corev1.Pod {
-	pods := new(corev1.PodList)
-	podLabelsSelector, _ := metav1.LabelSelectorAsSelector(
-		&metav1.LabelSelector{MatchLabels: farController.FaPodLabels})
-	options := client.ListOptions{
-		LabelSelector: podLabelsSelector,
-	}
-	if err := k8sClient.List(context.Background(), pods, &options); err != nil {
-		log.Error(err, "can't find the pod by it's labels")
-		return nil
-	}
-	if len(pods.Items) == 0 {
-		log.Error(errors.New("API error"), "Zero pods")
-		return nil
-	}
-	return &pods.Items[0]
 }
