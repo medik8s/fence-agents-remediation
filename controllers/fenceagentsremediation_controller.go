@@ -88,7 +88,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	}
 	//TODO: Check that FA is excutable? run cli.IsExecuteable
 
-	r.Log.Info("Create and execute the fence agent", "Fence Agent", far.Spec.Agent)
+	r.Log.Info("Create and execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
 	faParams, err := buildFenceAgentParams(far)
 	if err != nil {
 		return emptyResult, err

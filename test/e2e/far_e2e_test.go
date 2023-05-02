@@ -2,13 +2,16 @@ package e2e
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	farController "github.com/medik8s/fence-agents-remediation/controllers"
 	farUtils "github.com/medik8s/fence-agents-remediation/test/e2e/utils"
+
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,6 +22,10 @@ const (
 	fenceAgentDummyName = "echo"
 	testNamespace       = "openshift-operators"
 	fenceAgentAWS       = "fence_aws"
+
+	// eventually parameters
+	timeoutLogs  = 1 * time.Minute
+	pollInterval = 10 * time.Second
 )
 
 var _ = Describe("FAR E2e", func() {
@@ -118,6 +125,9 @@ var _ = Describe("FAR E2e", func() {
 				testFarCR := &v1alpha1.FenceAgentsRemediation{}
 				Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(far), testFarCR)).To(Succeed(), "failed to get FAR CR")
 
+				By("checking the command has been executed successfully")
+				checkFarLogs("ON")
+
 			})
 		})
 	})
@@ -146,4 +156,41 @@ func deleteFAR(far *v1alpha1.FenceAgentsRemediation) {
 		}
 		return err
 	}, 2*time.Minute, 10*time.Second).ShouldNot(HaveOccurred(), "failed to delete far")
+}
+
+// checkFarLogs gets the FAR pod and checks whether it's logs have logString
+func checkFarLogs(logString string) {
+	var pod *corev1.Pod
+	EventuallyWithOffset(1, func() *corev1.Pod {
+		pod = getFenceAgentsPod()
+		return pod
+	}, timeoutLogs, pollInterval).ShouldNot(BeNil(), "can't find the pod after timeout")
+
+	EventuallyWithOffset(1, func() string {
+		logs, err := farUtils.GetLogs(clientSet, pod, "manager")
+		if err != nil {
+			log.Error(err, "failed to get logs. Might try again")
+			return ""
+		}
+		return logs
+	}, timeoutLogs, pollInterval).Should(ContainSubstring(logString))
+}
+
+// getFenceAgentsPod fetches the FAR pod based on FAR's label and namespace
+func getFenceAgentsPod() *corev1.Pod {
+	pods := new(corev1.PodList)
+	podLabelsSelector, _ := metav1.LabelSelectorAsSelector(
+		&metav1.LabelSelector{MatchLabels: farController.FaPodLabels})
+	options := client.ListOptions{
+		LabelSelector: podLabelsSelector,
+	}
+	if err := k8sClient.List(context.Background(), pods, &options); err != nil {
+		log.Error(err, "can't find the pod by it's labels")
+		return nil
+	}
+	if len(pods.Items) == 0 {
+		log.Error(errors.New("API error"), "Zero pods")
+		return nil
+	}
+	return &pods.Items[0]
 }
