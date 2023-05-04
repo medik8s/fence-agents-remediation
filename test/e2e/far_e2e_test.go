@@ -25,7 +25,7 @@ const (
 	fenceAgentIPMI       = "fence_ipmilan"
 	fenceAgentAction     = "status"
 	nodeIndex            = 0
-	suceessStatusMessage = "ON"
+	succeesStatusMessage = "ON"
 	containerName        = "manager"
 
 	// eventually parameters
@@ -35,19 +35,17 @@ const (
 
 var _ = Describe("FAR E2e", func() {
 	var (
-		far                 *v1alpha1.FenceAgentsRemediation
-		fenceAgent          string
-		clusterPlatformType string
-		clusterPlatform     *configv1.Infrastructure
-		err                 error
+		far             *v1alpha1.FenceAgentsRemediation
+		fenceAgent      string
+		clusterPlatform *configv1.Infrastructure
+		err             error
 	)
 	BeforeEach(func() {
 		clusterPlatform, err = farE2eUtils.GetClusterInfo(configClient)
 		if err != nil {
 			Fail("can't identify the cluster platform")
 		}
-		clusterPlatformType = string(clusterPlatform.Status.PlatformStatus.Type)
-		fmt.Printf("\ncluster name: %s and PlatformType: %s \n", string(clusterPlatform.Name), clusterPlatformType)
+		fmt.Printf("\ncluster name: %s and PlatformType: %s \n", string(clusterPlatform.Name), string(clusterPlatform.Status.PlatformStatus.Type))
 	})
 
 	Context("fence agent - dummy", func() {
@@ -84,13 +82,14 @@ var _ = Describe("FAR E2e", func() {
 			testNodeName = nodeObj.Name
 			log.Info("Testing Node", "Node name", testNodeName)
 
-			if clusterPlatformType == "AWS" {
+			switch clusterPlatform.Status.PlatformStatus.Type {
+			case configv1.AWSPlatformType:
 				fenceAgent = fenceAgentAWS
 				By("running fence_aws")
-			} else if clusterPlatformType == "BareMetal" {
+			case configv1.BareMetalPlatformType:
 				fenceAgent = fenceAgentIPMI
 				By("running fence_ipmilan")
-			} else {
+			default:
 				Skip("FAR haven't been tested on this kind of cluster (non AWS or BareMetal)")
 			}
 
@@ -98,7 +97,7 @@ var _ = Describe("FAR E2e", func() {
 			if err != nil {
 				Fail("can't get shared information")
 			}
-			testNodeParam, err := buildNodeParameters(clusterPlatformType)
+			testNodeParam, err := buildNodeParameters(clusterPlatform.Status.PlatformStatus.Type)
 			if err != nil {
 				Fail("can't get node information")
 			}
@@ -117,7 +116,7 @@ var _ = Describe("FAR E2e", func() {
 				Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(far), testFarCR)).To(Succeed(), "failed to get FAR CR")
 
 				By("checking the command has been executed successfully")
-				checkFarLogs(suceessStatusMessage)
+				checkFarLogs(succeesStatusMessage)
 			})
 		})
 	})
@@ -165,8 +164,8 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 	var testShareParam map[v1alpha1.ParameterName]string
 
 	// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.type}'
-	clusterPlatformType := string(clusterPlatform.Status.PlatformStatus.Type)
-	if clusterPlatformType == "AWS" {
+	clusterPlatformType := clusterPlatform.Status.PlatformStatus.Type
+	if clusterPlatformType == configv1.AWSPlatformType {
 		accessKey, secretKey, err := farE2eUtils.GetCredentials(clientSet, secretAWS, secretKeyAWS, secretValAWS)
 		if err != nil {
 			fmt.Printf("can't get AWS credentials\n")
@@ -183,7 +182,7 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 			"--action":     action,
 			// "--verbose":    "", // for verbose result
 		}
-	} else if clusterPlatformType == "BareMetal" {
+	} else if clusterPlatformType == configv1.BareMetalPlatformType {
 		// TODO : get ip from GetCredientals
 		// oc get bmh -n openshift-machine-api ostest-master-0 -o jsonpath='{.spec.bmc.address}'
 		// then parse ip
@@ -204,7 +203,7 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 }
 
 // buildNodeParameters returns a map key-value of node parameters based on cluster platform type if it finds the node info list, otherwise an error
-func buildNodeParameters(clusterPlatformType string) (map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, error) {
+func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, error) {
 	var (
 		testNodeParam  map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
 		nodeListParam  map[v1alpha1.NodeName]string
@@ -212,7 +211,7 @@ func buildNodeParameters(clusterPlatformType string) (map[v1alpha1.ParameterName
 		err            error
 	)
 
-	if clusterPlatformType == "AWS" {
+	if clusterPlatformType == configv1.AWSPlatformType {
 		nodeListParam, err = farE2eUtils.GetAWSNodeInfoList(machineClient)
 		if err != nil {
 			fmt.Printf("can't get nodes' information - AWS instance ID\n")
@@ -220,7 +219,7 @@ func buildNodeParameters(clusterPlatformType string) (map[v1alpha1.ParameterName
 		}
 		nodeIdentifier = v1alpha1.ParameterName("--plug")
 
-	} else if clusterPlatformType == "BareMetal" {
+	} else if clusterPlatformType == configv1.BareMetalPlatformType {
 		nodeListParam, err = farE2eUtils.GetBMHNodeInfoList(machineClient)
 		if err != nil {
 			fmt.Printf("can't get nodes' information - ports\n")

@@ -24,6 +24,8 @@ import (
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
+const operatorInstalledNamespcae = "OPERATOR_NS"
+
 var (
 	log           logr.Logger
 	clientSet     *kubernetes.Clientset
@@ -48,8 +50,8 @@ var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseFlagOptions(&opts)))
 	log = logf.Log
 
-	operatorNsName = os.Getenv("OPERATOR_NS")
-	Expect(operatorNsName).ToNot(BeEmpty(), "OPERATOR_NS env var not set, can't start e2e test")
+	operatorNsName = os.Getenv(operatorInstalledNamespcae)
+	Expect(operatorNsName).ToNot(BeEmpty(), operatorInstalledNamespcae+" env var not set, can't start e2e test")
 
 	// +kubebuilder:scaffold:scheme
 
