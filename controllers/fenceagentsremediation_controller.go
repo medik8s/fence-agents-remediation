@@ -30,7 +30,7 @@ import (
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
-	"github.com/medik8s/fence-agents-remediation/pkg/utils"
+	farUtils "github.com/medik8s/fence-agents-remediation/pkg/utils"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
@@ -82,7 +82,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	// TODO: Validate FAR CR name to nodeName. Run isNodeNameValid
 	// Fetch the FAR's pod
 	r.Log.Info("Fetch FAR's pod")
-	pod, err := utils.GetFenceAgentsRemediationPod(r.Client)
+	pod, err := farUtils.GetFenceAgentsRemediationPod(r.Client)
 	if err != nil {
 		return emptyResult, err
 	}

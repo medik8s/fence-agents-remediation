@@ -12,7 +12,6 @@ const deployNamespaceEnv = "DEPLOYMENT_NAMESPACE"
 
 // GetDeploymentNamespace returns the Namespace this operator is deployed/installed on.
 func GetDeploymentNamespace() (string, error) {
-
 	ns, found := os.LookupEnv(deployNamespaceEnv)
 	if !found {
 		return "", fmt.Errorf("%s must be set", deployNamespaceEnv)
