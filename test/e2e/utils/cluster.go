@@ -40,12 +40,6 @@ func GetCredentials(clientSet *kubernetes.Clientset, secretName, secretKey, secr
 	if err != nil {
 		return "", "", err
 	}
-	if secretName == "aws-cloud-credentials" {
-		fmt.Printf("Key: %s & Value: %s \n", secret.Data[secretKey], secret.Data[secretVal])
-	} else {
-		fmt.Printf("Username: %s & Password: %s \n", secret.Data[secretKey], secret.Data[secretVal])
-	}
-
 	return string(secret.Data[secretKey]), string(secret.Data[secretVal]), nil
 }
 
