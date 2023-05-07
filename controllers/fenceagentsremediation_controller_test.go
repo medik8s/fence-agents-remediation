@@ -117,7 +117,7 @@ var _ = Describe("FAR Controller", func() {
 	})
 })
 
-// newFenceAgentsRemediation assign the input to the FenceAgentsRemediation's Spec
+// newFenceAgentsRemediation assigns the input to the FenceAgentsRemediation
 func newFenceAgentsRemediation(nodeName string, agent string, sharedparameters map[v1alpha1.ParameterName]string, nodeparameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) *v1alpha1.FenceAgentsRemediation {
 	return &v1alpha1.FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: defaultNamespace},
