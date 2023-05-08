@@ -15,5 +15,5 @@ data:
 kind: ConfigMap
 metadata:
   labels:
-    app: fence-agents-remediation-operator
+    app.kubernetes.io/name: fence-agents-remediation-operator
   name: fence-agents-remediation-manager-config

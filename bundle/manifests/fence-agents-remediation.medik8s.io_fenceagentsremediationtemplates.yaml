@@ -5,7 +5,7 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.8.0
   creationTimestamp: null
   labels:
-    app: fence-agents-remediation-operator
+    app.kubernetes.io/name: fence-agents-remediation-operator
   name: fenceagentsremediationtemplates.fence-agents-remediation.medik8s.io
 spec:
   group: fence-agents-remediation.medik8s.io

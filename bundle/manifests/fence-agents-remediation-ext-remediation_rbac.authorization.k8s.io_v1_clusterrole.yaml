@@ -3,7 +3,7 @@ kind: ClusterRole
 metadata:
   creationTimestamp: null
   labels:
-    app: fence-agents-remediation-operator
+    app.kubernetes.io/name: fence-agents-remediation-operator
     rbac.ext-remediation/aggregate-to-ext-remediation: "true"
   name: fence-agents-remediation-ext-remediation
 rules:
