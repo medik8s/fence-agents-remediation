@@ -36,10 +36,10 @@ import (
 
 	fenceagentsv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/controllers"
-	"github.com/medik8s/fence-agents-remediation/version"
 
 	//+kubebuilder:scaffold:imports
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
+	"github.com/medik8s/fence-agents-remediation/version"
 )
 
 var (

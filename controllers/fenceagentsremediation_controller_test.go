@@ -31,7 +31,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
-	// "github.com/medik8s/fence-agents-remediation/pkg/cli"
 )
 
 const (
