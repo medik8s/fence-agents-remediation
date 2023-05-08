@@ -7,16 +7,17 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	configv1 "github.com/openshift/api/config/v1"
-
-	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
-	farUtils "github.com/medik8s/fence-agents-remediation/pkg/utils"
-	farE2eUtils "github.com/medik8s/fence-agents-remediation/test/e2e/utils"
 
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	configv1 "github.com/openshift/api/config/v1"
+
+	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	farUtils "github.com/medik8s/fence-agents-remediation/pkg/utils"
+	farE2eUtils "github.com/medik8s/fence-agents-remediation/test/e2e/utils"
 )
 
 const (
