@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap/zapcore"
 
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -53,6 +54,7 @@ func TestControllers(t *testing.T) {
 var _ = BeforeSuite(func() {
 	opts := zap.Options{
 		Development: true,
+		TimeEncoder: zapcore.RFC3339NanoTimeEncoder,
 	}
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseFlagOptions(&opts)))
 
