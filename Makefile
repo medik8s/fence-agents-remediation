@@ -13,7 +13,7 @@ OPM_VERSION ?= v1.26.2
 # See github.com/operator-framework/operator-sdk/releases for the last version
 OPERATOR_SDK_VERSION ?= v1.26.0
 # See https://github.com/slintes/sort-imports/releases for the last version
-SORT_IMPORTS_VERSION = v0.1.0
+SORT_IMPORTS_VERSION = v0.2.1
 # See https://github.com/onsi/ginkgo/releases for the last version
 GINKGO_VERSION ?= v1.16.5
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
@@ -171,13 +171,13 @@ test-imports: sort-imports
 
 # Sort imports
 fix-imports: sort-imports
-	$(SORT_IMPORTS) . -w
+	$(SORT_IMPORTS) -w .
 
 .PHONY: test
 test: test-no-verify verify-unchanged ## Generate and format code, run tests, generate manifests and bundle, and verify no uncommitted changes
 
 .PHONY: test-no-verify
-test-no-verify: manifests generate go-verify fmt vet envtest ginkgo # Generate and format code, and run tests
+test-no-verify: manifests generate go-verify fmt vet fix-imports envtest ginkgo # Generate and format code, and run tests
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR)/$(ENVTEST_VERSION) -p path)"  $(GINKGO) --v -r  --keepGoing -requireSuite -coverprofile cover.out ./controllers
 
 .PHONY: bundle-run
