@@ -18,7 +18,7 @@ func GetFenceAgentsRemediationPod(r client.Reader) (*corev1.Pod, error) {
 	logger := ctrl.Log.WithName("utils-pods")
 	pods := &corev1.PodList{}
 	selector := labels.NewSelector()
-	requirement, _ := labels.NewRequirement("app", selection.Equals, []string{"fence-agents-remediation-operator"})
+	requirement, _ := labels.NewRequirement("app.kubernetes.io/name", selection.Equals, []string{"fence-agents-remediation-operator"})
 	selector = selector.Add(*requirement)
 	var podNamespace string
 	podNamespace, err := GetDeploymentNamespace()
