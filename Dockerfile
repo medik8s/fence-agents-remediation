@@ -35,4 +35,5 @@ RUN ./hack/build.sh
 # Add Fence Agents and fence-agents-aws packages
 RUN dnf install -y fence-agents-all fence-agents-aws
 
+USER 65532:65532
 ENTRYPOINT ["/manager"]
