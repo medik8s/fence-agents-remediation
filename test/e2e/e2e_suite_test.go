@@ -83,6 +83,8 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = ctrl.New(config, ctrl.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 
+	os.Setenv("DEPLOYMENT_NAMESPACE", operatorNsName)
+
 	debug()
 })
 
