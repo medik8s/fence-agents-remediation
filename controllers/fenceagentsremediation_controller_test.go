@@ -34,10 +34,9 @@ import (
 )
 
 const (
-	defaultNamespace = "default"
-	dummyNodeName    = "dummy-node"
-	validNodeName    = "worker-0"
-	fenceAgentIPMI   = "fence_ipmilan"
+	dummyNodeName  = "dummy-node"
+	validNodeName  = "worker-0"
+	fenceAgentIPMI = "fence_ipmilan"
 )
 
 var (

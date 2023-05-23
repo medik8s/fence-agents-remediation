@@ -17,6 +17,7 @@ package controllers
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -38,6 +39,8 @@ import (
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
+
+const defaultNamespace = "default"
 
 var k8sClient client.Client
 var k8sManager manager.Manager
@@ -80,6 +83,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 	mocksExecuter = newMockExecuter()
+
+	os.Setenv("DEPLOYMENT_NAMESPACE", defaultNamespace)
+
 	err = (&FenceAgentsRemediationReconciler{
 		Client:   k8sClient,
 		Log:      k8sManager.GetLogger().WithName("test far reconciler"),
