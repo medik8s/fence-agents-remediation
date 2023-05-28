@@ -15,7 +15,7 @@ OPERATOR_SDK_VERSION ?= v1.26.0
 # See https://github.com/slintes/sort-imports/releases for the last version
 SORT_IMPORTS_VERSION = v0.2.1
 # See https://github.com/onsi/ginkgo/releases for the last version
-GINKGO_VERSION ?= v1.16.5
+GINKGO_VERSION ?= v2.9.5
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.23
 
@@ -289,7 +289,7 @@ envtest: ## Download envtest-setup locally if necessary.
 
 .PHONY: ginkgo
 ginkgo: ## Download ginkgo locally if necessary.
-	$(call go-install-tool,$(GINKGO),$(GINKGO_DIR),github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION})
+	$(call go-install-tool,$(GINKGO),$(GINKGO_DIR),github.com/onsi/ginkgo/v2/ginkgo@${GINKGO_VERSION})
 
 .PHONY: goimports
 goimports: ## Download goimports locally if necessary.
