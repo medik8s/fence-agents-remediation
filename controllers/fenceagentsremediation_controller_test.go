@@ -109,7 +109,7 @@ var _ = Describe("FAR Controller", func() {
 				Eventually(func() (bool, error) {
 					res, err := cliCommandsEquality(underTestFAR)
 					return res, err
-				}, 1*time.Second, 500*time.Millisecond).Should(BeTrue(), BeEmpty())
+				}, 1*time.Second, 500*time.Millisecond).Should(BeTrue())
 			})
 		})
 	})
