@@ -202,6 +202,8 @@ spec:
                 - --upstream=http://127.0.0.1:8080/
                 - --logtostderr=true
                 - --v=0
+                - --tls-cert-file=/etc/tls/tls.crt
+                - --tls-private-key-file=/etc/tls/tls.key
                 image: gcr.io/kubebuilder/kube-rbac-proxy:v0.14.1
                 name: kube-rbac-proxy
                 ports:
@@ -220,6 +222,10 @@ spec:
                   capabilities:
                     drop:
                     - ALL
+                volumeMounts:
+                - mountPath: /etc/tls
+                  name: tls-secret
+                  readOnly: true
               - args:
                 - --health-probe-bind-address=:8081
                 - --metrics-bind-address=127.0.0.1:8080
@@ -263,6 +269,10 @@ spec:
                   type: RuntimeDefault
               serviceAccountName: fence-agents-remediation-controller-manager
               terminationGracePeriodSeconds: 10
+              volumes:
+              - name: tls-secret
+                secret:
+                  secretName: far-rbac-container-secret
       permissions:
       - rules:
         - apiGroups:

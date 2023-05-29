@@ -8,6 +8,10 @@ metadata:
 spec:
   template:
     spec:
+      volumes:
+      - name: tls-secret
+        secret:
+          secretName: far-rbac-container-secret
       containers:
       - name: kube-rbac-proxy
         image: gcr.io/kubebuilder/kube-rbac-proxy:v0.14.1
@@ -16,6 +20,12 @@ spec:
         - "--upstream=http://127.0.0.1:8080/"
         - "--logtostderr=true"
         - "--v=0"
+        - "--tls-cert-file=/etc/tls/tls.crt"
+        - "--tls-private-key-file=/etc/tls/tls.key"
+        volumeMounts:
+        - name: tls-secret
+          mountPath: /etc/tls
+          readOnly: true
         ports:
         - containerPort: 8443
           protocol: TCP
