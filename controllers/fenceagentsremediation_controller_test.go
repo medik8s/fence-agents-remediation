@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
@@ -109,7 +109,7 @@ var _ = Describe("FAR Controller", func() {
 				Eventually(func() (bool, error) {
 					res, err := cliCommandsEquality(underTestFAR)
 					return res, err
-				}, 1*time.Second, 500*time.Millisecond).Should(BeTrue(), BeEmpty())
+				}, 1*time.Second, 500*time.Millisecond).Should(BeTrue())
 			})
 		})
 	})

@@ -15,7 +15,7 @@ OPERATOR_SDK_VERSION ?= v1.26.0
 # See https://github.com/slintes/sort-imports/releases for the last version
 SORT_IMPORTS_VERSION = v0.2.1
 # See https://github.com/onsi/ginkgo/releases for the last version
-GINKGO_VERSION ?= v1.16.5
+GINKGO_VERSION ?= v2.9.5
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.23
 
@@ -177,8 +177,12 @@ fix-imports: sort-imports
 test: test-no-verify verify-unchanged ## Generate and format code, run tests, generate manifests and bundle, and verify no uncommitted changes
 
 .PHONY: test-no-verify
+# -r: If set, ginkgo finds and runs test suites under the current directory recursively.
+# --keep-going:  If set, failures from earlier test suites do not prevent later test suites from running.
+# --require-suite: If set, Ginkgo fails if there are ginkgo tests in a directory but no invocation of RunSpecs.
+# --vv: If set, emits with maximal verbosity - includes skipped and pending tests.
 test-no-verify: manifests generate go-verify fmt vet fix-imports envtest ginkgo # Generate and format code, and run tests
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR)/$(ENVTEST_VERSION) -p path)"  $(GINKGO) --v -r  --keepGoing -requireSuite -coverprofile cover.out ./controllers
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR)/$(ENVTEST_VERSION) -p path)"  $(GINKGO) -r --keep-going --require-suite --vv -coverprofile cover.out ./controllers
 
 .PHONY: bundle-run
 export BUNDLE_RUN_NAMESPACE ?= openshift-operators
@@ -289,7 +293,7 @@ envtest: ## Download envtest-setup locally if necessary.
 
 .PHONY: ginkgo
 ginkgo: ## Download ginkgo locally if necessary.
-	$(call go-install-tool,$(GINKGO),$(GINKGO_DIR),github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION})
+	$(call go-install-tool,$(GINKGO),$(GINKGO_DIR),github.com/onsi/ginkgo/v2/ginkgo@${GINKGO_VERSION})
 
 .PHONY: goimports
 goimports: ## Download goimports locally if necessary.
@@ -398,6 +402,10 @@ container-push: docker-push bundle-push catalog-build catalog-push ## Push conta
 container-build-and-push-community: container-build-community container-push ## Build three images, update CSV for community, and push all the images to Quay (docker, bundle, and catalog).
 
 .PHONY: test-e2e
+# -r: If set, ginkgo finds and runs test suites under the current directory recursively.
+# --keep-going:  If set, failures from earlier test suites do not prevent later test suites from running.
+# --require-suite: If set, Ginkgo fails if there are ginkgo tests in a directory but no invocation of RunSpecs.
+# --vv: If set, emits with maximal verbosity - includes skipped and pending tests.
 test-e2e: ginkgo ## Run end to end (E2E) tests
 	@test -n "${KUBECONFIG}" -o -r ${HOME}/.kube/config || (echo "Failed to find kubeconfig in ~/.kube/config or no KUBECONFIG set"; exit 1)
-	$(GINKGO) -r --keepGoing --requireSuite --v  ./test/e2e -coverprofile cover.out
+	$(GINKGO) -r --keep-going --require-suite --vv  ./test/e2e -coverprofile cover.out
