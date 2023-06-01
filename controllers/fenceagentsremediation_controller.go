@@ -79,7 +79,11 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "failed to get FAR CR")
 		return emptyResult, err
 	}
-	// TODO: Validate FAR CR name to nodeName. Run isNodeNameValid
+	// Validate FAR CR name to match a nodeName from the cluster
+	if err := farUtils.CheckNodeName(r.Client, req.Name); err != nil {
+		return emptyResult, err
+	}
+
 	// Fetch the FAR's pod
 	r.Log.Info("Fetch FAR's pod")
 	pod, err := farUtils.GetFenceAgentsRemediationPod(r.Client)
@@ -99,7 +103,6 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		//TODO: better seperation between errors from wrong shared parameters values and wrong node parameters values
 		return emptyResult, err
 	}
-
 	return emptyResult, nil
 }
 
@@ -131,5 +134,3 @@ func appendParamToSlice(fenceAgentParams []string, paramName v1alpha1.ParameterN
 	}
 	return fenceAgentParams
 }
-
-// TODO: Add isNodeNameValid function which call listNodeNames to validate the FAR's name with the cluster node names
