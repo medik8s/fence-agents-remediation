@@ -1,18 +1,16 @@
 # Build the manager binary
 FROM quay.io/centos/centos:stream8 AS builder
-RUN dnf install -y dnf-plugins-core \
-    && dnf config-manager --set-enabled ha
-RUN dnf install -y golang git
-
+RUN dnf install -y golang git \
+    && dnf clean all -y
 
 # Ensure correct Go version
 ENV GO_VERSION=1.18
-RUN go install golang.org/dl/go${GO_VERSION}@latest
-RUN ~/go/bin/go${GO_VERSION} download
-RUN /bin/cp -f ~/go/bin/go${GO_VERSION} /usr/bin/go
-RUN go version
+RUN go install golang.org/dl/go${GO_VERSION}@latest \
+    && ~/go/bin/go${GO_VERSION} download \
+    && /bin/cp -f ~/go/bin/go${GO_VERSION} /usr/bin/go \
+    && go version
 
-WORKDIR /
+WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.mod
 COPY go.sum go.sum
@@ -32,8 +30,16 @@ COPY .git/ .git/
 # Build
 RUN ./hack/build.sh
 
+FROM quay.io/centos/centos:stream8
+
+WORKDIR /
+COPY --from=builder /workspace/manager .
+
 # Add Fence Agents and fence-agents-aws packages
-RUN dnf install -y fence-agents-all fence-agents-aws
+RUN dnf install -y dnf-plugins-core \
+    && dnf config-manager --set-enabled ha \
+    && dnf install -y fence-agents-all fence-agents-aws \
+    && dnf clean all -y
 
 USER 65532:65532
 ENTRYPOINT ["/manager"]
