@@ -23,8 +23,6 @@ func GetFenceAgentsRemediationPod(r client.Reader) (*corev1.Pod, error) {
 	}
 	err = r.List(context.Background(), pods, &client.ListOptions{LabelSelector: selector, Namespace: podNamespace})
 	if err != nil {
-		// Build pod not found error
-		err = buildApiError(err, "not found a pod that match the label")
 		return nil, fmt.Errorf("failed fetching FAR pod - %w", err)
 	}
 	if len(pods.Items) == 0 {

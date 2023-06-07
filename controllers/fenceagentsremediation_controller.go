@@ -81,10 +81,15 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return emptyResult, err
 	}
 	// Validate FAR CR name to match a nodeName from the cluster
-	if err := farUtils.CheckNodeName(r.Client, req.Name); err != nil {
+	r.Log.Info("Check FAR CR's name")
+	valid, err := farUtils.IsNodeNameValid(r.Client, req.Name)
+	if err != nil {
 		return emptyResult, err
 	}
-
+	if !valid {
+		r.Log.Info("consider recreating the CR - invalid CR's name to the cluster node name", "FAR CR's Name", req.Name)
+		return emptyResult, nil
+	}
 	// Fetch the FAR's pod
 	r.Log.Info("Fetch FAR's pod")
 	pod, err := farUtils.GetFenceAgentsRemediationPod(r.Client)

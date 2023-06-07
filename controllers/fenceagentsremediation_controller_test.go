@@ -89,7 +89,7 @@ var _ = Describe("FAR Controller", func() {
 			})
 		})
 
-		Context("CheckNodeName - check node object", func() {
+		Context("IsNodeNameValid - check node object", func() {
 			BeforeEach(func() {
 				node = getNode(validNodeName)
 				DeferCleanup(k8sClient.Delete, context.Background(), node)
@@ -97,12 +97,12 @@ var _ = Describe("FAR Controller", func() {
 			})
 			When("FAR's name doesn't match to an existing node name", func() {
 				It("should fail", func() {
-					Expect(farUtils.CheckNodeName(k8sClient, dummyNodeName)).To(HaveOccurred())
+					Expect(farUtils.IsNodeNameValid(k8sClient, dummyNodeName)).To(BeFalse())
 				})
 			})
 			When("FAR's name does match to an existing node name", func() {
 				It("should succeed", func() {
-					Expect(farUtils.CheckNodeName(k8sClient, validNodeName)).To(Succeed())
+					Expect(farUtils.IsNodeNameValid(k8sClient, validNodeName)).To(BeTrue())
 				})
 			})
 		})
