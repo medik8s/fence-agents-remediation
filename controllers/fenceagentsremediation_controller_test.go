@@ -31,6 +31,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 )
 
 const (
@@ -47,6 +48,7 @@ var (
 var _ = Describe("FAR Controller", func() {
 	var (
 		underTestFAR *v1alpha1.FenceAgentsRemediation
+		node         *corev1.Node
 	)
 
 	testShareParam := map[v1alpha1.ParameterName]string{
@@ -70,12 +72,15 @@ var _ = Describe("FAR Controller", func() {
 
 	Context("Functionality", func() {
 		Context("buildFenceAgentParams", func() {
-			When("FAR's name isn't a node name", func() {
+			When("FAR CR's name doesn't match a node name", func() {
 				It("should fail", func() {
 					underTestFAR.ObjectMeta.Name = dummyNodeName
 					_, err := buildFenceAgentParams(underTestFAR)
 					Expect(err).To(HaveOccurred())
+					Expect(err).To(Equal(errors.New(errorBuildingFAParams)))
 				})
+			})
+			When("FAR CR's name does match a node name", func() {
 				It("should succeed", func() {
 					underTestFAR.ObjectMeta.Name = validNodeName
 					_, err := buildFenceAgentParams(underTestFAR)
@@ -83,25 +88,37 @@ var _ = Describe("FAR Controller", func() {
 				})
 			})
 		})
-		When("creating a resource", func() {
-			It("should fail when FAR pod is missing", func() {
-				//Test getFenceAgentsPod func
+
+		Context("IsNodeNameValid", func() {
+			BeforeEach(func() {
+				node = getNode(validNodeName)
+				DeferCleanup(k8sClient.Delete, context.Background(), node)
+				Expect(k8sClient.Create(context.Background(), node)).To(Succeed())
+			})
+			When("FAR CR's name doesn't match to an existing node name", func() {
+				It("should fail", func() {
+					Expect(utils.IsNodeNameValid(k8sClient, dummyNodeName)).To(BeFalse())
+				})
+			})
+			When("FAR's name does match to an existing node name", func() {
+				It("should succeed", func() {
+					Expect(utils.IsNodeNameValid(k8sClient, validNodeName)).To(BeTrue())
+				})
 			})
 		})
 	})
 	Context("Reconcile", func() {
 		//Scenarios
-
 		BeforeEach(func() {
 			fenceAgentsPod = buildFarPod()
-			// Create fenceAgentsPod and FAR
-			Expect(k8sClient.Create(context.Background(), fenceAgentsPod)).NotTo(HaveOccurred())
-			Expect(k8sClient.Create(context.Background(), underTestFAR)).NotTo(HaveOccurred())
-		})
-
-		AfterEach(func() {
-			Expect(k8sClient.Delete(context.Background(), fenceAgentsPod)).NotTo(HaveOccurred())
-			Expect(k8sClient.Delete(context.Background(), underTestFAR)).NotTo(HaveOccurred())
+			node = getNode(validNodeName)
+			// DeferCleanUp and Create node, fenceAgentsPod and FAR CR
+			DeferCleanup(k8sClient.Delete, context.Background(), node)
+			DeferCleanup(k8sClient.Delete, context.Background(), fenceAgentsPod)
+			DeferCleanup(k8sClient.Delete, context.Background(), underTestFAR)
+			Expect(k8sClient.Create(context.Background(), node)).To(Succeed())
+			Expect(k8sClient.Create(context.Background(), fenceAgentsPod)).To(Succeed())
+			Expect(k8sClient.Create(context.Background(), underTestFAR)).To(Succeed())
 		})
 
 		When("creating FAR CR", func() {
@@ -123,6 +140,16 @@ func newFenceAgentsRemediation(nodeName string, agent string, sharedparameters m
 			Agent:            agent,
 			SharedParameters: sharedparameters,
 			NodeParameters:   nodeparameters,
+		},
+	}
+}
+
+// used for making new node object for test and have a unique resourceVersion
+// getNode returns a node object with the name nodeName
+func getNode(nodeName string) *corev1.Node {
+	return &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nodeName,
 		},
 	}
 }

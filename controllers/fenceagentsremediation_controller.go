@@ -30,7 +30,11 @@ import (
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
-	farUtils "github.com/medik8s/fence-agents-remediation/pkg/utils"
+	"github.com/medik8s/fence-agents-remediation/pkg/utils"
+)
+
+const (
+	errorBuildingFAParams = "node parameter is required, and cannot be empty"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
@@ -50,6 +54,7 @@ func (r *FenceAgentsRemediationReconciler) SetupWithManager(mgr ctrl.Manager) er
 
 //+kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;delete;deletecollection
+//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations/finalizers,verbs=update
@@ -79,10 +84,19 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "failed to get FAR CR")
 		return emptyResult, err
 	}
-	// TODO: Validate FAR CR name to nodeName. Run isNodeNameValid
+	// Validate FAR CR name to match a nodeName from the cluster
+	r.Log.Info("Check FAR CR's name")
+	valid, err := utils.IsNodeNameValid(r.Client, req.Name)
+	if err != nil {
+		return emptyResult, err
+	}
+	if !valid {
+		r.Log.Info("didn't find a node matching the CR's name", "CR's Name", req.Name)
+		return emptyResult, nil
+	}
 	// Fetch the FAR's pod
 	r.Log.Info("Fetch FAR's pod")
-	pod, err := farUtils.GetFenceAgentsRemediationPod(r.Client)
+	pod, err := utils.GetFenceAgentsRemediationPod(r.Client)
 	if err != nil {
 		return emptyResult, err
 	}
@@ -99,7 +113,6 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		//TODO: better seperation between errors from wrong shared parameters values and wrong node parameters values
 		return emptyResult, err
 	}
-
 	return emptyResult, nil
 }
 
@@ -115,7 +128,7 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, erro
 		if nodeVal, isFound := nodeMap[nodeName]; isFound {
 			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
 		} else {
-			err := errors.New("node parameter is required, and cannot be empty")
+			err := errors.New(errorBuildingFAParams)
 			return nil, err
 		}
 	}
@@ -131,5 +144,3 @@ func appendParamToSlice(fenceAgentParams []string, paramName v1alpha1.ParameterN
 	}
 	return fenceAgentParams
 }
-
-// TODO: Add isNodeNameValid function which call listNodeNames to validate the FAR's name with the cluster node names
