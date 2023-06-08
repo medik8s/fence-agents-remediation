@@ -27,12 +27,11 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
-	farUtils "github.com/medik8s/fence-agents-remediation/pkg/utils"
+	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 )
 
 const (
@@ -49,7 +48,7 @@ var (
 var _ = Describe("FAR Controller", func() {
 	var (
 		underTestFAR *v1alpha1.FenceAgentsRemediation
-		node         *v1.Node
+		node         *corev1.Node
 	)
 
 	testShareParam := map[v1alpha1.ParameterName]string{
@@ -72,15 +71,16 @@ var _ = Describe("FAR Controller", func() {
 	underTestFAR = newFenceAgentsRemediation(validNodeName, fenceAgentIPMI, testShareParam, testNodeParam)
 
 	Context("Functionality", func() {
-		Context("buildFenceAgentParams - check CR name", func() {
-			When("FAR's name doesn't match a node name", func() {
+		Context("buildFenceAgentParams", func() {
+			When("FAR CR's name doesn't match a node name", func() {
 				It("should fail", func() {
 					underTestFAR.ObjectMeta.Name = dummyNodeName
 					_, err := buildFenceAgentParams(underTestFAR)
 					Expect(err).To(HaveOccurred())
+					Expect(err).To(Equal(errors.New(errorBuildingFAParams)))
 				})
 			})
-			When("FAR's name does match a node name", func() {
+			When("FAR CR's name does match a node name", func() {
 				It("should succeed", func() {
 					underTestFAR.ObjectMeta.Name = validNodeName
 					_, err := buildFenceAgentParams(underTestFAR)
@@ -89,20 +89,20 @@ var _ = Describe("FAR Controller", func() {
 			})
 		})
 
-		Context("IsNodeNameValid - check node object", func() {
+		Context("IsNodeNameValid", func() {
 			BeforeEach(func() {
 				node = getNode(validNodeName)
 				DeferCleanup(k8sClient.Delete, context.Background(), node)
 				Expect(k8sClient.Create(context.Background(), node)).To(Succeed())
 			})
-			When("FAR's name doesn't match to an existing node name", func() {
+			When("FAR CR's name doesn't match to an existing node name", func() {
 				It("should fail", func() {
-					Expect(farUtils.IsNodeNameValid(k8sClient, dummyNodeName)).To(BeFalse())
+					Expect(utils.IsNodeNameValid(k8sClient, dummyNodeName)).To(BeFalse())
 				})
 			})
 			When("FAR's name does match to an existing node name", func() {
 				It("should succeed", func() {
-					Expect(farUtils.IsNodeNameValid(k8sClient, validNodeName)).To(BeTrue())
+					Expect(utils.IsNodeNameValid(k8sClient, validNodeName)).To(BeTrue())
 				})
 			})
 		})

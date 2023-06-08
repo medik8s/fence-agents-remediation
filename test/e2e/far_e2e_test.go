@@ -16,8 +16,8 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
-	farUtils "github.com/medik8s/fence-agents-remediation/pkg/utils"
-	farE2eUtils "github.com/medik8s/fence-agents-remediation/test/e2e/utils"
+	"github.com/medik8s/fence-agents-remediation/pkg/utils"
+	e2eUtils "github.com/medik8s/fence-agents-remediation/test/e2e/utils"
 )
 
 const (
@@ -42,7 +42,7 @@ var _ = Describe("FAR E2e", func() {
 		err             error
 	)
 	BeforeEach(func() {
-		clusterPlatform, err = farE2eUtils.GetClusterInfo(configClient)
+		clusterPlatform, err = e2eUtils.GetClusterInfo(configClient)
 		if err != nil {
 			Fail("can't identify the cluster platform")
 		}
@@ -167,7 +167,7 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 	// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.type}'
 	clusterPlatformType := clusterPlatform.Status.PlatformStatus.Type
 	if clusterPlatformType == configv1.AWSPlatformType {
-		accessKey, secretKey, err := farE2eUtils.GetCredentials(clientSet, secretAWS, secretKeyAWS, secretValAWS)
+		accessKey, secretKey, err := e2eUtils.GetCredentials(clientSet, secretAWS, secretKeyAWS, secretValAWS)
 		if err != nil {
 			fmt.Printf("can't get AWS credentials\n")
 			return nil, err
@@ -187,7 +187,7 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 		// TODO : get ip from GetCredientals
 		// oc get bmh -n openshift-machine-api ostest-master-0 -o jsonpath='{.spec.bmc.address}'
 		// then parse ip
-		username, password, err := farE2eUtils.GetCredentials(clientSet, secretBMHExample, secretKeyBM, secretValBM)
+		username, password, err := e2eUtils.GetCredentials(clientSet, secretBMHExample, secretKeyBM, secretValBM)
 		if err != nil {
 			fmt.Printf("can't get BMH credentials\n")
 			return nil, err
@@ -213,7 +213,7 @@ func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha
 	)
 
 	if clusterPlatformType == configv1.AWSPlatformType {
-		nodeListParam, err = farE2eUtils.GetAWSNodeInfoList(machineClient)
+		nodeListParam, err = e2eUtils.GetAWSNodeInfoList(machineClient)
 		if err != nil {
 			fmt.Printf("can't get nodes' information - AWS instance ID\n")
 			return nil, err
@@ -221,7 +221,7 @@ func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha
 		nodeIdentifier = v1alpha1.ParameterName("--plug")
 
 	} else if clusterPlatformType == configv1.BareMetalPlatformType {
-		nodeListParam, err = farE2eUtils.GetBMHNodeInfoList(machineClient)
+		nodeListParam, err = e2eUtils.GetBMHNodeInfoList(machineClient)
 		if err != nil {
 			fmt.Printf("can't get nodes' information - ports\n")
 			return nil, err
@@ -237,7 +237,7 @@ func checkFarLogs(logString string) {
 	var pod *corev1.Pod
 	var err error
 	EventuallyWithOffset(1, func() *corev1.Pod {
-		pod, err = farUtils.GetFenceAgentsRemediationPod(k8sClient)
+		pod, err = utils.GetFenceAgentsRemediationPod(k8sClient)
 		if err != nil {
 			log.Error(err, "failed to get pod. Might try again")
 			return nil
@@ -246,7 +246,7 @@ func checkFarLogs(logString string) {
 	}, timeoutLogs, pollInterval).ShouldNot(BeNil(), "can't find the pod after timeout")
 
 	EventuallyWithOffset(1, func() string {
-		logs, err := farE2eUtils.GetLogs(clientSet, pod, containerName)
+		logs, err := e2eUtils.GetLogs(clientSet, pod, containerName)
 		if err != nil {
 			log.Error(err, "failed to get logs. Might try again")
 			return ""
