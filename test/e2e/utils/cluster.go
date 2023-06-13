@@ -58,10 +58,19 @@ func GetAWSNodeInfoList(machineClient *machineclient.MachineV1beta1Client) (map[
 		return nodeList, err
 	}
 
+	var missNodeMachineErr error
 	// creates map for nodeName and AWS instance ID
 	for _, machine := range machineList.Items {
-		nodeName := v1alpha1.NodeName(string(machine.Status.NodeRef.Name))
-		providerID := string(*machine.Spec.ProviderID)
+		if machine.Status.NodeRef == nil || machine.Spec.ProviderID == nil {
+			if missNodeMachineErr != nil {
+				missNodeMachineErr = fmt.Errorf("machine %s is not associated with any node or it't provider ID is missing\n%w", machine.Spec.Name, missNodeMachineErr)
+			} else {
+				missNodeMachineErr = fmt.Errorf("machine %s is not associated with any node or it't provider ID is missing", machine.Spec.Name)
+			}
+			continue
+		}
+		nodeName := v1alpha1.NodeName(machine.Status.NodeRef.Name)
+		providerID := *machine.Spec.ProviderID
 
 		// Get the instance ID from the provider ID aws:///us-east-1b/i-082ac37ab919a82c2 -> i-082ac37ab919a82c2
 		splitedProviderID := strings.Split(providerID, "/i-")
@@ -69,7 +78,7 @@ func GetAWSNodeInfoList(machineClient *machineclient.MachineV1beta1Client) (map[
 		nodeList[nodeName] = instanceID
 		fmt.Printf("node: %s Instance ID: %s \n", nodeName, instanceID)
 	}
-	return nodeList, nil
+	return nodeList, missNodeMachineErr
 }
 
 // GetBMHNodeInfoList returns a list of the node names and their identification, e.g., ports
