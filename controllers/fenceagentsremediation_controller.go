@@ -35,6 +35,7 @@ import (
 
 const (
 	errorBuildingFAParams = "node parameter is required, and cannot be empty"
+	SuccessFAResponse = "Success: Rebooted"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
@@ -108,9 +109,18 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return emptyResult, err
 	}
 	cmd := append([]string{far.Spec.Agent}, faParams...)
-	// The Fence Agent is excutable and the parameters are valid but we don't know about their values
-	if _, _, err := r.Executor.Execute(pod, cmd); err != nil {
-		//TODO: better seperation between errors from wrong shared parameters values and wrong node parameters values
+	// The Fence Agent is excutable and the parameters structure are valid, but we don't check their values
+	outputRes, outputErr, err := r.Executor.Execute(pod, cmd)
+	if err != nil {
+		// response was a failure message
+		if outputErr != "" {
+			err = fmt.Errorf("%s- %w", outputErr, err)
+		}
+		return emptyResult, err
+	}
+	if outputRes != SuccessFAResponse {
+		// response wasn't failure or sucesss message
+		err := fmt.Errorf("unknown fence agent response - expecting `%s` response, but we received `%s`", SuccessFAResponse, outputRes)
 		return emptyResult, err
 	}
 	return emptyResult, nil
