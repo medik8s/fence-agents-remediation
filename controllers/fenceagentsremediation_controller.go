@@ -34,8 +34,9 @@ import (
 )
 
 const (
-	errorBuildingFAParams = "node parameter is required, and cannot be empty"
-	SuccessFAResponse = "Success: Rebooted"
+	errorMissingParams     = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
+	errorMissingNodeParams = "node parameter is required, and cannot be empty"
+	SuccessFAResponse      = "Success: Rebooted"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
@@ -78,56 +79,68 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	far := &v1alpha1.FenceAgentsRemediation{}
 	if err := r.Get(ctx, req.NamespacedName, far); err != nil {
 		if apiErrors.IsNotFound(err) {
-			// FAR is deleted, stop reconciling
-			r.Log.Info("FAR CR is deleted - nothing to do", "CR Name", req.Name, "CR Namespace", req.Namespace)
+			// Request object of FAR CR was not found, could have been deleted after reconcile request.
+			// Return and don't requeue
+			r.Log.Info("FenceAgentsRemediation CR was not found", "CR Name", req.Name, "CR Namespace", req.Namespace)
 			return emptyResult, nil
 		}
-		r.Log.Error(err, "failed to get FAR CR")
+		r.Log.Error(err, "Failed to get FenceAgentsRemediation CR")
 		return emptyResult, err
 	}
 	// Validate FAR CR name to match a nodeName from the cluster
 	r.Log.Info("Check FAR CR's name")
 	valid, err := utils.IsNodeNameValid(r.Client, req.Name)
 	if err != nil {
+		r.Log.Error(err, "Didn't find a node matching the CR's name", "CR's Name", req.Name)
 		return emptyResult, err
 	}
 	if !valid {
-		r.Log.Info("didn't find a node matching the CR's name", "CR's Name", req.Name)
+		r.Log.Error(err, "API notFound error for finding the node ", "CR's Name", req.Name)
 		return emptyResult, nil
 	}
 	// Fetch the FAR's pod
 	r.Log.Info("Fetch FAR's pod")
 	pod, err := utils.GetFenceAgentsRemediationPod(r.Client)
 	if err != nil {
+		r.Log.Error(err, "Can't find FAR's pod by it's label", "CR's Name", req.Name)
 		return emptyResult, err
 	}
 	//TODO: Check that FA is excutable? run cli.IsExecuteable
 
-	r.Log.Info("Create and execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
+	// Build FA parameters
+	r.Log.Info("Combine fence agent parameters", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
 	faParams, err := buildFenceAgentParams(far)
 	if err != nil {
+		r.Log.Error(err, "Invalid sharedParameters/nodeParameters from CR", "CR's Name", req.Name)
 		return emptyResult, err
 	}
 	cmd := append([]string{far.Spec.Agent}, faParams...)
 	// The Fence Agent is excutable and the parameters structure are valid, but we don't check their values
+	r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
 	outputRes, outputErr, err := r.Executor.Execute(pod, cmd)
 	if err != nil {
 		// response was a failure message
 		if outputErr != "" {
 			err = fmt.Errorf("%s- %w", outputErr, err)
 		}
+		r.Log.Error(err, "Fence Agent response was a failure", "CR's Name", req.Name)
 		return emptyResult, err
 	}
 	if outputRes != SuccessFAResponse {
 		// response wasn't failure or sucesss message
 		err := fmt.Errorf("unknown fence agent response - expecting `%s` response, but we received `%s`", SuccessFAResponse, outputRes)
+		r.Log.Error(err, "Fence Agent response wasn't a success message", "CR's Name", req.Name)
 		return emptyResult, err
 	}
 	return emptyResult, nil
 }
 
-// buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR
+// buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
+// or the CR's name don't match nodeParamter name then return an error
 func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, error) {
+	if far.Spec.NodeParameters == nil || far.Spec.SharedParameters == nil {
+		return nil, errors.New(errorMissingParams)
+	}
 	var fenceAgentParams []string
 	for paramName, paramVal := range far.Spec.SharedParameters {
 		fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
@@ -138,7 +151,7 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, erro
 		if nodeVal, isFound := nodeMap[nodeName]; isFound {
 			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
 		} else {
-			err := errors.New(errorBuildingFAParams)
+			err := errors.New(errorMissingNodeParams)
 			return nil, err
 		}
 	}

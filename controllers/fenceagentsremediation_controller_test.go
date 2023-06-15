@@ -77,7 +77,7 @@ var _ = Describe("FAR Controller", func() {
 					underTestFAR.ObjectMeta.Name = dummyNodeName
 					_, err := buildFenceAgentParams(underTestFAR)
 					Expect(err).To(HaveOccurred())
-					Expect(err).To(Equal(errors.New(errorBuildingFAParams)))
+					Expect(err).To(Equal(errors.New(errorMissingNodeParams)))
 				})
 			})
 			When("FAR CR's name does match a node name", func() {
@@ -200,5 +200,5 @@ func newMockExecuter() *mockExecuter {
 func (m *mockExecuter) Execute(_ *corev1.Pod, command []string) (stdout string, stderr string, err error) {
 	m.command = command
 	m.mockLog.Info("Executed command has been stored", "command", m.command)
-	return "", "", nil
+	return SuccessFAResponse, "", nil
 }
