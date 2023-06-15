@@ -79,7 +79,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	far := &v1alpha1.FenceAgentsRemediation{}
 	if err := r.Get(ctx, req.NamespacedName, far); err != nil {
 		if apiErrors.IsNotFound(err) {
-			// Request object of FAR CR was not found, could have been deleted after reconcile request.
+			// FenceAgentsRemediation CR was not found, and it could have been deleted after reconcile request.
 			// Return and don't requeue
 			r.Log.Info("FenceAgentsRemediation CR was not found", "CR Name", req.Name, "CR Namespace", req.Namespace)
 			return emptyResult, nil
@@ -91,11 +91,11 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	r.Log.Info("Check FAR CR's name")
 	valid, err := utils.IsNodeNameValid(r.Client, req.Name)
 	if err != nil {
-		r.Log.Error(err, "Didn't find a node matching the CR's name", "CR's Name", req.Name)
+		r.Log.Error(err, "Unexpected error when validating CR's name with nodes' names", "CR's Name", req.Name)
 		return emptyResult, err
 	}
 	if !valid {
-		r.Log.Error(err, "API notFound error for finding the node ", "CR's Name", req.Name)
+		r.Log.Error(err, "Didn't find a node matching the CR's name", "CR's Name", req.Name)
 		return emptyResult, nil
 	}
 	// Fetch the FAR's pod
@@ -120,13 +120,10 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	outputRes, outputErr, err := r.Executor.Execute(pod, cmd)
 	if err != nil {
 		// response was a failure message
-		if outputErr != "" {
-			err = fmt.Errorf("%s- %w", outputErr, err)
-		}
 		r.Log.Error(err, "Fence Agent response was a failure", "CR's Name", req.Name)
 		return emptyResult, err
 	}
-	if outputRes != SuccessFAResponse {
+	if outputErr != "" || outputRes == "" {
 		// response wasn't failure or sucesss message
 		err := fmt.Errorf("unknown fence agent response - expecting `%s` response, but we received `%s`", SuccessFAResponse, outputRes)
 		r.Log.Error(err, "Fence Agent response wasn't a success message", "CR's Name", req.Name)
