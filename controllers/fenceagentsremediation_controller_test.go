@@ -83,8 +83,7 @@ var _ = Describe("FAR Controller", func() {
 			When("FAR CR's name does match a node name", func() {
 				It("should succeed", func() {
 					underTestFAR.ObjectMeta.Name = validNodeName
-					_, err := buildFenceAgentParams(underTestFAR)
-					Expect(err).NotTo(HaveOccurred())
+					Expect(buildFenceAgentParams(underTestFAR)).Error().NotTo(HaveOccurred())
 				})
 			})
 		})
