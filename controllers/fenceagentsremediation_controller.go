@@ -57,7 +57,7 @@ func (r *FenceAgentsRemediationReconciler) SetupWithManager(mgr ctrl.Manager) er
 
 //+kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;delete;deletecollection
-//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;patch;delete
+//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;update;delete
 //+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations/finalizers,verbs=update
@@ -88,16 +88,15 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "Failed to get FenceAgentsRemediation CR")
 		return emptyResult, err
 	}
-	// Add finalizer when object is created
-	if far.ObjectMeta.DeletionTimestamp.IsZero() {
+	// Add finalizer when the CR is created
+	if !controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) && far.ObjectMeta.DeletionTimestamp.IsZero() {
 		controllerutil.AddFinalizer(far, v1alpha1.FARFinalizer)
 		if err := r.Client.Update(context.Background(), far); err != nil {
 			return emptyResult, fmt.Errorf("failed to add finalizer to the CR - %w", err)
 		}
-	} else if controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) {
+	} else if controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) && !far.ObjectMeta.DeletionTimestamp.IsZero() {
+		// Delete CR only when a finalizer and DeletionTimestamp are set
 		r.Log.Info("CR's deletion timestamp is not zero, and FAR finalizer exists", "CR Name", req.Name)
-		// The object is being deleted
-
 		// remove node's taints
 		if err := utils.RemoveTaint(r.Client, far.Name); err != nil && !apiErrors.IsNotFound(err) {
 			return emptyResult, err

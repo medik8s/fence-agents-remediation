@@ -65,13 +65,12 @@ func AppendTaint(r client.Client, nodeName string) error {
 		return nil
 	}
 	// add the taint to the taint list
-	patch := client.MergeFrom(node.DeepCopy())
 	now := metav1.Now()
 	taint.TimeAdded = &now
 	node.Spec.Taints = append(node.Spec.Taints, taint)
 
 	// update with new taint list
-	if err := r.Patch(context.Background(), node, patch); err != nil {
+	if err := r.Update(context.Background(), node); err != nil {
 		loggerTaint.Error(err, "Failed to append taint on node", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
 		return err
 	}
@@ -94,7 +93,6 @@ func RemoveTaint(r client.Client, nodeName string) error {
 	}
 
 	// delete the taint from the taint list
-	patch := client.MergeFrom(node.DeepCopy())
 	if taints, deleted := deleteTaint(node.Spec.Taints, &taint); !deleted {
 		loggerTaint.Info("Failed to remove taint from node - taint was not found", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
 		return nil
@@ -103,7 +101,7 @@ func RemoveTaint(r client.Client, nodeName string) error {
 	}
 
 	// update with new taint list
-	if err := r.Patch(context.Background(), node, patch); err != nil {
+	if err := r.Update(context.Background(), node); err != nil {
 		loggerTaint.Error(err, "Failed to remove taint from node,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
 		return err
 	}
