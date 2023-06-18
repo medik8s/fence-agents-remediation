@@ -19,8 +19,8 @@ var (
 // Taints are unique by key:effect
 // Regardless of the taint's value
 
-// taintExists checks if the given taint exists in list of taints. Returns true if exists false otherwise.
-func taintExists(taints []corev1.Taint, taintToFind *corev1.Taint) bool {
+// TaintExists checks if the given taint exists in list of taints. Returns true if exists false otherwise.
+func TaintExists(taints []corev1.Taint, taintToFind *corev1.Taint) bool {
 	for _, taint := range taints {
 		if taint.MatchTaint(taintToFind) {
 			return true
@@ -43,8 +43,8 @@ func deleteTaint(taints []corev1.Taint, taintToDelete *corev1.Taint) ([]corev1.T
 	return newTaints, deleted
 }
 
-// createFARNoExecuteTaint returns a remediation NoExeucte taint
-func createFARNoExecuteTaint() corev1.Taint {
+// CreateFARNoExecuteTaint returns a remediation NoExeucte taint
+func CreateFARNoExecuteTaint() corev1.Taint {
 	return corev1.Taint{
 		Key:    v1alpha1.FARNoExecuteTaintKey,
 		Effect: corev1.TaintEffectNoExecute,
@@ -59,9 +59,9 @@ func AppendTaint(r client.Client, nodeName string) error {
 		return err
 	}
 
-	taint := createFARNoExecuteTaint()
+	taint := CreateFARNoExecuteTaint()
 	// check if taint doesn't exist
-	if taintExists(node.Spec.Taints, &taint) {
+	if TaintExists(node.Spec.Taints, &taint) {
 		return nil
 	}
 	// add the taint to the taint list
@@ -86,9 +86,9 @@ func RemoveTaint(r client.Client, nodeName string) error {
 		return err
 	}
 
-	taint := createFARNoExecuteTaint()
+	taint := CreateFARNoExecuteTaint()
 	// check if taint exist
-	if !taintExists(node.Spec.Taints, &taint) {
+	if !TaintExists(node.Spec.Taints, &taint) {
 		return nil
 	}
 
