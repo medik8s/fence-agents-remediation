@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
@@ -87,6 +88,29 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "Failed to get FenceAgentsRemediation CR")
 		return emptyResult, err
 	}
+	// Add finalizer when object is created
+	if far.ObjectMeta.DeletionTimestamp.IsZero() {
+		controllerutil.AddFinalizer(far, v1alpha1.FARFinalizer)
+		if err := r.Client.Update(context.Background(), far); err != nil {
+			return emptyResult, fmt.Errorf("failed to add finalizer to the CR - %w", err)
+		}
+	} else if controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) {
+		r.Log.Info("CR's deletion timestamp is not zero, and FAR finalizer exists", "CR Name", req.Name)
+		// The object is being deleted
+
+		// remove node's taints
+		if err := utils.RemoveTaint(r.Client, far.Name); err != nil && !apiErrors.IsNotFound(err) {
+			return emptyResult, err
+		}
+		// remove finalizer
+		controllerutil.RemoveFinalizer(far, v1alpha1.FARFinalizer)
+		if err := r.Client.Update(context.Background(), far); err != nil {
+			return emptyResult, fmt.Errorf("failed to remove finalizer from CR - %w", err)
+		}
+		r.Log.Info("Finalizer was removed", "CR Name", req.Name)
+		return emptyResult, nil
+	}
+
 	// Validate FAR CR name to match a nodeName from the cluster
 	r.Log.Info("Check FAR CR's name")
 	valid, err := utils.IsNodeNameValid(r.Client, req.Name)

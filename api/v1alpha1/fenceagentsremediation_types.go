@@ -27,6 +27,8 @@ type ParameterName string
 type NodeName string
 
 const (
+	// FARFinalizer is a finalizer for a FenceAgentsRemediation CR deletion
+	FARFinalizer string = "fence-agents-remediation.medik8s.io/far-finalizer"
 	// Taints
 	Medik8sRemediationTaintKey = "medik8s.io/remediation"
 	FARRemediationTaintValue   = "fence-agents-remediation"
