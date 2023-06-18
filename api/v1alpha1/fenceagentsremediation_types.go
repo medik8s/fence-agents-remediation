@@ -26,6 +26,12 @@ import (
 type ParameterName string
 type NodeName string
 
+const (
+	// Taints
+	Medik8sRemediationTaintKey = "medik8s.io/remediation"
+	FARRemediationTaintValue   = "fence-agents-remediation"
+)
+
 // FenceAgentsRemediationSpec defines the desired state of FenceAgentsRemediation
 type FenceAgentsRemediationSpec struct {
 	// Agent is the name of fence agent that will be used

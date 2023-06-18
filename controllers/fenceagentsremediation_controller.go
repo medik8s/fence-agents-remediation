@@ -114,6 +114,11 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "Invalid sharedParameters/nodeParameters from CR", "CR's Name", req.Name)
 		return emptyResult, err
 	}
+	// Add medik8s remediation taint
+	r.Log.Info("Add Medik8s remediation taint", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
+	if err := utils.AppendTaint(r.Client, far.Name); err != nil {
+		return emptyResult, err
+	}
 	cmd := append([]string{far.Spec.Agent}, faParams...)
 	// The Fence Agent is excutable and the parameters structure are valid, but we don't check their values
 	r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
