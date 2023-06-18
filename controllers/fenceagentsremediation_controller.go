@@ -88,6 +88,18 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "Failed to get FenceAgentsRemediation CR")
 		return emptyResult, err
 	}
+	// Validate FAR CR name to match a nodeName from the cluster
+	r.Log.Info("Check FAR CR's name")
+	valid, err := utils.IsNodeNameValid(r.Client, req.Name)
+	if err != nil {
+		r.Log.Error(err, "Unexpected error when validating CR's name with nodes' names", "CR's Name", req.Name)
+		return emptyResult, err
+	}
+	if !valid {
+		r.Log.Error(err, "Didn't find a node matching the CR's name", "CR's Name", req.Name)
+		return emptyResult, nil
+	}
+
 	// Add finalizer when the CR is created
 	if !controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) && far.ObjectMeta.DeletionTimestamp.IsZero() {
 		controllerutil.AddFinalizer(far, v1alpha1.FARFinalizer)
@@ -110,17 +122,6 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return emptyResult, nil
 	}
 
-	// Validate FAR CR name to match a nodeName from the cluster
-	r.Log.Info("Check FAR CR's name")
-	valid, err := utils.IsNodeNameValid(r.Client, req.Name)
-	if err != nil {
-		r.Log.Error(err, "Unexpected error when validating CR's name with nodes' names", "CR's Name", req.Name)
-		return emptyResult, err
-	}
-	if !valid {
-		r.Log.Error(err, "Didn't find a node matching the CR's name", "CR's Name", req.Name)
-		return emptyResult, nil
-	}
 	// Fetch the FAR's pod
 	r.Log.Info("Fetch FAR's pod")
 	pod, err := utils.GetFenceAgentsRemediationPod(r.Client)
