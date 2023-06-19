@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
@@ -56,7 +57,7 @@ func (r *FenceAgentsRemediationReconciler) SetupWithManager(mgr ctrl.Manager) er
 
 //+kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;delete;deletecollection
-//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;update;delete
 //+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations/finalizers,verbs=update
@@ -98,6 +99,29 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "Didn't find a node matching the CR's name", "CR's Name", req.Name)
 		return emptyResult, nil
 	}
+
+	// Add finalizer when the CR is created
+	if !controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) && far.ObjectMeta.DeletionTimestamp.IsZero() {
+		controllerutil.AddFinalizer(far, v1alpha1.FARFinalizer)
+		if err := r.Client.Update(context.Background(), far); err != nil {
+			return emptyResult, fmt.Errorf("failed to add finalizer to the CR - %w", err)
+		}
+	} else if controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) && !far.ObjectMeta.DeletionTimestamp.IsZero() {
+		// Delete CR only when a finalizer and DeletionTimestamp are set
+		r.Log.Info("CR's deletion timestamp is not zero, and FAR finalizer exists", "CR Name", req.Name)
+		// remove node's taints
+		if err := utils.RemoveTaint(r.Client, far.Name); err != nil && !apiErrors.IsNotFound(err) {
+			return emptyResult, err
+		}
+		// remove finalizer
+		controllerutil.RemoveFinalizer(far, v1alpha1.FARFinalizer)
+		if err := r.Client.Update(context.Background(), far); err != nil {
+			return emptyResult, fmt.Errorf("failed to remove finalizer from CR - %w", err)
+		}
+		r.Log.Info("Finalizer was removed", "CR Name", req.Name)
+		return emptyResult, nil
+	}
+
 	// Fetch the FAR's pod
 	r.Log.Info("Fetch FAR's pod")
 	pod, err := utils.GetFenceAgentsRemediationPod(r.Client)
@@ -112,6 +136,11 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	faParams, err := buildFenceAgentParams(far)
 	if err != nil {
 		r.Log.Error(err, "Invalid sharedParameters/nodeParameters from CR", "CR's Name", req.Name)
+		return emptyResult, err
+	}
+	// Add medik8s remediation taint
+	r.Log.Info("Add Medik8s remediation taint", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
+	if err := utils.AppendTaint(r.Client, far.Name); err != nil {
 		return emptyResult, err
 	}
 	cmd := append([]string{far.Spec.Agent}, faParams...)

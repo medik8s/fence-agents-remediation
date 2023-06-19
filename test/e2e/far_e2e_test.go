@@ -49,29 +49,8 @@ var _ = Describe("FAR E2e", func() {
 		fmt.Printf("\ncluster name: %s and PlatformType: %s \n", string(clusterPlatform.Name), string(clusterPlatform.Status.PlatformStatus.Type))
 	})
 
-	Context("fence agent - dummy", func() {
-		testNodeName := "dummy-node"
-		fenceAgent = fenceAgentDummyName
-
+	Context("fence agent", func() {
 		BeforeEach(func() {
-			testShareParam := map[v1alpha1.ParameterName]string{}
-			testNodeParam := map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{}
-			far = createFAR(testNodeName, fenceAgent, testShareParam, testNodeParam)
-		})
-
-		AfterEach(func() {
-			deleteFAR(far)
-		})
-
-		It("should check whether the CR has been created", func() {
-			testFarCR := &v1alpha1.FenceAgentsRemediation{}
-			Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(far), testFarCR)).To(Succeed(), "failed to get FAR CR")
-		})
-	})
-
-	Context("fence agent - non-Dummy", func() {
-		BeforeEach(func() {
-			var testNodeName string
 			nodes := &corev1.NodeList{}
 			Expect(k8sClient.List(context.Background(), nodes, &client.ListOptions{})).ToNot(HaveOccurred())
 			if len(nodes.Items) <= 1 {
@@ -80,7 +59,7 @@ var _ = Describe("FAR E2e", func() {
 			//TODO: Randomize the node selection
 			// run FA on the first node - a master node
 			nodeObj := nodes.Items[nodeIndex]
-			testNodeName = nodeObj.Name
+			testNodeName := nodeObj.Name
 			log.Info("Testing Node", "Node name", testNodeName)
 
 			switch clusterPlatform.Status.PlatformStatus.Type {

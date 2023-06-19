@@ -26,6 +26,13 @@ import (
 type ParameterName string
 type NodeName string
 
+const (
+	// FARFinalizer is a finalizer for a FenceAgentsRemediation CR deletion
+	FARFinalizer string = "fence-agents-remediation.medik8s.io/far-finalizer"
+	// Taints
+	FARNoExecuteTaintKey = "medik8s.io/fence-agents-remediation"
+)
+
 // FenceAgentsRemediationSpec defines the desired state of FenceAgentsRemediation
 type FenceAgentsRemediationSpec struct {
 	// Agent is the name of fence agent that will be used
