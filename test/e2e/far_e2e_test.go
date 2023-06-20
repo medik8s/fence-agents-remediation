@@ -33,7 +33,7 @@ const (
 	// eventually parameters
 	//TODO: try to minimize timeout
 	timeoutLogs   = 6 * time.Minute
-	timeoutReboot = 10 * time.Minute
+	timeoutReboot = 10 * time.Minute // fencing with fence_aws should be completed within 6 minutes
 	pollInterval  = 10 * time.Second
 )
 
@@ -151,22 +151,25 @@ func deleteFAR(far *v1alpha1.FenceAgentsRemediation) {
 func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action string) (map[v1alpha1.ParameterName]string, error) {
 	const (
 		//AWS
-		secretAWS    = "aws-cloud-credentials"
-		secretKeyAWS = "aws_access_key_id"
-		secretValAWS = "aws_secret_access_key"
+		// secretDefaultAWS    = "aws-cloud-credentials"
+		secretAWSName      = "aws-cloud-fencing-credentials-secret"
+		secretAWSNamespace = "openshift-operators"
+		secretKeyAWS       = "aws_access_key_id"
+		secretValAWS       = "aws_secret_access_key"
 
 		// BareMetal
 		//TODO: secret BM should be based on node name - > oc get bmh -n openshift-machine-api BM_NAME -o jsonpath='{.spec.bmc.credentialsName}'
-		secretBMHExample = "ostest-master-0-bmc-secret"
-		secretKeyBM      = "username"
-		secretValBM      = "password"
+		secretBMHName      = "ostest-master-0-bmc-secret"
+		secretBMHNamespace = "openshift-machine-api"
+		secretKeyBM        = "username"
+		secretValBM        = "password"
 	)
 	var testShareParam map[v1alpha1.ParameterName]string
 
 	// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.type}'
 	clusterPlatformType := clusterPlatform.Status.PlatformStatus.Type
 	if clusterPlatformType == configv1.AWSPlatformType {
-		accessKey, secretKey, err := e2eUtils.GetCredentials(clientSet, secretAWS, secretKeyAWS, secretValAWS)
+		accessKey, secretKey, err := e2eUtils.GetCredentials(clientSet, secretAWSName, secretAWSNamespace, secretKeyAWS, secretValAWS)
 		if err != nil {
 			fmt.Printf("can't get AWS credentials\n")
 			return nil, err
@@ -176,17 +179,18 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 		regionAWS := string(clusterPlatform.Status.PlatformStatus.AWS.Region)
 
 		testShareParam = map[v1alpha1.ParameterName]string{
-			"--access-key": accessKey,
-			"--secret-key": secretKey,
-			"--region":     regionAWS,
-			"--action":     action,
+			"--access-key":      accessKey,
+			"--secret-key":      secretKey,
+			"--region":          regionAWS,
+			"--action":          action,
+			"--skip-race-check": "",
 			// "--verbose":    "", // for verbose result
 		}
 	} else if clusterPlatformType == configv1.BareMetalPlatformType {
 		// TODO : get ip from GetCredientals
 		// oc get bmh -n openshift-machine-api ostest-master-0 -o jsonpath='{.spec.bmc.address}'
 		// then parse ip
-		username, password, err := e2eUtils.GetCredentials(clientSet, secretBMHExample, secretKeyBM, secretValBM)
+		username, password, err := e2eUtils.GetCredentials(clientSet, secretBMHName, secretBMHNamespace, secretKeyBM, secretValBM)
 		if err != nil {
 			fmt.Printf("can't get BMH credentials\n")
 			return nil, err

@@ -15,9 +15,11 @@ import (
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 )
 
+// See OCP API for Machine in https://docs.openshift.com/container-platform/latest/rest_api/machine_apis/machine-machine-openshift-io-v1beta1.html
+
 const (
-	machinesNamespace   = "openshift-machine-api"
 	clusterPlatformName = "cluster"
+	machinesNamespace   = "openshift-machine-api"
 )
 
 // GetClusterInfo fetch the cluster's infrastructure object to identify it's type
@@ -34,11 +36,11 @@ func GetClusterInfo(config configclient.Interface) (*configv1.Infrastructure, er
 }
 
 // GetCredentials searches for AWS or BMH secret, and then returns it decoded
-func GetCredentials(clientSet *kubernetes.Clientset, secretName, secretKey, secretVal string) (string, string, error) {
+func GetCredentials(clientSet *kubernetes.Clientset, secretName, secretNamespace, secretKey, secretVal string) (string, string, error) {
 	// oc get secrets -n openshift-machine-api aws-cloud-credentials -o jsonpath='{.data.aws_access_key_id}' | base64 -d
 	// oc get secrets -n openshift-machine-api aws-cloud-credentials -o jsonpath='{.data.aws_secret_access_key}' | base64 -d
 
-	secret, err := clientSet.CoreV1().Secrets(machinesNamespace).Get(context.Background(), secretName, metav1.GetOptions{})
+	secret, err := clientSet.CoreV1().Secrets(secretNamespace).Get(context.Background(), secretName, metav1.GetOptions{})
 	if err != nil {
 		return "", "", err
 	}
