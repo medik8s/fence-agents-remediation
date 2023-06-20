@@ -401,11 +401,16 @@ container-push: docker-push bundle-push catalog-build catalog-push ## Push conta
 .PHONY: container-build-and-push-community
 container-build-and-push-community: container-build-community container-push ## Build three images, update CSV for community, and push all the images to Quay (docker, bundle, and catalog).
 
+export OCP_AWS_CREDENTIALS ="config/ocp_aws/fence_aws_credentials_request.yaml"
+.PHONY: ocp-aws-credentials
+ocp-aws-credentials: ## Add CredentialsRequest for OCP on AWS
+	$(KUBECTL) create -f ${OCP_AWS_CREDENTIALS}
+
 .PHONY: test-e2e
 # -r: If set, ginkgo finds and runs test suites under the current directory recursively.
 # --keep-going:  If set, failures from earlier test suites do not prevent later test suites from running.
 # --require-suite: If set, Ginkgo fails if there are ginkgo tests in a directory but no invocation of RunSpecs.
 # --vv: If set, emits with maximal verbosity - includes skipped and pending tests.
-test-e2e: ginkgo ## Run end to end (E2E) tests
+test-e2e: ocp-aws-credentials ginkgo ## Run end to end (E2E) tests
 	@test -n "${KUBECONFIG}" -o -r ${HOME}/.kube/config || (echo "Failed to find kubeconfig in ~/.kube/config or no KUBECONFIG set"; exit 1)
 	$(GINKGO) -r --keep-going --require-suite --vv  ./test/e2e -coverprofile cover.out
