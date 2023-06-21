@@ -139,7 +139,7 @@ var _ = Describe("FAR Controller", func() {
 					Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
 					res, _ := cliCommandsEquality(underTestFAR)
 					return utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint) && res
-				}, 1*time.Second, 500*time.Millisecond).Should(BeTrue(), "taint should be added, and command format is correct")
+				}, 20*time.Millisecond, 10*time.Millisecond).Should(BeTrue(), "taint should be added, and command format is correct")
 				// If taint was added, then defenintly the finzlier was added as well
 				By("Having a finalizer if we have a remediation taint")
 				Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
@@ -160,7 +160,7 @@ var _ = Describe("FAR Controller", func() {
 				Eventually(func() bool {
 					Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
 					return controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)
-				}, 1*time.Second, 500*time.Millisecond).Should(BeFalse(), "finalizer shouldn't be added")
+				}, 20*time.Millisecond, 10*time.Millisecond).Should(BeFalse(), "finalizer shouldn't be added")
 				// If finalizer is missing, then a taint shouldn't be existed
 				By("Not having remediation taint")
 				Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeFalse())
