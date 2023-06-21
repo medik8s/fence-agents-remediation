@@ -15,6 +15,7 @@ import (
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 )
 
+// Inspired from https://github.com/hybrid-cloud-patterns/patterns-operator/blob/main/controllers/pattern_controller.go#L293-L313
 // See OCP API for Machine in https://docs.openshift.com/container-platform/latest/rest_api/machine_apis/machine-machine-openshift-io-v1beta1.html
 
 const (
@@ -24,7 +25,6 @@ const (
 
 // GetClusterInfo fetch the cluster's infrastructure object to identify it's type
 func GetClusterInfo(config configclient.Interface) (*configv1.Infrastructure, error) {
-	// Copy paste from https://github.com/hybrid-cloud-patterns/patterns-operator/blob/main/controllers/pattern_controller.go#L293-L313
 	// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.metadata.name}'
 	// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.spec.platformSpec.type}'
 
@@ -35,8 +35,8 @@ func GetClusterInfo(config configclient.Interface) (*configv1.Infrastructure, er
 	return clusterInfra, nil
 }
 
-// GetCredentials searches for AWS or BMH secret, and then returns it decoded
-func GetCredentials(clientSet *kubernetes.Clientset, secretName, secretNamespace, secretKey, secretVal string) (string, string, error) {
+// GetSecretData searches for the platform's secret, and then returns it's decoded two data values
+func GetSecretData(clientSet *kubernetes.Clientset, secretName, secretNamespace, secretData1, secretData2 string) (string, string, error) {
 	// oc get secrets -n openshift-machine-api aws-cloud-credentials -o jsonpath='{.data.aws_access_key_id}' | base64 -d
 	// oc get secrets -n openshift-machine-api aws-cloud-credentials -o jsonpath='{.data.aws_secret_access_key}' | base64 -d
 
@@ -44,7 +44,7 @@ func GetCredentials(clientSet *kubernetes.Clientset, secretName, secretNamespace
 	if err != nil {
 		return "", "", err
 	}
-	return string(secret.Data[secretKey]), string(secret.Data[secretVal]), nil
+	return string(secret.Data[secretData1]), string(secret.Data[secretData2]), nil
 }
 
 // GetAWSNodeInfoList returns a list of the node names and their identification, e.g., AWS instance ID

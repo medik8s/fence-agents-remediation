@@ -31,8 +31,8 @@ const (
 	succeesRebootMessage     = "\"Success: Rebooted"
 	containerName            = "manager"
 
-	// eventually parameters
 	//TODO: try to minimize timeout
+	// eventually parameters
 	timeoutLogs   = 6 * time.Minute
 	timeoutReboot = 10 * time.Minute // fencing with fence_aws should be completed within 6 minutes
 	pollInterval  = 10 * time.Second
@@ -154,7 +154,6 @@ func deleteFAR(far *v1alpha1.FenceAgentsRemediation) {
 func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action string) (map[v1alpha1.ParameterName]string, error) {
 	const (
 		//AWS
-		// secretDefaultAWS    = "aws-cloud-credentials"
 		secretAWSName      = "aws-cloud-fencing-credentials-secret"
 		secretAWSNamespace = "openshift-operators"
 		secretKeyAWS       = "aws_access_key_id"
@@ -172,7 +171,7 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 	// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.type}'
 	clusterPlatformType := clusterPlatform.Status.PlatformStatus.Type
 	if clusterPlatformType == configv1.AWSPlatformType {
-		accessKey, secretKey, err := e2eUtils.GetCredentials(clientSet, secretAWSName, secretAWSNamespace, secretKeyAWS, secretValAWS)
+		accessKey, secretKey, err := e2eUtils.GetSecretData(clientSet, secretAWSName, secretAWSNamespace, secretKeyAWS, secretValAWS)
 		if err != nil {
 			fmt.Printf("can't get AWS credentials\n")
 			return nil, err
@@ -193,7 +192,7 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 		// TODO : get ip from GetCredientals
 		// oc get bmh -n openshift-machine-api ostest-master-0 -o jsonpath='{.spec.bmc.address}'
 		// then parse ip
-		username, password, err := e2eUtils.GetCredentials(clientSet, secretBMHName, secretBMHNamespace, secretKeyBM, secretValBM)
+		username, password, err := e2eUtils.GetSecretData(clientSet, secretBMHName, secretBMHNamespace, secretKeyBM, secretValBM)
 		if err != nil {
 			fmt.Printf("can't get BMH credentials\n")
 			return nil, err
