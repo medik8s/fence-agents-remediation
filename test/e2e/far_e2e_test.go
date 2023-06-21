@@ -11,6 +11,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -26,7 +28,6 @@ const (
 	fenceAgentAction         = "reboot"
 	nodeIdentifierPrefixAWS  = "--plug"
 	nodeIdentifierPrefixIPMI = "--ipport"
-	nodeIndex                = 3
 	succeesRebootMessage     = "\"Success: Rebooted"
 	containerName            = "manager"
 
@@ -62,15 +63,17 @@ var _ = Describe("FAR E2e", func() {
 		)
 		BeforeEach(func() {
 			nodes := &corev1.NodeList{}
-			Expect(k8sClient.List(context.Background(), nodes, &client.ListOptions{})).ToNot(HaveOccurred())
-			if len(nodes.Items) <= 1 {
-				Fail("there is one or less available nodes in the cluster")
+			selector := labels.NewSelector()
+			requirement, _ := labels.NewRequirement(utils.WorkerLabelName, selection.Exists, []string{})
+			selector = selector.Add(*requirement)
+			Expect(k8sClient.List(context.Background(), nodes, &client.ListOptions{LabelSelector: selector})).ToNot(HaveOccurred())
+			if len(nodes.Items) < 1 {
+				Fail("there are no worker nodes in the cluster")
 			}
 			//TODO: Randomize the node selection & verify valid index
-			// run FA on the fourth node - a worker node
-			nodeObj := nodes.Items[nodeIndex]
-			testNodeName := nodeObj.Name
-			log.Info("Testing Node", "Node name", testNodeName)
+			// run FA on the first worker node
+			nodeObj := nodes.Items[0]
+			testNodeName = nodeObj.Name
 
 			switch clusterPlatform.Status.PlatformStatus.Type {
 			case configv1.AWSPlatformType:
