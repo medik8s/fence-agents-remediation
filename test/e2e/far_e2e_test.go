@@ -246,10 +246,12 @@ func getNodeBootTime(nodeName string) (time.Time, error) {
 	return time.Time{}, err
 }
 
-// checkFarLogs gets the FAR pod and checks whether it's logs have logString
-func checkFarLogs(logString string) {
-	var pod *corev1.Pod
-	var err error
+// getFarPod gets the FAR pod by it's label
+func getFarPod() *corev1.Pod {
+	var (
+		pod *corev1.Pod
+		err error
+	)
 	EventuallyWithOffset(1, func() *corev1.Pod {
 		pod, err = utils.GetFenceAgentsRemediationPod(k8sClient)
 		if err != nil {
@@ -258,10 +260,22 @@ func checkFarLogs(logString string) {
 		}
 		return pod
 	}, timeoutLogs, pollInterval).ShouldNot(BeNil(), "can't find the pod after timeout")
+	return pod
+}
 
+// checkFarLogs gets the FAR pod and checks whether it's logs have logString
+func checkFarLogs(logString string) {
+	pod := getFarPod()
 	EventuallyWithOffset(1, func() string {
 		logs, err := e2eUtils.GetLogs(clientSet, pod, containerName)
 		if err != nil {
+			if apiErrors.IsNotFound(err) {
+				// If FAR pod was running in testNodeName, then after reboot it was recreated in another node, and with a new name.
+				// Thus the "old" pod's name prior to this eventually won't link to a running pod, since it was already evicted by the reboot
+				log.Error(err, "failed to get logs. FAR pod might have been recreated due to rebooting the node it was resided. Might try again")
+				pod = getFarPod()
+				return ""
+			}
 			log.Error(err, "failed to get logs. Might try again")
 			return ""
 		}
