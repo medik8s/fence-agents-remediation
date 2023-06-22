@@ -20,6 +20,8 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 )
 
 // GetBootTime gets the boot time of the given node by running a pod on it executing uptime command
@@ -49,6 +51,7 @@ func RunCommandInCluster(c *kubernetes.Clientset, nodeName string, ns string, co
 
 	err = waitForCondition(c, pod, corev1.PodReady, corev1.ConditionTrue, time.Minute)
 	if err != nil {
+		log.Error(err, "helper pod isn't ready")
 		return "", err
 	}
 
@@ -127,9 +130,8 @@ func execCommandOnPod(c *kubernetes.Clientset, pod *corev1.Pod, command []string
 // waitForCondition waits until the pod will have specified condition type with the expected status
 func waitForCondition(c *kubernetes.Clientset, pod *corev1.Pod, conditionType corev1.PodConditionType, conditionStatus corev1.ConditionStatus, timeout time.Duration) error {
 	return wait.PollImmediate(time.Second, timeout, func() (bool, error) {
-		updatedPod := &corev1.Pod{}
-		var err error
-		if updatedPod, err = c.CoreV1().Pods(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{}); err != nil {
+		updatedPod, err := c.CoreV1().Pods(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
+		if err != nil {
 			return false, err
 		}
 		for _, c := range updatedPod.Status.Conditions {
@@ -166,6 +168,13 @@ func getPod(nodeName string) *corev1.Pod {
 						Privileged: pointer.Bool(true),
 					},
 					Command: []string{"sleep", "2m"},
+				},
+			},
+			Tolerations: []corev1.Toleration{
+				{
+					Key:      v1alpha1.FARNoExecuteTaintKey,
+					Operator: corev1.TolerationOpEqual,
+					Effect:   corev1.TaintEffectNoExecute,
 				},
 			},
 		},
