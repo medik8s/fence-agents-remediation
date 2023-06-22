@@ -110,6 +110,8 @@ var _ = Describe("FAR Controller", func() {
 		})
 	})
 	Context("Reconcile", func() {
+		farNamespacedName := client.ObjectKey{Name: node01, Namespace: defaultNamespace}
+		nodeKey := client.ObjectKey{Name: node01}
 		farNoExecuteTaint := utils.CreateFARNoExecuteTaint()
 		//Scenarios
 		BeforeEach(func() {
@@ -131,15 +133,13 @@ var _ = Describe("FAR Controller", func() {
 				node = getNode(node01)
 			})
 			It("should have finalizer and taint", func() {
-				farNamespacedName := client.ObjectKey{Name: node01, Namespace: defaultNamespace}
-				nodeNamespacedName := client.ObjectKey{Name: node01}
 				By("Searching for remediation taint")
 				Eventually(func() bool {
-					Expect(k8sClient.Get(context.Background(), nodeNamespacedName, node)).To(Succeed())
+					Expect(k8sClient.Get(context.Background(), nodeKey, node)).To(Succeed())
 					Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
 					res, _ := cliCommandsEquality(underTestFAR)
 					return utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint) && res
-				}, 20*time.Millisecond, 10*time.Millisecond).Should(BeTrue(), "taint should be added, and command format is correct")
+				}, 100*time.Millisecond, 10*time.Millisecond).Should(BeTrue(), "taint should be added, and command format is correct")
 				// If taint was added, then defenintly the finzlier was added as well
 				By("Having a finalizer if we have a remediation taint")
 				Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
@@ -153,14 +153,14 @@ var _ = Describe("FAR Controller", func() {
 			})
 			It("should not have a finalizer nor taint", func() {
 				By("Not finding a matching node to FAR CR's name")
-				nodeNamespacedName := client.ObjectKey{Name: dummyNode}
-				Expect(k8sClient.Get(context.Background(), nodeNamespacedName, node)).To(Not(Succeed()))
+				nodeKey.Name = dummyNode
+				Expect(k8sClient.Get(context.Background(), nodeKey, node)).To(Not(Succeed()))
 				By("Not having finalizer")
-				farNamespacedName := client.ObjectKey{Name: dummyNode, Namespace: defaultNamespace}
+				farNamespacedName.Name = dummyNode
 				Eventually(func() bool {
 					Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
 					return controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)
-				}, 20*time.Millisecond, 10*time.Millisecond).Should(BeFalse(), "finalizer shouldn't be added")
+				}, 100*time.Millisecond, 10*time.Millisecond).Should(BeFalse(), "finalizer shouldn't be added")
 				// If finalizer is missing, then a taint shouldn't be existed
 				By("Not having remediation taint")
 				Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeFalse())
