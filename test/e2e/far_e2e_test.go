@@ -33,8 +33,9 @@ const (
 
 	//TODO: try to minimize timeout
 	// eventually parameters
-	timeoutLogs   = 6 * time.Minute
-	timeoutReboot = 10 * time.Minute // fencing with fence_aws should be completed within 6 minutes
+	timeoutGetPod = 1 * time.Minute
+	timeoutLogs   = 3 * time.Minute
+	timeoutReboot = 6 * time.Minute // fencing with fence_aws should be completed within 6 minutes
 	pollInterval  = 10 * time.Second
 )
 
@@ -259,7 +260,7 @@ func getFarPod() *corev1.Pod {
 			return nil
 		}
 		return pod
-	}, timeoutLogs, pollInterval).ShouldNot(BeNil(), "can't find the pod after timeout")
+	}, timeoutGetPod, pollInterval).ShouldNot(BeNil(), "can't find the pod after timeout")
 	return pod
 }
 
