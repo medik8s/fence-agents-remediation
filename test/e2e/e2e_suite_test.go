@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -10,6 +11,9 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap/zapcore"
 
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,6 +40,9 @@ var (
 
 	// The ns the operator is running in
 	operatorNsName string
+
+	// The ns test pods are started in
+	testNsName = "far-test"
 )
 
 func TestE2e(t *testing.T) {
@@ -84,6 +91,23 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	os.Setenv("DEPLOYMENT_NAMESPACE", operatorNsName)
+
+	// create test ns
+	testNs := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: testNsName,
+			Labels: map[string]string{
+				// allow privileged pods in test namespace (disable PSA), needed for API blocker pod
+				"pod-security.kubernetes.io/enforce":             "privileged",
+				"security.openshift.io/scc.podSecurityLabelSync": "false",
+			},
+		},
+	}
+	err = k8sClient.Get(context.Background(), ctrl.ObjectKeyFromObject(testNs), testNs)
+	if errors.IsNotFound(err) {
+		err = k8sClient.Create(context.Background(), testNs)
+	}
+	Expect(err).ToNot(HaveOccurred(), "could not get or create test ns")
 
 	debug()
 })
