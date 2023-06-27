@@ -35,7 +35,8 @@ func GetClusterInfo(config configclient.Interface) (*configv1.Infrastructure, er
 	return clusterInfra, nil
 }
 
-// GetSecretData searches for the platform's secret, and then returns it's decoded two data values
+// GetSecretData searches for the platform's secret, and then returns it's decoded two data values.
+// E.g. on AWS it would be the Access Key and it's ID, but on BMH with fence_impilan it would be useranme and password
 func GetSecretData(clientSet *kubernetes.Clientset, secretName, secretNamespace, secretData1, secretData2 string) (string, string, error) {
 	// oc get secrets -n openshift-machine-api aws-cloud-credentials -o jsonpath='{.data.aws_access_key_id}' | base64 -d
 	// oc get secrets -n openshift-machine-api aws-cloud-credentials -o jsonpath='{.data.aws_secret_access_key}' | base64 -d

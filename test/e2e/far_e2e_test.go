@@ -33,7 +33,6 @@ const (
 
 	//TODO: try to minimize timeout
 	// eventually parameters
-	timeoutGetPod = 1 * time.Minute
 	timeoutLogs   = 3 * time.Minute
 	timeoutReboot = 6 * time.Minute // fencing with fence_aws should be completed within 6 minutes
 	pollInterval  = 10 * time.Second
@@ -103,7 +102,7 @@ var _ = Describe("FAR E2e", func() {
 			log.Info("Testing Node", "Node name", testNodeName, "Node ID", testNodeID)
 
 			// save the node's boot time prior to the fence agent call
-			nodeBootTimeBefore, errBoot = getNodeBootTime(testNodeName)
+			nodeBootTimeBefore, errBoot = e2eUtils.GetBootTime(clientSet, testNodeName, testNsName, log)
 			Expect(errBoot).ToNot(HaveOccurred(), "failed to get boot time of the node")
 
 			far = createFAR(testNodeName, fenceAgent, testShareParam, testNodeParam)
@@ -238,46 +237,23 @@ func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha
 	return testNodeParam, nil
 }
 
-// getNodeBootTime returns the bootime of node nodeName if possible, otherwise it returns an error
-func getNodeBootTime(nodeName string) (time.Time, error) {
-	bootTime, err := e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
-	if bootTime != nil && err == nil {
-		return *bootTime, nil
-	}
-	return time.Time{}, err
-}
-
-// getFarPod gets the FAR pod by it's label
-func getFarPod() *corev1.Pod {
-	var (
-		pod *corev1.Pod
-		err error
-	)
-	EventuallyWithOffset(1, func() *corev1.Pod {
-		pod, err = utils.GetFenceAgentsRemediationPod(k8sClient)
-		if err != nil {
-			log.Error(err, "failed to get pod. Might try again")
-			return nil
-		}
-		return pod
-	}, timeoutGetPod, pollInterval).ShouldNot(BeNil(), "can't find the pod after timeout")
-	return pod
-}
-
 // checkFarLogs gets the FAR pod and checks whether it's logs have logString
 func checkFarLogs(logString string) {
-	pod := getFarPod()
 	EventuallyWithOffset(1, func() string {
+		pod, err := utils.GetFenceAgentsRemediationPod(k8sClient)
+		if err != nil {
+			log.Error(err, "failed to get FAR pod. Might try again")
+			return ""
+		}
 		logs, err := e2eUtils.GetLogs(clientSet, pod, containerName)
 		if err != nil {
 			if apiErrors.IsNotFound(err) {
 				// If FAR pod was running in testNodeName, then after reboot it was recreated in another node, and with a new name.
 				// Thus the "old" pod's name prior to this eventually won't link to a running pod, since it was already evicted by the reboot
-				log.Error(err, "failed to get logs. FAR pod might have been recreated due to rebooting the node it was resided. Might try again")
-				pod = getFarPod()
+				log.Error(err, "failed to get logs. FAR pod might have been recreated due to rebooting the node it was resided. Might try again", "pod", pod)
 				return ""
 			}
-			log.Error(err, "failed to get logs. Might try again")
+			log.Error(err, "failed to get logs. Might try again", "pod", pod)
 			return ""
 		}
 		return logs
@@ -290,7 +266,7 @@ func wasNodeRebooted(nodeName string, nodeBootTimeBefore time.Time) {
 	var nodeBootTimeAfter time.Time
 	Eventually(func() (time.Time, error) {
 		var errBootAfter error
-		nodeBootTimeAfter, errBootAfter = getNodeBootTime(nodeName)
+		nodeBootTimeAfter, errBootAfter = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
 		if errBootAfter != nil {
 			log.Error(errBootAfter, "Can't get boot time of the node")
 		}

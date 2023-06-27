@@ -10,10 +10,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// GetFenceAgentsRemediationPod fetches the FAR pod based on FAR's label and namespace
+// GetFenceAgentsRemediationPod fetches the first running pod that matches to FAR's label and namespace
+// The pod should be on running state since when we taint and reboot a node which had FAR, then that pod will be restarted on a different node,
+// This results with an old pod which is about to die and new pod is already running and we want to return the running pod
 func GetFenceAgentsRemediationPod(r client.Reader) (*corev1.Pod, error) {
-	var podNamespace string
-	pods := &corev1.PodList{}
+	podList := &corev1.PodList{}
 	selector := labels.NewSelector()
 	requirement, _ := labels.NewRequirement("app", selection.Equals, []string{"fence-agents-remediation-operator"})
 	selector = selector.Add(*requirement)
@@ -21,12 +22,17 @@ func GetFenceAgentsRemediationPod(r client.Reader) (*corev1.Pod, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed fetching FAR namespace - %w", err)
 	}
-	err = r.List(context.Background(), pods, &client.ListOptions{LabelSelector: selector, Namespace: podNamespace})
+	err = r.List(context.Background(), podList, &client.ListOptions{LabelSelector: selector, Namespace: podNamespace})
 	if err != nil {
 		return nil, fmt.Errorf("failed fetching FAR pod - %w", err)
 	}
-	if len(pods.Items) == 0 {
-		return nil, fmt.Errorf("no Fence Agent pods were found")
+	if len(podList.Items) == 0 {
+		return nil, fmt.Errorf("no FAR pods were found")
 	}
-	return &pods.Items[0], nil
+	for _, pod := range podList.Items {
+		if pod.Status.Phase == corev1.PodRunning {
+			return &pod, nil
+		}
+	}
+	return nil, fmt.Errorf("no running FAR pods were found")
 }

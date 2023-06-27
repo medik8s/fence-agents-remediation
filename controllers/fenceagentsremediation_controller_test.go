@@ -114,8 +114,10 @@ var _ = Describe("FAR Controller", func() {
 		//Scenarios
 		BeforeEach(func() {
 			fenceAgentsPod = buildFarPod()
-			// DeferCleanUp and Create fenceAgentsPod
+			// Create, Update status (for GetFenceAgentsRemediationPod), and DeferCleanUp the fenceAgentsPod
 			Expect(k8sClient.Create(context.Background(), fenceAgentsPod)).To(Succeed())
+			fenceAgentsPod.Status.Phase = corev1.PodRunning
+			Expect(k8sClient.Status().Update(context.Background(), fenceAgentsPod)).To(Succeed())
 			DeferCleanup(k8sClient.Delete, context.Background(), fenceAgentsPod)
 		})
 		JustBeforeEach(func() {
