@@ -5,6 +5,7 @@ KUSTOMIZE_VERSION ?= v4@v4.5.7
 # https://github.com/kubernetes-sigs/controller-tools/releases for the last version
 CONTROLLER_GEN_VERSION ?= v0.12.0
 # See https://pkg.go.dev/sigs.k8s.io/controller-runtime/tools/setup-envtest?tab=versions for the last version
+# Why to use the git commit sha? https://github.com/kubernetes-sigs/controller-runtime/issues/1670
 ENVTEST_VERSION ?= v0.0.0-20230620070423-a784ee78d04b
 # See https://github.com/onsi/ginkgo/releases for the last version
 GINKGO_VERSION ?= v2.11.0
@@ -289,6 +290,9 @@ controller-gen: ## Download controller-gen locally if necessary.
 
 .PHONY: envtest ## This library helps write integration tests for your controllers by setting up and starting an instance of etcd and the Kubernetes API server, without kubelet, controller-manager or other components.
 envtest: ## Download envtest-setup locally if necessary.
+ifneq ($(wildcard $(ENVTEST_DIR)),)
+	chmod -R +w $(ENVTEST_DIR)
+endif
 	$(call go-install-tool,$(ENVTEST),$(ENVTEST_DIR),sigs.k8s.io/controller-runtime/tools/setup-envtest@${ENVTEST_VERSION})
 
 .PHONY: ginkgo
