@@ -4,8 +4,8 @@ go 1.20
 
 require (
 	github.com/go-logr/logr v1.2.4
-	github.com/onsi/ginkgo/v2 v2.9.5
-	github.com/onsi/gomega v1.27.7
+	github.com/onsi/ginkgo/v2 v2.11.0
+	github.com/onsi/gomega v1.27.8
 	github.com/openshift/api v0.0.0-20210831091943-07e756545ac1
 	github.com/openshift/client-go v0.0.0-20210831095141-e19a065e79f7
 	github.com/openshift/machine-api-operator v0.2.1-0.20200520080344-fe76daf636f4

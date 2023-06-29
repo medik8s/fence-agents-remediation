@@ -3,19 +3,19 @@
 # See https://github.com/kubernetes-sigs/kustomize for the last version
 KUSTOMIZE_VERSION ?= v4@v4.5.7
 # https://github.com/kubernetes-sigs/controller-tools/releases for the last version
-CONTROLLER_GEN_VERSION ?= v0.8.0
+CONTROLLER_GEN_VERSION ?= v0.12.0
 # See https://pkg.go.dev/sigs.k8s.io/controller-runtime/tools/setup-envtest?tab=versions for the last version
-ENVTEST_VERSION ?= v0.0.0-20221022092956-090611b34874
+ENVTEST_VERSION ?= v0.0.0-20230620070423-a784ee78d04b
+# See https://github.com/onsi/ginkgo/releases for the last version
+GINKGO_VERSION ?= v2.11.0
 # See https://pkg.go.dev/golang.org/x/tools/cmd/goimports?tab=versions for the last version
-GOIMPORTS_VERSION ?= v0.6.0
-# See github.com/operator-framework/operator-registry/releases for the last version
-OPM_VERSION ?= v1.26.2
-# See github.com/operator-framework/operator-sdk/releases for the last version
-OPERATOR_SDK_VERSION ?= v1.26.0
+GOIMPORTS_VERSION ?= v0.10.0
 # See https://github.com/slintes/sort-imports/releases for the last version
 SORT_IMPORTS_VERSION = v0.2.1
-# See https://github.com/onsi/ginkgo/releases for the last version
-GINKGO_VERSION ?= v2.9.5
+# See https://github.com/operator-framework/operator-registry/releases for the last version
+OPM_VERSION ?= v1.28.0
+# See https://github.com/operator-framework/operator-sdk/releases for the last version
+OPERATOR_SDK_VERSION ?= v1.30.0
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.23
 
@@ -265,9 +265,9 @@ CONTROLLER_GEN_DIR ?= $(LOCALBIN)/controller-gen
 ENVTEST_DIR ?= $(LOCALBIN)/setup-envtest
 GINKGO_DIR ?= $(LOCALBIN)/ginkgo
 GOIMPORTS_DIR ?= $(LOCALBIN)/goimports
+SORT_IMPORTS_DIR ?= $(LOCALBIN)/sort-imports
 OPM_DIR = $(LOCALBIN)/opm
 OPERATOR_SDK_DIR ?= $(LOCALBIN)/operator-sdk
-SORT_IMPORTS_DIR ?= $(LOCALBIN)/sort-imports
 
 ## Specific Tool Binaries
 KUSTOMIZE = $(KUSTOMIZE_DIR)/$(KUSTOMIZE_VERSION)/kustomize
@@ -275,9 +275,9 @@ CONTROLLER_GEN = $(CONTROLLER_GEN_DIR)/$(CONTROLLER_GEN_VERSION)/controller-gen
 ENVTEST = $(ENVTEST_DIR)/$(ENVTEST_VERSION)/setup-envtest
 GINKGO = $(GINKGO_DIR)/$(GINKGO_VERSION)/ginkgo
 GOIMPORTS = $(GOIMPORTS_DIR)/$(GOIMPORTS_VERSION)/goimports
+SORT_IMPORTS = $(SORT_IMPORTS_DIR)/$(SORT_IMPORTS_VERSION)/sort-imports
 OPM = $(OPM_DIR)/$(OPM_VERSION)/opm
 OPERATOR_SDK = $(OPERATOR_SDK_DIR)/$(OPERATOR_SDK_VERSION)/operator-sdk
-SORT_IMPORTS = $(SORT_IMPORTS_DIR)/$(SORT_IMPORTS_VERSION)/sort-imports
 
 .PHONY: kustomize
 kustomize: ## Download kustomize locally if necessary.
