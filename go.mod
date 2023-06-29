@@ -6,15 +6,15 @@ require (
 	github.com/go-logr/logr v1.2.4
 	github.com/onsi/ginkgo/v2 v2.11.0
 	github.com/onsi/gomega v1.27.8
-	github.com/openshift/api v0.0.0-20210831091943-07e756545ac1
-	github.com/openshift/client-go v0.0.0-20210831095141-e19a065e79f7
+	github.com/openshift/api v0.0.0-20230621174358-ea40115b9fa6
+	github.com/openshift/client-go v0.0.0-20230626133714-296133fbf75e
 	github.com/openshift/machine-api-operator v0.2.1-0.20200520080344-fe76daf636f4
-	go.uber.org/zap v1.19.1
-	k8s.io/api v0.23.5
-	k8s.io/apimachinery v0.23.5
-	k8s.io/client-go v0.23.5
-	k8s.io/utils v0.0.0-20211116205334-6203023598ed
-	sigs.k8s.io/controller-runtime v0.11.2
+	go.uber.org/zap v1.24.0
+	k8s.io/api v0.27.2
+	k8s.io/apimachinery v0.27.2
+	k8s.io/client-go v0.27.1
+	k8s.io/utils v0.0.0-20230505201702-9f6742963106
+	sigs.k8s.io/controller-runtime v0.15.0
 )
 
 require (

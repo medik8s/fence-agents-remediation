@@ -18,7 +18,7 @@ OPM_VERSION ?= v1.28.0
 # See https://github.com/operator-framework/operator-sdk/releases for the last version
 OPERATOR_SDK_VERSION ?= v1.30.0
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.23
+ENVTEST_K8S_VERSION = 1.27
 
 # IMAGE_REGISTRY used to indicate the registery/group for the operator, bundle and catalog
 IMAGE_REGISTRY ?= quay.io/medik8s
