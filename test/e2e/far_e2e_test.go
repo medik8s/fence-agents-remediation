@@ -250,10 +250,10 @@ func checkFarLogs(logString string) {
 			if apiErrors.IsNotFound(err) {
 				// If FAR pod was running in testNodeName, then after reboot it was recreated in another node, and with a new name.
 				// Thus the "old" pod's name prior to this eventually won't link to a running pod, since it was already evicted by the reboot
-				log.Error(err, "failed to get logs. FAR pod might have been recreated due to rebooting the node it was resided. Might try again", "pod", pod)
+				log.Error(err, "failed to get logs. FAR pod might have been recreated due to rebooting the node it was resided. Might try again", "pod", pod.Name)
 				return ""
 			}
-			log.Error(err, "failed to get logs. Might try again", "pod", pod)
+			log.Error(err, "failed to get logs. Might try again", "pod", pod.Name)
 			return ""
 		}
 		return logs
