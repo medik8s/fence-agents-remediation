@@ -8,7 +8,6 @@ require (
 	github.com/onsi/gomega v1.27.8
 	github.com/openshift/api v0.0.0-20230621174358-ea40115b9fa6
 	github.com/openshift/client-go v0.0.0-20230626133714-296133fbf75e
-	github.com/openshift/machine-api-operator v0.2.1-0.20200520080344-fe76daf636f4
 	go.uber.org/zap v1.24.0
 	k8s.io/api v0.27.2
 	k8s.io/apimachinery v0.27.2
