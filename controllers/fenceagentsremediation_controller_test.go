@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	medik8sLabels "github.com/medik8s/common/pkg/labels"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -72,6 +73,10 @@ var _ = Describe("FAR Controller", func() {
 
 	// default FenceAgentsRemediation CR
 	underTestFAR := getFenceAgentsRemediation(node01, fenceAgentIPMI, testShareParam, testNodeParam)
+	nodeKey := client.ObjectKey{Name: node01}
+	farNamespacedName := client.ObjectKey{Name: node01, Namespace: defaultNamespace}
+	controlPlaneRoleTaint := getControlPlaneRoleTaint()
+	farNoExecuteTaint := utils.CreateFARNoExecuteTaint()
 
 	Context("Functionality", func() {
 		Context("buildFenceAgentParams", func() {
@@ -93,7 +98,7 @@ var _ = Describe("FAR Controller", func() {
 
 		Context("IsNodeNameValid", func() {
 			BeforeEach(func() {
-				node = getNode(node01)
+				node = getNode("", node01)
 				DeferCleanup(k8sClient.Delete, context.Background(), node)
 				Expect(k8sClient.Create(context.Background(), node)).To(Succeed())
 			})
@@ -108,11 +113,37 @@ var _ = Describe("FAR Controller", func() {
 				})
 			})
 		})
+		Context("Taint functioninality test", func() {
+			// Check functionaility with control-plane node which already has a taint
+			BeforeEach(func() {
+				node = getNode("control-plane", node01)
+				Expect(k8sClient.Create(context.Background(), node)).To(Succeed())
+				DeferCleanup(k8sClient.Delete, context.Background(), node)
+			})
+			When("Control-plane node only has 1 the control-plane-role taint", func() {
+				It("should add and delete medik8s NoSchedule taint and keep other existing taints", func() {
+					By("having one control-plane-role taint")
+					taintedNode := &corev1.Node{}
+					Expect(k8sClient.Get(context.Background(), nodeKey, taintedNode)).To(Succeed())
+					Expect(utils.TaintExists(taintedNode.Spec.Taints, &controlPlaneRoleTaint)).To(BeTrue())
+					By("adding medik8s NoSchedule taint")
+					Expect(utils.AppendTaint(k8sClient, node01)).To(Succeed())
+					Expect(k8sClient.Get(context.Background(), nodeKey, taintedNode)).To(Succeed())
+					Expect(utils.TaintExists(taintedNode.Spec.Taints, &controlPlaneRoleTaint)).To(BeTrue())
+					Expect(utils.TaintExists(taintedNode.Spec.Taints, &farNoExecuteTaint)).To(BeTrue())
+					By("removing medik8s NoSchedule taint")
+					Expect(utils.RemoveTaint(k8sClient, node01)).To(Succeed())
+					Expect(k8sClient.Get(context.Background(), nodeKey, taintedNode)).To(Succeed())
+					Expect(utils.TaintExists(taintedNode.Spec.Taints, &controlPlaneRoleTaint)).To(BeTrue())
+					Expect(utils.TaintExists(taintedNode.Spec.Taints, &farNoExecuteTaint)).To(BeFalse())
+
+					// there is a not-ready taint now as well, so there will be 2 taints... skip count tests
+					// Expect(len(taintedNode.Spec.Taints)).To(Equal(1))
+				})
+			})
+		})
 	})
 	Context("Reconcile", func() {
-		farNamespacedName := client.ObjectKey{Name: node01, Namespace: defaultNamespace}
-		nodeKey := client.ObjectKey{Name: node01}
-		farNoExecuteTaint := utils.CreateFARNoExecuteTaint()
 		//Scenarios
 		BeforeEach(func() {
 			fenceAgentsPod = buildFarPod()
@@ -132,7 +163,7 @@ var _ = Describe("FAR Controller", func() {
 
 		When("creating valid FAR CR", func() {
 			BeforeEach(func() {
-				node = getNode(node01)
+				node = getNode("", node01)
 			})
 			It("should have finalizer and taint", func() {
 				By("Searching for remediation taint")
@@ -150,7 +181,7 @@ var _ = Describe("FAR Controller", func() {
 		})
 		When("creating invalid FAR CR Name", func() {
 			BeforeEach(func() {
-				node = getNode(node01)
+				node = getNode("", node01)
 				underTestFAR = getFenceAgentsRemediation(dummyNode, fenceAgentIPMI, testShareParam, testNodeParam)
 			})
 			It("should not have a finalizer nor taint", func() {
@@ -184,12 +215,36 @@ func getFenceAgentsRemediation(nodeName string, agent string, sharedparameters m
 }
 
 // used for making new node object for test and have a unique resourceVersion
-// getNode returns a node object with the name nodeName
-func getNode(nodeName string) *corev1.Node {
-	return &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: nodeName,
-		},
+// getNode returns a node object with the name nodeName based on the nodeType input
+func getNode(nodeType, nodeName string) *corev1.Node {
+	if nodeType == "control-plane" {
+		return &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName,
+			},
+			Spec: corev1.NodeSpec{
+				Taints: []corev1.Taint{
+					{
+						Key:    medik8sLabels.ControlPlaneRole,
+						Effect: corev1.TaintEffectNoExecute,
+					},
+				},
+			},
+		}
+	} else {
+		return &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName,
+			},
+		}
+	}
+}
+
+// getControlPlaneRoleTaint returns a control-plane-role taint
+func getControlPlaneRoleTaint() corev1.Taint {
+	return corev1.Taint{
+		Key:    medik8sLabels.ControlPlaneRole,
+		Effect: corev1.TaintEffectNoExecute,
 	}
 }
 
