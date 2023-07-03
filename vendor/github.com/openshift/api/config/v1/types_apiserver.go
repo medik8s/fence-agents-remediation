@@ -15,7 +15,10 @@ import (
 // Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
 // +openshift:compatibility-gen:level=1
 type APIServer struct {
-	metav1.TypeMeta   `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
+
+	// metadata is the standard object's metadata.
+	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	// spec holds user settable values for configuration
 	// +kubebuilder:validation:Required
@@ -97,9 +100,10 @@ type Audit struct {
 	// HTTP payloads for read requests (get, list).
 	// - None: no requests are logged at all, not even oauthaccesstokens and oauthauthorizetokens.
 	//
-	// Warning: to raise a Red Hat support request, it is required to set this to Default,
-	// WriteRequestBodies, or AllRequestBodies to generate audit log events that can be
-	// analyzed by support.
+	// Warning: It is not recommended to disable audit logging by using the `None` profile unless you
+	// are fully aware of the risks of not logging data that can be beneficial when troubleshooting issues.
+	// If you disable audit logging and a support situation arises, you might need to enable audit logging
+	// and reproduce the issue in order to troubleshoot properly.
 	//
 	// If unset, the 'Default' profile is used as the default.
 	//
@@ -183,7 +187,7 @@ type APIServerEncryption struct {
 	Type EncryptionType `json:"type,omitempty"`
 }
 
-// +kubebuilder:validation:Enum="";identity;aescbc
+// +kubebuilder:validation:Enum="";identity;aescbc;aesgcm
 type EncryptionType string
 
 const (
@@ -194,6 +198,10 @@ const (
 	// aescbc refers to a type where AES-CBC with PKCS#7 padding and a 32-byte key
 	// is used to perform encryption at the datastore layer.
 	EncryptionTypeAESCBC EncryptionType = "aescbc"
+
+	// aesgcm refers to a type where AES-GCM with random nonce and a 32-byte key
+	// is used to perform encryption at the datastore layer.
+	EncryptionTypeAESGCM EncryptionType = "aesgcm"
 )
 
 type APIServerStatus struct {
@@ -205,6 +213,9 @@ type APIServerStatus struct {
 // +openshift:compatibility-gen:level=1
 type APIServerList struct {
 	metav1.TypeMeta `json:",inline"`
+
+	// metadata is the standard list's metadata.
+	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	metav1.ListMeta `json:"metadata"`
 	Items           []APIServer `json:"items"`
 }

@@ -10,7 +10,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	configclient "github.com/openshift/client-go/config/clientset/versioned"
-	machineclient "github.com/openshift/machine-api-operator/pkg/generated/clientset/versioned/typed/machine/v1beta1"
+	machineclient "github.com/openshift/client-go/machine/clientset/versioned"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 )
@@ -49,14 +49,14 @@ func GetSecretData(clientSet *kubernetes.Clientset, secretName, secretNamespace,
 }
 
 // GetAWSNodeInfoList returns a list of the node names and their identification, e.g., AWS instance ID
-func GetAWSNodeInfoList(machineClient *machineclient.MachineV1beta1Client) (map[v1alpha1.NodeName]string, error) {
+func GetAWSNodeInfoList(machineClient *machineclient.Clientset) (map[v1alpha1.NodeName]string, error) {
 	//  oc get machine -n openshift-machine-api MACHINE_NAME -o jsonpath='{.spec.providerID}'
 	//  oc get machine -n openshift-machine-api MACHINE_NAME -o jsonpath='{.status.nodeRef.name}'
 
 	nodeList := make(map[v1alpha1.NodeName]string)
 
 	// Get the list of Machines in the openshift-machine-api namespace
-	machineList, err := machineClient.Machines(machinesNamespace).List(context.Background(), metav1.ListOptions{})
+	machineList, err := machineClient.MachineV1beta1().Machines(machinesNamespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nodeList, err
 	}
@@ -85,7 +85,7 @@ func GetAWSNodeInfoList(machineClient *machineclient.MachineV1beta1Client) (map[
 }
 
 // GetBMHNodeInfoList returns a list of the node names and their identification, e.g., ports
-func GetBMHNodeInfoList(machineClient *machineclient.MachineV1beta1Client) (map[v1alpha1.NodeName]string, error) {
+func GetBMHNodeInfoList(machineClient *machineclient.Clientset) (map[v1alpha1.NodeName]string, error) {
 
 	//TODO: seacrch for BM and fetch ports
 

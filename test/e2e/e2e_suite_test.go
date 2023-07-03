@@ -22,7 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	configclient "github.com/openshift/client-go/config/clientset/versioned"
-	machineclient "github.com/openshift/machine-api-operator/pkg/generated/clientset/versioned/typed/machine/v1beta1"
+	machineclient "github.com/openshift/client-go/machine/clientset/versioned"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 )
@@ -36,7 +36,7 @@ var (
 	clientSet     *kubernetes.Clientset
 	k8sClient     ctrl.Client
 	configClient  configclient.Interface
-	machineClient *machineclient.MachineV1beta1Client
+	machineClient *machineclient.Clientset
 
 	// The ns the operator is running in
 	operatorNsName string
