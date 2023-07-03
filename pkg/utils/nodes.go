@@ -8,8 +8,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const WorkerLabelName = "node-role.kubernetes.io/worker"
-
 // getNodeWithName returns a node with a name nodeName, or an error if it can't be found
 func getNodeWithName(r client.Reader, nodeName string) (*corev1.Node, error) {
 	node := &corev1.Node{}
