@@ -3,8 +3,11 @@ package utils
 import (
 	"context"
 
+	medik8sLabels "github.com/medik8s/common/pkg/labels"
+
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -30,4 +33,30 @@ func IsNodeNameValid(r client.Reader, nodeName string) (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+// used for making new node object for test and have a unique resourceVersion
+// GetNode returns a node object with the name nodeName based on the nodeType input
+func GetNode(nodeType, nodeName string) *corev1.Node {
+	if nodeType == "control-plane" {
+		return &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName,
+			},
+			Spec: corev1.NodeSpec{
+				Taints: []corev1.Taint{
+					{
+						Key:    medik8sLabels.ControlPlaneRole,
+						Effect: corev1.TaintEffectNoExecute,
+					},
+				},
+			},
+		}
+	} else {
+		return &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nodeName,
+			},
+		}
+	}
 }
