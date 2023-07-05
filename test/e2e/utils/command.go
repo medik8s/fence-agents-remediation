@@ -153,11 +153,8 @@ func getPod(nodeName string) *corev1.Pod {
 			},
 		},
 		Spec: corev1.PodSpec{
-			NodeName:    nodeName,
-			HostNetwork: true,
-			HostPID:     true,
+			NodeName: nodeName,
 			SecurityContext: &corev1.PodSecurityContext{
-				RunAsUser:  pointer.Int64(0),
 				RunAsGroup: pointer.Int64(0),
 			},
 			RestartPolicy: corev1.RestartPolicyNever,
@@ -167,6 +164,12 @@ func getPod(nodeName string) *corev1.Pod {
 					Image: "registry.access.redhat.com/ubi8/ubi-minimal",
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: pointer.Bool(true),
+						Capabilities: &corev1.Capabilities{
+							Drop: []corev1.Capability{"ALL"},
+						},
+						SeccompProfile: &corev1.SeccompProfile{
+							Type: corev1.SeccompProfileTypeRuntimeDefault,
+						},
 					},
 					Command: []string{"sleep", "2m"},
 				},
