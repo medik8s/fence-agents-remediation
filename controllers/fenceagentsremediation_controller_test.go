@@ -90,28 +90,10 @@ var _ = Describe("FAR Controller", func() {
 				})
 			})
 		})
-
-		Context("IsNodeNameValid", func() {
-			BeforeEach(func() {
-				node = getNode(node01)
-				DeferCleanup(k8sClient.Delete, context.Background(), node)
-				Expect(k8sClient.Create(context.Background(), node)).To(Succeed())
-			})
-			When("FAR CR's name doesn't match to an existing node name", func() {
-				It("should fail", func() {
-					Expect(utils.IsNodeNameValid(k8sClient, dummyNode)).To(BeFalse())
-				})
-			})
-			When("FAR's name does match to an existing node name", func() {
-				It("should succeed", func() {
-					Expect(utils.IsNodeNameValid(k8sClient, node01)).To(BeTrue())
-				})
-			})
-		})
 	})
 	Context("Reconcile", func() {
-		farNamespacedName := client.ObjectKey{Name: node01, Namespace: defaultNamespace}
 		nodeKey := client.ObjectKey{Name: node01}
+		farNamespacedName := client.ObjectKey{Name: node01, Namespace: defaultNamespace}
 		farNoExecuteTaint := utils.CreateFARNoExecuteTaint()
 		//Scenarios
 		BeforeEach(func() {
@@ -132,7 +114,7 @@ var _ = Describe("FAR Controller", func() {
 
 		When("creating valid FAR CR", func() {
 			BeforeEach(func() {
-				node = getNode(node01)
+				node = utils.GetNode("", node01)
 			})
 			It("should have finalizer and taint", func() {
 				By("Searching for remediation taint")
@@ -150,7 +132,7 @@ var _ = Describe("FAR Controller", func() {
 		})
 		When("creating invalid FAR CR Name", func() {
 			BeforeEach(func() {
-				node = getNode(node01)
+				node = utils.GetNode("", node01)
 				underTestFAR = getFenceAgentsRemediation(dummyNode, fenceAgentIPMI, testShareParam, testNodeParam)
 			})
 			It("should not have a finalizer nor taint", func() {
@@ -179,16 +161,6 @@ func getFenceAgentsRemediation(nodeName string, agent string, sharedparameters m
 			Agent:            agent,
 			SharedParameters: sharedparameters,
 			NodeParameters:   nodeparameters,
-		},
-	}
-}
-
-// used for making new node object for test and have a unique resourceVersion
-// getNode returns a node object with the name nodeName
-func getNode(nodeName string) *corev1.Node {
-	return &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: nodeName,
 		},
 	}
 }

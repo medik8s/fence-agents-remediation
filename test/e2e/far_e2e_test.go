@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	medik8sLabels "github.com/medik8s/common/pkg/labels"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -64,7 +65,7 @@ var _ = Describe("FAR E2e", func() {
 		BeforeEach(func() {
 			nodes := &corev1.NodeList{}
 			selector := labels.NewSelector()
-			requirement, _ := labels.NewRequirement(utils.WorkerLabelName, selection.Exists, []string{})
+			requirement, _ := labels.NewRequirement(medik8sLabels.WorkerRole, selection.Exists, []string{})
 			selector = selector.Add(*requirement)
 			Expect(k8sClient.List(context.Background(), nodes, &client.ListOptions{LabelSelector: selector})).ToNot(HaveOccurred())
 			if len(nodes.Items) < 1 {
