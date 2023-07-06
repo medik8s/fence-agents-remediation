@@ -35,10 +35,10 @@ func IsNodeNameValid(r client.Reader, nodeName string) (bool, error) {
 	return true, nil
 }
 
-// used for making new node object for test and have a unique resourceVersion
 // GetNode returns a node object with the name nodeName based on the nodeType input
-func GetNode(nodeType, nodeName string) *corev1.Node {
-	if nodeType == "control-plane" {
+// used for making new node object for test and have a unique resourceVersion
+func GetNode(nodeRole, nodeName string) *corev1.Node {
+	if nodeRole == "control-plane" {
 		return &corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: nodeName,
