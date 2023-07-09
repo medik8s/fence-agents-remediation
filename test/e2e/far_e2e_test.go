@@ -41,26 +41,50 @@ const (
 
 var _ = Describe("FAR E2e", func() {
 	var (
-		far             *v1alpha1.FenceAgentsRemediation
-		fenceAgent      string
-		clusterPlatform *configv1.Infrastructure
-		err             error
+		fenceAgent, nodeIdentifierPrefix string
+		testShareParam                   map[v1alpha1.ParameterName]string
+		testNodeParam                    map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
+		nodeIndex                        int
+		secondRun                        bool
 	)
 	BeforeEach(func() {
-		clusterPlatform, err = e2eUtils.GetClusterInfo(configClient)
+		// create FAR CR spec based on OCP platformn
+		clusterPlatform, err := e2eUtils.GetClusterInfo(configClient)
 		if err != nil {
 			Fail("can't identify the cluster platform")
 		}
 		fmt.Printf("\ncluster name: %s and PlatformType: %s \n", string(clusterPlatform.Name), string(clusterPlatform.Status.PlatformStatus.Type))
+
+		switch clusterPlatform.Status.PlatformStatus.Type {
+		case configv1.AWSPlatformType:
+			fenceAgent = fenceAgentAWS
+			nodeIdentifierPrefix = nodeIdentifierPrefixAWS
+			By("running fence_aws")
+		case configv1.BareMetalPlatformType:
+			fenceAgent = fenceAgentIPMI
+			nodeIdentifierPrefix = nodeIdentifierPrefixIPMI
+			By("running fence_ipmilan")
+		default:
+			Skip("FAR haven't been tested on this kind of cluster (non AWS or BareMetal)")
+		}
+
+		testShareParam, err = buildSharedParameters(clusterPlatform, fenceAgentAction)
+		if err != nil {
+			Fail("can't get shared information")
+		}
+		testNodeParam, err = buildNodeParameters(clusterPlatform.Status.PlatformStatus.Type)
+		if err != nil {
+			Fail("can't get node information")
+		}
+		// run FA on the first worker node
+		nodeIndex = 0
 	})
 
-	Context("fence agent - fence_aws or fence_ipmilan", func() {
+	Context("stress cluster", func() {
 		var (
-			nodeBootTimeBefore   time.Time
-			errBoot              error
-			testNodeName         string
-			nodeIdentifierPrefix string
-			testNodeID           string
+			nodeName, errString string
+			nodeBootTimeBefore  time.Time
+			err                 error
 		)
 		BeforeEach(func() {
 			nodes := &corev1.NodeList{}
@@ -71,60 +95,56 @@ var _ = Describe("FAR E2e", func() {
 			if len(nodes.Items) < 1 {
 				Fail("there are no worker nodes in the cluster")
 			}
-			//TODO: Randomize the node selection & verify valid index
-			// run FA on the first worker node
-			nodeObj := nodes.Items[0]
-			testNodeName = nodeObj.Name
-
-			switch clusterPlatform.Status.PlatformStatus.Type {
-			case configv1.AWSPlatformType:
-				fenceAgent = fenceAgentAWS
-				nodeIdentifierPrefix = nodeIdentifierPrefixAWS
-				By("running fence_aws")
-			case configv1.BareMetalPlatformType:
-				fenceAgent = fenceAgentIPMI
-				nodeIdentifierPrefix = nodeIdentifierPrefixIPMI
-				By("running fence_ipmilan")
-			default:
-				Skip("FAR haven't been tested on this kind of cluster (non AWS or BareMetal)")
+			if secondRun {
+				nodeIndex++
 			}
-
-			testShareParam, err := buildSharedParameters(clusterPlatform, fenceAgentAction)
-			if err != nil {
-				Fail("can't get shared information")
+			nodeName, errString = getNodeName(nodeIndex)
+			if errString != "" {
+				if nodeIndex <= 0 {
+					Fail(errString)
+				}
+				Skip(errString)
 			}
-			testNodeParam, err := buildNodeParameters(clusterPlatform.Status.PlatformStatus.Type)
-			if err != nil {
-				Fail("can't get node information")
-			}
-			nodeName := v1alpha1.NodeName(testNodeName)
+			nodeNameParam := v1alpha1.NodeName(nodeName)
 			parameterName := v1alpha1.ParameterName(nodeIdentifierPrefix)
-			testNodeID = testNodeParam[parameterName][nodeName]
-			log.Info("Testing Node", "Node name", testNodeName, "Node ID", testNodeID)
+			testNodeID := testNodeParam[parameterName][nodeNameParam]
+			log.Info("Testing Node", "Node name", nodeName, "Node ID", testNodeID)
 
 			// save the node's boot time prior to the fence agent call
-			nodeBootTimeBefore, errBoot = e2eUtils.GetBootTime(clientSet, testNodeName, testNsName, log)
-			Expect(errBoot).ToNot(HaveOccurred(), "failed to get boot time of the node")
-
-			far = createFAR(testNodeName, fenceAgent, testShareParam, testNodeParam)
+			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
+			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
+			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam)
 			DeferCleanup(deleteFAR, far)
 		})
+		When("running FAR to reboot two nodes", func() {
+			It("should successfully remediate the first node", func() {
+				remediateNode(nodeName, succeesRebootMessage, nodeBootTimeBefore)
+				// next run create CR for the next worker node
+				secondRun = true
+			})
+			It("should successfully remediate the second node", func() {
+				remediateNode(nodeName, succeesRebootMessage, nodeBootTimeBefore)
 
-		When("running FAR to reboot node ", func() {
-			It("should execute the fence agent cli command", func() {
-				By("checking the CR has been created")
-				testFarCR := &v1alpha1.FenceAgentsRemediation{}
-				Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(far), testFarCR)).To(Succeed(), "failed to get FAR CR")
-
-				By("checking the command has been executed successfully")
-				checkFarLogs(succeesRebootMessage)
-
-				By("checking the node's boot time after running the FA")
-				wasNodeRebooted(testNodeName, nodeBootTimeBefore)
 			})
 		})
 	})
 })
+
+// getNodeName returns the node's name based on valid index, otherwise it returns an error
+func getNodeName(index int) (string, string) {
+	nodes := &corev1.NodeList{}
+	selector := labels.NewSelector()
+	requirement, _ := labels.NewRequirement(utils.WorkerLabelName, selection.Exists, []string{})
+	selector = selector.Add(*requirement)
+	Expect(k8sClient.List(context.Background(), nodes, &client.ListOptions{LabelSelector: selector})).ToNot(HaveOccurred())
+	if index < 0 {
+		return "", "nodeIndex is invalid - smaller than zero"
+	}
+	if index >= len(nodes.Items) {
+		return "", fmt.Sprintf("nodeIndex is invalid - there are not enough available worker nodes for nodeIndex %d", index)
+	}
+	return nodes.Items[index].Name, ""
+}
 
 // createFAR assigns the input to FenceAgentsRemediation object, creates CR, and returns the CR object
 func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.ParameterName]string, nodeParameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) *v1alpha1.FenceAgentsRemediation {
@@ -249,7 +269,7 @@ func checkFarLogs(logString string) {
 		logs, err := e2eUtils.GetLogs(clientSet, pod, containerName)
 		if err != nil {
 			if apiErrors.IsNotFound(err) {
-				// If FAR pod was running in testNodeName, then after reboot it was recreated in another node, and with a new name.
+				// If FAR pod was running in nodeObj, then after reboot it was recreated in another node, and with a new name.
 				// Thus the "old" pod's name prior to this eventually won't link to a running pod, since it was already evicted by the reboot
 				log.Error(err, "failed to get logs. FAR pod might have been recreated due to rebooting the node it was resided. Might try again", "pod", pod.Name)
 				return ""
@@ -276,4 +296,16 @@ func wasNodeRebooted(nodeName string, nodeBootTimeBefore time.Time) {
 		BeTemporally(">", nodeBootTimeBefore), "Timeout for node reboot has passed, even though FAR CR has been created")
 
 	log.Info("successful reboot", "node", nodeName, "offset between last boot", nodeBootTimeAfter.Sub(nodeBootTimeBefore), "new boot time", nodeBootTimeAfter)
+}
+
+// remediateNode run three functions to verify whether the node was remediated
+func remediateNode(nodeName, logString string, nodeBootTimeBefore time.Time) {
+	By("Executing the FA command and receive success response")
+	// TODO: When reboot is running only once and it is running on FAR node, then FAR pod will
+	// be recreated on a new node and since the FA command won't be exuected again, then the log
+	// won't include any success message
+	checkFarLogs(succeesRebootMessage)
+
+	By("Getting new node's boot time")
+	wasNodeRebooted(nodeName, nodeBootTimeBefore)
 }
