@@ -106,6 +106,10 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		if err := r.Client.Update(context.Background(), far); err != nil {
 			return emptyResult, fmt.Errorf("failed to add finalizer to the CR - %w", err)
 		}
+		r.Log.Info("Finalizer was added", "CR Name", req.Name)
+		return emptyResult, nil
+		// TODO: should return Requeue: true when the CR has a status and not end reconcile with empty result when a finalizer has been added
+		//return ctrl.Result{Requeue: true}, nil
 	} else if controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) && !far.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Delete CR only when a finalizer and DeletionTimestamp are set
 		r.Log.Info("CR's deletion timestamp is not zero, and FAR finalizer exists", "CR Name", req.Name)
