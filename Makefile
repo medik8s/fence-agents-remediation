@@ -416,6 +416,6 @@ ocp-aws-credentials: ## Add CredentialsRequest for OCP on AWS
 # --keep-going:  If set, failures from earlier test suites do not prevent later test suites from running.
 # --require-suite: If set, Ginkgo fails if there are ginkgo tests in a directory but no invocation of RunSpecs.
 # --vv: If set, emits with maximal verbosity - includes skipped and pending tests.
-test-e2e: ocp-aws-credentials ginkgo ## Run end to end (E2E) tests
+test-e2e: ginkgo ## Run end to end (E2E) tests
 	@test -n "${KUBECONFIG}" -o -r ${HOME}/.kube/config || (echo "Failed to find kubeconfig in ~/.kube/config or no KUBECONFIG set"; exit 1)
 	$(GINKGO) -r --keep-going --require-suite --vv  ./test/e2e -coverprofile cover.out
