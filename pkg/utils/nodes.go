@@ -11,8 +11,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// getNodeWithName returns a node with a name nodeName, or an error if it can't be found
-func getNodeWithName(r client.Reader, nodeName string) (*corev1.Node, error) {
+// GetNodeWithName returns a node with a name nodeName, or an error if it can't be found
+func GetNodeWithName(r client.Reader, nodeName string) (*corev1.Node, error) {
 	node := &corev1.Node{}
 	key := client.ObjectKey{Name: nodeName}
 	if err := r.Get(context.TODO(), key, node); err != nil {
@@ -23,7 +23,7 @@ func getNodeWithName(r client.Reader, nodeName string) (*corev1.Node, error) {
 
 // IsNodeNameValid returns an error if nodeName doesn't match any node name int the cluster, otherwise a nil
 func IsNodeNameValid(r client.Reader, nodeName string) (bool, error) {
-	_, err := getNodeWithName(r, nodeName)
+	_, err := GetNodeWithName(r, nodeName)
 	if err != nil {
 		if apiErrors.IsNotFound(err) {
 			// In case of notFound API error we don't return error, since it is valid result

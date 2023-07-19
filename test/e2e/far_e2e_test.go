@@ -118,12 +118,12 @@ var _ = Describe("FAR E2e", func() {
 		})
 		When("running FAR to reboot two nodes", func() {
 			It("should successfully remediate the first node", func() {
-				remediateNode(nodeName, succeesRebootMessage, nodeBootTimeBefore)
+				checkRemediation(nodeName, succeesRebootMessage, nodeBootTimeBefore)
 				// next run create CR for the next worker node
 				secondRun = true
 			})
 			It("should successfully remediate the second node", func() {
-				remediateNode(nodeName, succeesRebootMessage, nodeBootTimeBefore)
+				checkRemediation(nodeName, succeesRebootMessage, nodeBootTimeBefore)
 
 			})
 		})
@@ -134,7 +134,7 @@ var _ = Describe("FAR E2e", func() {
 func getNodeName(index int) (string, string) {
 	nodes := &corev1.NodeList{}
 	selector := labels.NewSelector()
-	requirement, _ := labels.NewRequirement(utils.WorkerLabelName, selection.Exists, []string{})
+	requirement, _ := labels.NewRequirement(medik8sLabels.WorkerRole, selection.Exists, []string{})
 	selector = selector.Add(*requirement)
 	Expect(k8sClient.List(context.Background(), nodes, &client.ListOptions{LabelSelector: selector})).ToNot(HaveOccurred())
 	if index < 0 {
@@ -258,6 +258,19 @@ func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha
 	return testNodeParam, nil
 }
 
+// wasFarTaintAdded checks whether the FAR taint was added to the tested node
+func wasFarTaintAdded(nodeName string) {
+	farTaint := utils.CreateFARNoExecuteTaint()
+	var node *corev1.Node
+	Eventually(func() bool {
+		var err error
+		node, err = utils.GetNodeWithName(k8sClient, nodeName)
+		Expect(err).ToNot(HaveOccurred())
+		return utils.TaintExists(node.Spec.Taints, &farTaint)
+	}, 1*time.Second, "200ms").Should(BeTrue())
+	log.Info("FAR taint was added", "node name", node.Name, "taint key", farTaint.Key, "taint effect", farTaint.Effect)
+}
+
 // checkFarLogs gets the FAR pod and checks whether it's logs have logString
 func checkFarLogs(logString string) {
 	EventuallyWithOffset(1, func() string {
@@ -298,9 +311,12 @@ func wasNodeRebooted(nodeName string, nodeBootTimeBefore time.Time) {
 	log.Info("successful reboot", "node", nodeName, "offset between last boot", nodeBootTimeAfter.Sub(nodeBootTimeBefore), "new boot time", nodeBootTimeAfter)
 }
 
-// remediateNode run three functions to verify whether the node was remediated
-func remediateNode(nodeName, logString string, nodeBootTimeBefore time.Time) {
-	By("Executing the FA command and receive success response")
+// checkRemediation verify whether the node was remediated
+func checkRemediation(nodeName, logString string, nodeBootTimeBefore time.Time) {
+	By("Check if FAR NoExecute taint was added")
+	wasFarTaintAdded(nodeName)
+
+	By("Check if the response of the FA was a success")
 	// TODO: When reboot is running only once and it is running on FAR node, then FAR pod will
 	// be recreated on a new node and since the FA command won't be exuected again, then the log
 	// won't include any success message
