@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	medik8sLabels "github.com/medik8s/common/pkg/labels"
@@ -39,20 +40,18 @@ const (
 	pollInterval  = 10 * time.Second
 )
 
+var previousNodeName string
+
 var _ = Describe("FAR E2e", func() {
 	var (
 		fenceAgent, nodeIdentifierPrefix string
 		testShareParam                   map[v1alpha1.ParameterName]string
 		testNodeParam                    map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
-		nodeIndex                        int
-		secondRun                        bool
 	)
 	BeforeEach(func() {
 		// create FAR CR spec based on OCP platformn
 		clusterPlatform, err := e2eUtils.GetClusterInfo(configClient)
-		if err != nil {
-			Fail("can't identify the cluster platform")
-		}
+		Expect(err).ToNot(HaveOccurred(), "can't identify the cluster platform")
 		fmt.Printf("\ncluster name: %s and PlatformType: %s \n", string(clusterPlatform.Name), string(clusterPlatform.Status.PlatformStatus.Type))
 
 		switch clusterPlatform.Status.PlatformStatus.Type {
@@ -69,22 +68,16 @@ var _ = Describe("FAR E2e", func() {
 		}
 
 		testShareParam, err = buildSharedParameters(clusterPlatform, fenceAgentAction)
-		if err != nil {
-			Fail("can't get shared information")
-		}
+		Expect(err).ToNot(HaveOccurred(), "can't get shared information")
 		testNodeParam, err = buildNodeParameters(clusterPlatform.Status.PlatformStatus.Type)
-		if err != nil {
-			Fail("can't get node information")
-		}
-		// run FA on the first worker node
-		nodeIndex = 0
+		Expect(err).ToNot(HaveOccurred(), "can't get node information")
 	})
 
 	Context("stress cluster", func() {
 		var (
-			nodeName, errString string
-			nodeBootTimeBefore  time.Time
-			err                 error
+			nodeName           string
+			nodeBootTimeBefore time.Time
+			err                error
 		)
 		BeforeEach(func() {
 			nodes := &corev1.NodeList{}
@@ -93,18 +86,11 @@ var _ = Describe("FAR E2e", func() {
 			selector = selector.Add(*requirement)
 			Expect(k8sClient.List(context.Background(), nodes, &client.ListOptions{LabelSelector: selector})).ToNot(HaveOccurred())
 			if len(nodes.Items) < 1 {
-				Fail("there are no worker nodes in the cluster")
+				Fail("No worker nodes found in the cluster")
 			}
-			if secondRun {
-				nodeIndex++
-			}
-			nodeName, errString = getNodeName(nodeIndex)
-			if errString != "" {
-				if nodeIndex <= 0 {
-					Fail(errString)
-				}
-				Skip(errString)
-			}
+
+			nodeName = randomizeWorkerNode(nodes)
+			previousNodeName = nodeName
 			nodeNameParam := v1alpha1.NodeName(nodeName)
 			parameterName := v1alpha1.ParameterName(nodeIdentifierPrefix)
 			testNodeID := testNodeParam[parameterName][nodeNameParam]
@@ -119,8 +105,6 @@ var _ = Describe("FAR E2e", func() {
 		When("running FAR to reboot two nodes", func() {
 			It("should successfully remediate the first node", func() {
 				checkRemediation(nodeName, succeesRebootMessage, nodeBootTimeBefore)
-				// next run create CR for the next worker node
-				secondRun = true
 			})
 			It("should successfully remediate the second node", func() {
 				checkRemediation(nodeName, succeesRebootMessage, nodeBootTimeBefore)
@@ -129,47 +113,6 @@ var _ = Describe("FAR E2e", func() {
 		})
 	})
 })
-
-// getNodeName returns the node's name based on valid index, otherwise it returns an error
-func getNodeName(index int) (string, string) {
-	nodes := &corev1.NodeList{}
-	selector := labels.NewSelector()
-	requirement, _ := labels.NewRequirement(medik8sLabels.WorkerRole, selection.Exists, []string{})
-	selector = selector.Add(*requirement)
-	Expect(k8sClient.List(context.Background(), nodes, &client.ListOptions{LabelSelector: selector})).ToNot(HaveOccurred())
-	if index < 0 {
-		return "", "nodeIndex is invalid - smaller than zero"
-	}
-	if index >= len(nodes.Items) {
-		return "", fmt.Sprintf("nodeIndex is invalid - there are not enough available worker nodes for nodeIndex %d", index)
-	}
-	return nodes.Items[index].Name, ""
-}
-
-// createFAR assigns the input to FenceAgentsRemediation object, creates CR, and returns the CR object
-func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.ParameterName]string, nodeParameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) *v1alpha1.FenceAgentsRemediation {
-	far := &v1alpha1.FenceAgentsRemediation{
-		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: operatorNsName},
-		Spec: v1alpha1.FenceAgentsRemediationSpec{
-			Agent:            agent,
-			SharedParameters: sharedParameters,
-			NodeParameters:   nodeParameters,
-		},
-	}
-	ExpectWithOffset(1, k8sClient.Create(context.Background(), far)).ToNot(HaveOccurred())
-	return far
-}
-
-// deleteFAR deletes the CR with offset
-func deleteFAR(far *v1alpha1.FenceAgentsRemediation) {
-	EventuallyWithOffset(1, func() error {
-		err := k8sClient.Delete(context.Background(), far)
-		if apiErrors.IsNotFound(err) {
-			return nil
-		}
-		return err
-	}, 2*time.Minute, 10*time.Second).ShouldNot(HaveOccurred(), "failed to delete far")
-}
 
 // buildSharedParameters returns a map key-value of shared parameters based on cluster platform type if it finds the credentials, otherwise an error
 func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action string) (map[v1alpha1.ParameterName]string, error) {
@@ -256,6 +199,44 @@ func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha
 	}
 	testNodeParam = map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{nodeIdentifier: nodeListParam}
 	return testNodeParam, nil
+}
+
+// randomizeWorkerNode returns a worker node name which is different than the previous one
+// (on the first call it will allways return new node)
+func randomizeWorkerNode(nodes *corev1.NodeList) string {
+	nodeName := previousNodeName
+	for previousNodeName == nodeName {
+		// Generate a random seed based on the current time
+		rand.New(rand.NewSource(time.Now().UnixNano()))
+		// Randomly select a worker node
+		nodeName = nodes.Items[rand.Intn(len(nodes.Items))].Name
+	}
+	return nodeName
+}
+
+// createFAR assigns the input to FenceAgentsRemediation object, creates CR, and returns the CR object
+func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.ParameterName]string, nodeParameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) *v1alpha1.FenceAgentsRemediation {
+	far := &v1alpha1.FenceAgentsRemediation{
+		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: operatorNsName},
+		Spec: v1alpha1.FenceAgentsRemediationSpec{
+			Agent:            agent,
+			SharedParameters: sharedParameters,
+			NodeParameters:   nodeParameters,
+		},
+	}
+	ExpectWithOffset(1, k8sClient.Create(context.Background(), far)).ToNot(HaveOccurred())
+	return far
+}
+
+// deleteFAR deletes the CR with offset
+func deleteFAR(far *v1alpha1.FenceAgentsRemediation) {
+	EventuallyWithOffset(1, func() error {
+		err := k8sClient.Delete(context.Background(), far)
+		if apiErrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}, 2*time.Minute, 10*time.Second).ShouldNot(HaveOccurred(), "failed to delete far")
 }
 
 // wasFarTaintAdded checks whether the FAR taint was added to the tested node
