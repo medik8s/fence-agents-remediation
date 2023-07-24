@@ -28,6 +28,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
         runAsNonRoot: true
+      priorityClassName: system-cluster-critical
       containers:
       - command:
         - /manager
