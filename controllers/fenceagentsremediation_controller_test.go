@@ -43,7 +43,7 @@ const (
 )
 
 var (
-	faPodLabels    = map[string]string{"app": "fence-agents-remediation-operator"}
+	faPodLabels    = map[string]string{"app.kubernetes.io/name": "fence-agents-remediation-operator"}
 	fenceAgentsPod *corev1.Pod
 )
 

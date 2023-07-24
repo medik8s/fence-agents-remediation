@@ -188,14 +188,14 @@ spec:
         serviceAccountName: fence-agents-remediation-controller-manager
       deployments:
       - label:
-          app: fence-agents-remediation-operator
+          app.kubernetes.io/name: fence-agents-remediation-operator
           control-plane: controller-manager
         name: fence-agents-remediation-controller-manager
         spec:
           replicas: 1
           selector:
             matchLabels:
-              app: fence-agents-remediation-operator
+              app.kubernetes.io/name: fence-agents-remediation-operator
               control-plane: controller-manager
           strategy: {}
           template:
@@ -203,7 +203,7 @@ spec:
               annotations:
                 kubectl.kubernetes.io/default-container: manager
               labels:
-                app: fence-agents-remediation-operator
+                app.kubernetes.io/name: fence-agents-remediation-operator
                 control-plane: controller-manager
             spec:
               containers:

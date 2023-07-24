@@ -16,7 +16,7 @@ import (
 func GetFenceAgentsRemediationPod(r client.Reader) (*corev1.Pod, error) {
 	podList := &corev1.PodList{}
 	selector := labels.NewSelector()
-	requirement, _ := labels.NewRequirement("app", selection.Equals, []string{"fence-agents-remediation-operator"})
+	requirement, _ := labels.NewRequirement("app.kubernetes.io/name", selection.Equals, []string{"fence-agents-remediation-operator"})
 	selector = selector.Add(*requirement)
 	podNamespace, err := GetDeploymentNamespace()
 	if err != nil {

@@ -11,8 +11,7 @@ namePrefix: fence-agents-remediation-
 # Labels to add to all resources and selectors.
 #commonLabels:
 commonLabels:
-  app: "fence-agents-remediation-operator"
-
+  app.kubernetes.io/name: fence-agents-remediation-operator
 bases:
 - ../crd
 - ../rbac

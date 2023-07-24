@@ -3,7 +3,7 @@ kind: Service
 metadata:
   creationTimestamp: null
   labels:
-    app: fence-agents-remediation-operator
+    app.kubernetes.io/name: fence-agents-remediation-operator
     control-plane: controller-manager
   name: fence-agents-remediation-controller-manager-metrics-service
 spec:
@@ -13,7 +13,7 @@ spec:
     protocol: TCP
     targetPort: https
   selector:
-    app: fence-agents-remediation-operator
+    app.kubernetes.io/name: fence-agents-remediation-operator
     control-plane: controller-manager
 status:
   loadBalancer: {}
