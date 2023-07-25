@@ -54,7 +54,7 @@ func CreateFARNoExecuteTaint() corev1.Taint {
 // AppendTaint appends new taint to the taint list when it is not present, and returns error if it fails in the process
 func AppendTaint(r client.Client, nodeName string) error {
 	// find node by name
-	node, err := getNodeWithName(r, nodeName)
+	node, err := GetNodeWithName(r, nodeName)
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func AppendTaint(r client.Client, nodeName string) error {
 // RemoveTaint removes taint from the taint list when it is existed, and returns error if it fails in the process
 func RemoveTaint(r client.Client, nodeName string) error {
 	// find node by name
-	node, err := getNodeWithName(r, nodeName)
+	node, err := GetNodeWithName(r, nodeName)
 	if err != nil {
 		return err
 	}
