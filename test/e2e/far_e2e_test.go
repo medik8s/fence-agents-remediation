@@ -207,9 +207,9 @@ func randomizeWorkerNode(nodes *corev1.NodeList) string {
 	nodeName := previousNodeName
 	for previousNodeName == nodeName {
 		// Generate a random seed based on the current time
-		rand.New(rand.NewSource(time.Now().UnixNano()))
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
 		// Randomly select a worker node
-		nodeName = nodes.Items[rand.Intn(len(nodes.Items))].Name
+		nodeName = nodes.Items[r.Intn(len(nodes.Items))].Name
 	}
 	return nodeName
 }
