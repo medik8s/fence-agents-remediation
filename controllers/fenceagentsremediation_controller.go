@@ -170,19 +170,19 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParamter name then return an error
 func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, error) {
+	logger := ctrl.Log.WithName("build-fa-parameters")
 	if far.Spec.NodeParameters == nil || far.Spec.SharedParameters == nil {
-		return nil, errors.New(errorMissingParams)
+		err := errors.New(errorMissingParams)
+		logger.Error(err, "Missing parameters")
+		return nil, err
 	}
 	var fenceAgentParams []string
-	logger := ctrl.Log.WithName("build-fa-parameters")
 	// add shared parameters except the action parameter
 	for paramName, paramVal := range far.Spec.SharedParameters {
-		if paramName == parameterActionName {
-			if paramVal != parameterActionValue {
-				logger.Info("FAR doesn't support any other action than reboot", "action", paramVal)
-			}
-		} else {
+		if paramName != parameterActionName {
 			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
+		} else if paramVal != parameterActionValue {
+			logger.Info("FAR doesn't support any other action than reboot", "action", paramVal)
 		}
 	}
 	// ensure the FA uses the reboot action
@@ -195,6 +195,7 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, erro
 			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
 		} else {
 			err := errors.New(errorMissingNodeParams)
+			logger.Error(err, "Missing matching nodeParam and CR's name")
 			return nil, err
 		}
 	}
