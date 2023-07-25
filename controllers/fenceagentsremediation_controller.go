@@ -158,7 +158,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "Fence Agent response was a failure", "CR's Name", req.Name)
 		return emptyResult, err
 	}
-	if outputErr != "" || outputRes == "" {
+	if outputErr != "" || outputRes != SuccessFAResponse {
 		// response wasn't failure or sucesss message
 		err := fmt.Errorf("unknown fence agent response - expecting `%s` response, but we received `%s`", SuccessFAResponse, outputRes)
 		r.Log.Error(err, "Fence Agent response wasn't a success message", "CR's Name", req.Name)
