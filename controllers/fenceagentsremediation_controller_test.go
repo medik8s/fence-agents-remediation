@@ -52,6 +52,13 @@ var _ = Describe("FAR Controller", func() {
 		node *corev1.Node
 	)
 
+	invalidShareParam := map[v1alpha1.ParameterName]string{
+		"--username": "admin",
+		"--password": "password",
+		"--action":   "",
+		"--ip":       "192.168.111.1",
+		"--lanplus":  "",
+	}
 	testShareParam := map[v1alpha1.ParameterName]string{
 		"--username": "admin",
 		"--password": "password",
@@ -75,6 +82,17 @@ var _ = Describe("FAR Controller", func() {
 
 	Context("Functionality", func() {
 		Context("buildFenceAgentParams", func() {
+			When("FAR include different action than reboot", func() {
+				It("should succeed with a warning", func() {
+					invalidValTestFAR := getFenceAgentsRemediation(node01, fenceAgentIPMI, invalidShareParam, testNodeParam)
+					invalidShareString, err := buildFenceAgentParams(invalidValTestFAR)
+					Expect(err).NotTo(HaveOccurred())
+					validShareString, err := buildFenceAgentParams(underTestFAR)
+					Expect(err).NotTo(HaveOccurred())
+					// Eventually buildFenceAgentParams would return the same shareParam
+					Expect(isEqualStringLists(invalidShareString, validShareString)).To(BeTrue())
+				})
+			})
 			When("FAR CR's name doesn't match a node name", func() {
 				It("should fail", func() {
 					underTestFAR.ObjectMeta.Name = dummyNode
@@ -153,8 +171,8 @@ var _ = Describe("FAR Controller", func() {
 	})
 })
 
-// newFenceAgentsRemediation assigns the input to the FenceAgentsRemediation
-func getFenceAgentsRemediation(nodeName string, agent string, sharedparameters map[v1alpha1.ParameterName]string, nodeparameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) *v1alpha1.FenceAgentsRemediation {
+// getFenceAgentsRemediation assigns the input to the FenceAgentsRemediation
+func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[v1alpha1.ParameterName]string, nodeparameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) *v1alpha1.FenceAgentsRemediation {
 	return &v1alpha1.FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: defaultNamespace},
 		Spec: v1alpha1.FenceAgentsRemediationSpec{
@@ -179,6 +197,13 @@ func buildFarPod() *corev1.Pod {
 	return fenceAgentsPod
 }
 
+// isEqualStringLists return true if two string lists share the same values
+func isEqualStringLists(s1, s2 []string) bool {
+	sort.Strings(s1)
+	sort.Strings(s2)
+	return reflect.DeepEqual(s1, s2)
+}
+
 // cliCommandsEquality creates the command for CLI and compares it with the production command
 func cliCommandsEquality(far *v1alpha1.FenceAgentsRemediation) (bool, error) {
 	if mocksExecuter.command == nil {
@@ -190,9 +215,7 @@ func cliCommandsEquality(far *v1alpha1.FenceAgentsRemediation) (bool, error) {
 	expectedCommand := []string{fenceAgentIPMI, "--lanplus", "--password=password", "--username=admin", "--action=reboot", "--ip=192.168.111.1", "--ipport=6233"}
 
 	fmt.Printf("%s is the command from production environment, and %s is the hardcoded expected command from test environment.\n", mocksExecuter.command, expectedCommand)
-	sort.Strings(mocksExecuter.command)
-	sort.Strings(expectedCommand)
-	return reflect.DeepEqual(mocksExecuter.command, expectedCommand), nil
+	return isEqualStringLists(mocksExecuter.command, expectedCommand), nil
 }
 
 // Implements Execute function to mock/test Execute of FenceAgentsRemediationReconciler

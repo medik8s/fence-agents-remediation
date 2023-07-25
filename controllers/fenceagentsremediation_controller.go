@@ -38,6 +38,8 @@ const (
 	errorMissingParams     = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
 	errorMissingNodeParams = "node parameter is required, and cannot be empty"
 	SuccessFAResponse      = "Success: Rebooted"
+	parameterActionName    = "--action"
+	parameterActionValue   = "reboot"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
@@ -172,10 +174,21 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, erro
 		return nil, errors.New(errorMissingParams)
 	}
 	var fenceAgentParams []string
+	logger := ctrl.Log.WithName("build-fa-parameters")
+	// add shared parameters except the action parameter
 	for paramName, paramVal := range far.Spec.SharedParameters {
-		fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
+		if paramName == parameterActionName {
+			if paramVal != parameterActionValue {
+				logger.Info("FAR doesn't support any other action than reboot", "action", paramVal)
+			}
+		} else {
+			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
+		}
 	}
+	// ensure the FA uses the reboot action
+	fenceAgentParams = appendParamToSlice(fenceAgentParams, parameterActionName, parameterActionValue)
 
+	// append node parameters
 	nodeName := v1alpha1.NodeName(far.Name)
 	for paramName, nodeMap := range far.Spec.NodeParameters {
 		if nodeVal, isFound := nodeMap[nodeName]; isFound {
