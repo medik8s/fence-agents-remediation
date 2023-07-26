@@ -55,7 +55,6 @@ var _ = Describe("FAR Controller", func() {
 	invalidShareParam := map[v1alpha1.ParameterName]string{
 		"--username": "admin",
 		"--password": "password",
-		"--action":   "",
 		"--ip":       "192.168.111.1",
 		"--lanplus":  "",
 	}

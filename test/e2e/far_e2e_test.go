@@ -107,7 +107,7 @@ var _ = Describe("FAR E2e", func() {
 				checkRemediation(nodeName, nodeBootTimeBefore)
 			})
 			It("should successfully remediate the second node", func() {
-				checkRemediation(nodeName,nodeBootTimeBefore)
+				checkRemediation(nodeName, nodeBootTimeBefore)
 			})
 		})
 	})

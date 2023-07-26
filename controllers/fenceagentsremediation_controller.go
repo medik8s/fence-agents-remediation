@@ -141,8 +141,8 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	r.Log.Info("Combine fence agent parameters", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
 	faParams, err := buildFenceAgentParams(far)
 	if err != nil {
-		r.Log.Error(err, "Invalid sharedParameters/nodeParameters from CR", "CR's Name", req.Name)
-		return emptyResult, err
+		r.Log.Error(err, "Invalid sharedParameters/nodeParameters from CR - edit/recreate the CR", "CR's Name", req.Name)
+		return emptyResult, nil
 	}
 	// Add medik8s remediation taint
 	r.Log.Info("Add Medik8s remediation taint", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
@@ -158,7 +158,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "Fence Agent response was a failure", "CR's Name", req.Name)
 		return emptyResult, err
 	}
-	if outputErr != "" || outputRes != SuccessFAResponse {
+	if outputErr != "" || outputRes != SuccessFAResponse+"\n" {
 		// response wasn't failure or sucesss message
 		err := fmt.Errorf("unknown fence agent response - expecting `%s` response, but we received `%s`", SuccessFAResponse, outputRes)
 		r.Log.Error(err, "Fence Agent response wasn't a success message", "CR's Name", req.Name)
@@ -168,7 +168,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 }
 
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
-// or the CR's name don't match nodeParamter name then return an error
+// or the CR's name don't match nodeParamter name or it has an action which is different than reboot, then return an error
 func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, error) {
 	logger := ctrl.Log.WithName("build-fa-parameters")
 	if far.Spec.NodeParameters == nil || far.Spec.SharedParameters == nil {
@@ -182,10 +182,15 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, erro
 		if paramName != parameterActionName {
 			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
 		} else if paramVal != parameterActionValue {
-			logger.Info("FAR doesn't support any other action than reboot", "action", paramVal)
+			// --action attribute was selected but it is differemt than reboot
+			err := errors.New("FAR doesn't support any other action than reboot")
+			logger.Error(err, "can't build CR with this action attribute", "action", paramVal)
+			return nil, err
 		}
 	}
-	// ensure the FA uses the reboot action
+	// if --action attribute was not selected, then it's default value is reboot
+	// https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
+	// Therefore we can safely add the reboot action regardless if it was initially added into the CR
 	fenceAgentParams = appendParamToSlice(fenceAgentParams, parameterActionName, parameterActionValue)
 
 	// append node parameters
