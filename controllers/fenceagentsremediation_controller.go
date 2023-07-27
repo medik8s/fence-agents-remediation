@@ -133,7 +133,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	r.Log.Info("Fetch FAR's pod")
 	pod, err := utils.GetFenceAgentsRemediationPod(r.Client)
 	if err != nil {
-		r.Log.Error(err, "Can't find FAR's pod by it's label", "CR's Name", req.Name)
+		r.Log.Error(err, "Can't find FAR's pod by its label", "CR's Name", req.Name)
 		return emptyResult, err
 	}
 	//TODO: Check that FA is excutable? run cli.IsExecuteable
@@ -197,7 +197,7 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, erro
 			return nil, err
 		}
 	}
-	// if --action attribute was not selected, then it's default value is reboot
+	// if --action attribute was not selected, then its default value is reboot
 	// https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
 	// Therefore we can safely add the reboot action regardless if it was initially added into the CR
 	fenceAgentParams = appendParamToSlice(fenceAgentParams, parameterActionName, parameterActionValue)

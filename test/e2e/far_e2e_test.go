@@ -109,7 +109,7 @@ var _ = Describe("FAR E2e", func() {
 			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, testNodeName, testNsName, log)
 			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
 
-			// create tested pod, and save it's creation time
+			// create tested pod, and save its creation time
 			// it will be deleted by FAR CR
 			pod = e2eUtils.GetPod(testNodeName, testContainerName)
 			pod.Name = testPodName
@@ -118,7 +118,7 @@ var _ = Describe("FAR E2e", func() {
 			log.Info("Tested pod has been created", "pod", testPodName)
 			creationTimePod = metav1.Now().Time
 			va = createVA(testNodeName)
-			DeferCleanup(verifyCleanSetup, va, pod)
+			DeferCleanup(cleanupTestedResources, va, pod)
 
 			far = createFAR(testNodeName, fenceAgent, testShareParam, testNodeParam)
 			DeferCleanup(deleteFAR, far)
@@ -244,7 +244,7 @@ func createVA(nodeName string) *storagev1.VolumeAttachment {
 		},
 		Spec: storagev1.VolumeAttachmentSpec{
 			Attacher: pv,
-			Source:   storagev1.VolumeAttachmentSource{
+			Source: storagev1.VolumeAttachmentSource{
 				PersistentVolumeName: &pv,
 			},
 			NodeName: nodeName,
@@ -281,8 +281,8 @@ func deleteFAR(far *v1alpha1.FenceAgentsRemediation) {
 	}, 2*time.Minute, 10*time.Second).ShouldNot(HaveOccurred(), "failed to delete far")
 }
 
-// verifyCleanSetup deletes an old pod and old va if it was not deleted from FAR CR
-func verifyCleanSetup(va *storagev1.VolumeAttachment, pod *corev1.Pod) {
+// cleanupTestedResources deletes an old pod and old va if it was not deleted from FAR CR
+func cleanupTestedResources(va *storagev1.VolumeAttachment, pod *corev1.Pod) {
 	newVa := &storagev1.VolumeAttachment{}
 	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(va), newVa); err == nil {
 		Expect(k8sClient.Delete(context.Background(), newVa)).To(Succeed())
@@ -309,7 +309,7 @@ func wasFarTaintAdded(nodeName string) {
 	log.Info("FAR taint was added", "node name", node.Name, "taint key", farTaint.Key, "taint effect", farTaint.Effect)
 }
 
-// checkFarLogs gets the FAR pod and checks whether it's logs have logString
+// checkFarLogs gets the FAR pod and checks whether its logs have logString
 func checkFarLogs(logString string) {
 	EventuallyWithOffset(1, func() string {
 		pod, err := utils.GetFenceAgentsRemediationPod(k8sClient)

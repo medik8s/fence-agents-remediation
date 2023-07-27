@@ -124,7 +124,7 @@ var _ = Describe("FAR Controller", func() {
 			va1 := createVA(vaName1, workerNode)
 			va2 := createVA(vaName2, workerNode)
 			testPod := createRunningPod("far-test-1", testPodName, workerNode)
-			DeferCleanup(verifyResourceCleanup, va1, va2, testPod)
+			DeferCleanup(cleanupTestedResources, va1, va2, testPod)
 			farPod := createRunningPod("far-manager-test", farPodName, "")
 			DeferCleanup(k8sClient.Delete, context.Background(), farPod)
 		})
@@ -150,7 +150,7 @@ var _ = Describe("FAR Controller", func() {
 					return utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint) && res
 				}, 100*time.Millisecond, 10*time.Millisecond).Should(BeTrue(), "taint should be added, and command format is correct")
 
-				// If taint was added, then defenintly the finzlier was added as well
+				// If taint was added, then definitely the finalizer was added as well
 				By("Having a finalizer if we have a remediation taint")
 				Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
 
@@ -163,17 +163,15 @@ var _ = Describe("FAR Controller", func() {
 		When("creating invalid FAR CR Name", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
-				// createVA(vaName1, workerNode)
-				// createVA(vaName2, workerNode)
 				underTestFAR = getFenceAgentsRemediation(dummyNode, fenceAgentIPMI, testShareParam, testNodeParam)
 			})
 			It("should not have a finalizer nor taint, while the two VAs and one pod will remain", func() {
 				By("Not finding a matching node to FAR CR's name")
-				nodeKey.Name = dummyNode
+				nodeKey.Name = underTestFAR.Name
 				Expect(k8sClient.Get(context.Background(), nodeKey, node)).To(Not(Succeed()))
 
 				By("Not having finalizer")
-				farNamespacedName.Name = dummyNode
+				farNamespacedName.Name = underTestFAR.Name
 				Eventually(func() bool {
 					Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
 					return controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)
@@ -210,10 +208,10 @@ func buildPod(containerName, podName, nodeName string) *corev1.Pod {
 	pod := &corev1.Pod{}
 	pod.Name = podName
 	if podName == farPodName {
-		// only when we build FAR pod then we add it's label
+		// only when we build FAR pod then we add its label
 		pod.Labels = faPodLabels
 	} else {
-		// testedPod should be reside on unhealthy node
+		// testedPod should reside in unhealthy node
 		pod.Spec.NodeName = nodeName
 	}
 	pod.Namespace = defaultNamespace
@@ -225,7 +223,7 @@ func buildPod(containerName, podName, nodeName string) *corev1.Pod {
 	return pod
 }
 
-// createRunningPod builds new pod format, create it, and set it's status as running
+// createRunningPod builds new pod format, create it, and set its status as running
 func createRunningPod(containerName, podName, nodeName string) *corev1.Pod {
 	pod := buildPod(containerName, podName, nodeName)
 	Expect(k8sClient.Create(context.Background(), pod)).To(Succeed())
@@ -234,7 +232,7 @@ func createRunningPod(containerName, podName, nodeName string) *corev1.Pod {
 	return pod
 }
 
-// createVA creates new volume attachment and return it's object
+// createVA creates new volume attachment and return its object
 func createVA(vaName, unhealthyNodeName string) *storagev1.VolumeAttachment {
 	va := &storagev1.VolumeAttachment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -253,9 +251,9 @@ func createVA(vaName, unhealthyNodeName string) *storagev1.VolumeAttachment {
 	return va
 }
 
-// verifyResourceCleanup fetches all the resources that we have crated for the test
+// cleanupTestedResources fetches all the resources that we have crated for the test
 // and if they are still exist at the end of the test, then we clean them up for next test
-func verifyResourceCleanup(va1, va2 *storagev1.VolumeAttachment, pod *corev1.Pod) {
+func cleanupTestedResources(va1, va2 *storagev1.VolumeAttachment, pod *corev1.Pod) {
 	// clean test volume attachments if it exists
 	vaTest := &storagev1.VolumeAttachment{}
 	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(va1), vaTest); err == nil {
