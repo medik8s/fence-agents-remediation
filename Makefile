@@ -184,7 +184,7 @@ test: test-no-verify verify-unchanged ## Generate and format code, run tests, ge
 # --vv: If set, emits with maximal verbosity - includes skipped and pending tests.
 test-no-verify: manifests generate go-verify fmt vet fix-imports envtest ginkgo # Generate and format code, and run tests
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR)/$(ENVTEST_VERSION) -p path)" \
-	$(GINKGO) -r --keep-going --require-suite --vv -coverprofile cover.out ./controllers/... ./pkg/...
+	$(GINKGO) -r --keep-going --require-suite --vv -coverprofile cover.out ./pkg/... ./controllers/...
 
 .PHONY: bundle-run
 export BUNDLE_RUN_NAMESPACE ?= openshift-operators
