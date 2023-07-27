@@ -46,8 +46,6 @@ const (
 	pollInterval    = 10 * time.Second
 )
 
-var previousNodeName string
-
 var _ = Describe("FAR E2e", func() {
 	var (
 		fenceAgent, nodeIdentifierPrefix string
@@ -81,15 +79,16 @@ var _ = Describe("FAR E2e", func() {
 
 	Context("stress cluster", func() {
 		var (
-			err                                 error
-			testNodeName                        string
+			nodes, filteredNodes *corev1.NodeList
+			nodeName             string
 			va                                  *storagev1.VolumeAttachment
 			pod                                 *corev1.Pod
 			creationTimePod, nodeBootTimeBefore time.Time
-			far                                 *v1alpha1.FenceAgentsRemediation
+			err                  error
+
 		)
 		BeforeEach(func() {
-			nodes := &corev1.NodeList{}
+			nodes = &corev1.NodeList{}
 			selector := labels.NewSelector()
 			requirement, _ := labels.NewRequirement(medik8sLabels.WorkerRole, selection.Exists, []string{})
 			selector = selector.Add(*requirement)
@@ -97,28 +96,37 @@ var _ = Describe("FAR E2e", func() {
 			if len(nodes.Items) < 1 {
 				Fail("No worker nodes found in the cluster")
 			}
-
+			if filteredNodes != nil {
+				nodes = filteredNodes
+			}
 			selectedNode := randomizeWorkerNode(nodes)
 			nodeName = selectedNode.Name
-			previousNodeName = nodeName
 			nodeNameParam := v1alpha1.NodeName(nodeName)
 			parameterName := v1alpha1.ParameterName(nodeIdentifierPrefix)
 			testNodeID := testNodeParam[parameterName][nodeNameParam]
-			log.Info("Testing Node", "Node name", testNodeName, "Node ID", testNodeID)
+			log.Info("Testing Node", "Node name", nodeName, "Node ID", testNodeID)
+
+			// filter the last remediated node from the list of available nodes
+			filteredNodes = &corev1.NodeList{}
+			for _, node := range nodes.Items {
+				if node.Name != nodeName {
+					filteredNodes.Items = append(filteredNodes.Items, node)
+				}
+			}
 
 			// save the node's boot time prior to the fence agent call
-			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, testNodeName, testNsName, log)
+			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
 			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
 
 			// create tested pod, and save its creation time
 			// it will be deleted by FAR CR
-			pod = e2eUtils.GetPod(testNodeName, testContainerName)
+			pod = e2eUtils.GetPod(nodeName, testContainerName)
 			pod.Name = testPodName
 			pod.Namespace = testNsName
 			Expect(k8sClient.Create(context.Background(), pod)).To(Succeed())
 			log.Info("Tested pod has been created", "pod", testPodName)
 			creationTimePod = metav1.Now().Time
-			va = createVA(testNodeName)
+			va = createVA(nodeName)
 			DeferCleanup(cleanupTestedResources, va, pod)
 
 			// set the node as "unhealthy" by disabling kubelet
@@ -129,10 +137,10 @@ var _ = Describe("FAR E2e", func() {
 		})
 		When("running FAR to reboot two nodes", func() {
 			It("should successfully remediate the first node", func() {
-				checkRemediation(testNodeName, nodeBootTimeBefore, creationTimePod, va, pod)
+				checkRemediation(nodeName, nodeBootTimeBefore, creationTimePod, va, pod)
 			})
 			It("should successfully remediate the second node", func() {
-				checkRemediation(testNodeName, nodeBootTimeBefore, creationTimePod, va, pod)
+				checkRemediation(nodeName, nodeBootTimeBefore, creationTimePod, va, pod)
 			})
 		})
 	})
@@ -228,16 +236,10 @@ func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha
 // randomizeWorkerNode returns a worker node that his name is different than the previous one
 // (on the first call it will allways return new node)
 func randomizeWorkerNode(nodes *corev1.NodeList) *corev1.Node {
-	var node corev1.Node
-	nodeName := previousNodeName
-	for previousNodeName == nodeName {
-		// Generate a random seed based on the current time
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-		// Randomly select a worker node
-		node = nodes.Items[r.Intn(len(nodes.Items))]
-		nodeName = node.Name
-	}
-	return &node
+	// Generate a random seed based on the current time
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// Randomly select a worker node
+	return &nodes.Items[r.Intn(len(nodes.Items))]
 }
 
 // createVA creates dummy volume attachment for testing the resource deletion
