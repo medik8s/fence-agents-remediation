@@ -57,6 +57,7 @@ func (r *FenceAgentsRemediationReconciler) SetupWithManager(mgr ctrl.Manager) er
 		Complete(r)
 }
 
+//+kubebuilder:rbac:groups=storage.k8s.io,resources=volumeattachments,verbs=get;list;watch;delete
 //+kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;delete;deletecollection
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;update;delete
@@ -164,6 +165,14 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "Fence Agent response wasn't a success message", "CR's Name", req.Name)
 		return emptyResult, err
 	}
+
+	// Reboot was finished and now we remove workloads (pods and their VA)
+	r.Log.Info("Manual workload deletion", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
+	if err := utils.DeleteResources(ctx, r.Client, req.Name); err != nil {
+		r.Log.Error(err, "Manual workload deletion has failed", "CR's Name", req.Name)
+		return emptyResult, err
+	}
+
 	return emptyResult, nil
 }
 
