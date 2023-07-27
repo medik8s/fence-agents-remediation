@@ -57,6 +57,7 @@ func (r *FenceAgentsRemediationReconciler) SetupWithManager(mgr ctrl.Manager) er
 		Complete(r)
 }
 
+//+kubebuilder:rbac:groups=storage.k8s.io,resources=volumeattachments,verbs=get;list;watch;delete
 //+kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;delete;deletecollection
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;update;delete
@@ -132,7 +133,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	r.Log.Info("Fetch FAR's pod")
 	pod, err := utils.GetFenceAgentsRemediationPod(r.Client)
 	if err != nil {
-		r.Log.Error(err, "Can't find FAR's pod by it's label", "CR's Name", req.Name)
+		r.Log.Error(err, "Can't find FAR's pod by its label", "CR's Name", req.Name)
 		return emptyResult, err
 	}
 	//TODO: Check that FA is excutable? run cli.IsExecuteable
@@ -164,6 +165,14 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "Fence Agent response wasn't a success message", "CR's Name", req.Name)
 		return emptyResult, err
 	}
+
+	// Reboot was finished and now we remove workloads (pods and their VA)
+	r.Log.Info("Manual workload deletion", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
+	if err := utils.DeleteResources(ctx, r.Client, req.Name); err != nil {
+		r.Log.Error(err, "Manual workload deletion has failed", "CR's Name", req.Name)
+		return emptyResult, err
+	}
+
 	return emptyResult, nil
 }
 
@@ -188,7 +197,7 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, erro
 			return nil, err
 		}
 	}
-	// if --action attribute was not selected, then it's default value is reboot
+	// if --action attribute was not selected, then its default value is reboot
 	// https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
 	// Therefore we can safely add the reboot action regardless if it was initially added into the CR
 	fenceAgentParams = appendParamToSlice(fenceAgentParams, parameterActionName, parameterActionValue)

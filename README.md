@@ -42,7 +42,7 @@ Then, run `operator-sdk run bundle quay.io/medik8s/fence-agents-remediation-oper
 FAR is recommended for using with NHC to create a complete solution for unhealty nodes, since NHC detects unhelthy nodes and creates an extrenal remediation CR, e.g., FAR's CR, for unhealthy nodes.
 This automated way is preferable as it gives the responsibily on FAR CRs (creation and deletion) to NHC, even though FAR can also act as standalone remediator, but it with expense from the administrator to create and delete CRs.
 
-Either way a user must be familier with fence agent to be used - Knowing it's parameters and any other requirements on the cluster (e.g., fence_ipmilan needs machines that support IPMI).
+Either way a user must be familier with fence agent to be used - Knowing its parameters and any other requirements on the cluster (e.g., fence_ipmilan needs machines that support IPMI).
 
 ### FAR with NHC
 
@@ -50,7 +50,7 @@ Either way a user must be familier with fence agent to be used - Knowing it's pa
 
 * Load the yaml manifest of the FAR template (see below).
 
-* Modify NHC CR to use FAR as it's remediator -
+* Modify NHC CR to use FAR as its remediator -
 This is basically a specific use case of an [external remediation of NHC CR](https://github.com/medik8s/node-healthcheck-operator#external-remediation-resources).
 In order to set it up, please make sure that Node Health Check is running, FAR controller exists and then creates the necessary CRs (*FenceAgentsRemediationTemplate* and then *NodeHealthCheck*).
 

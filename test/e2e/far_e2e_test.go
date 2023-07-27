@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -32,12 +33,17 @@ const (
 	nodeIdentifierPrefixAWS  = "--plug"
 	nodeIdentifierPrefixIPMI = "--ipport"
 	containerName            = "manager"
+	testVolumeAttachment     = "test-va"
+	testContainerName        = "test-container"
+	testPodName              = "test-pod"
 
 	//TODO: try to minimize timeout
 	// eventually parameters
-	timeoutLogs   = 3 * time.Minute
-	timeoutReboot = 6 * time.Minute // fencing with fence_aws should be completed within 6 minutes
-	pollInterval  = 10 * time.Second
+	timeoutLogs     = 3 * time.Minute
+	timeoutReboot   = 6 * time.Minute  // fencing with fence_aws should be completed within 6 minutes
+	timeoutDeletion = 10 * time.Second // this timeout is used after all the other steps have been succesfult
+	pollDeletion    = 250 * time.Millisecond
+	pollInterval    = 10 * time.Second
 )
 
 var previousNodeName string
@@ -75,9 +81,12 @@ var _ = Describe("FAR E2e", func() {
 
 	Context("stress cluster", func() {
 		var (
-			nodeName           string
-			nodeBootTimeBefore time.Time
-			err                error
+			err                                 error
+			testNodeName                        string
+			va                                  *storagev1.VolumeAttachment
+			pod                                 *corev1.Pod
+			creationTimePod, nodeBootTimeBefore time.Time
+			far                                 *v1alpha1.FenceAgentsRemediation
 		)
 		BeforeEach(func() {
 			nodes := &corev1.NodeList{}
@@ -89,25 +98,37 @@ var _ = Describe("FAR E2e", func() {
 				Fail("No worker nodes found in the cluster")
 			}
 
-			nodeName = randomizeWorkerNode(nodes)
-			previousNodeName = nodeName
-			nodeNameParam := v1alpha1.NodeName(nodeName)
+			testNodeName = randomizeWorkerNode(nodes)
+			previousNodeName = testNodeName
+			nodeNameParam := v1alpha1.NodeName(testNodeName)
 			parameterName := v1alpha1.ParameterName(nodeIdentifierPrefix)
 			testNodeID := testNodeParam[parameterName][nodeNameParam]
-			log.Info("Testing Node", "Node name", nodeName, "Node ID", testNodeID)
+			log.Info("Testing Node", "Node name", testNodeName, "Node ID", testNodeID)
 
 			// save the node's boot time prior to the fence agent call
-			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
+			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, testNodeName, testNsName, log)
 			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
-			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam)
+
+			// create tested pod, and save its creation time
+			// it will be deleted by FAR CR
+			pod = e2eUtils.GetPod(testNodeName, testContainerName)
+			pod.Name = testPodName
+			pod.Namespace = testNsName
+			Expect(k8sClient.Create(context.Background(), pod)).To(Succeed())
+			log.Info("Tested pod has been created", "pod", testPodName)
+			creationTimePod = metav1.Now().Time
+			va = createVA(testNodeName)
+			DeferCleanup(cleanupTestedResources, va, pod)
+
+			far = createFAR(testNodeName, fenceAgent, testShareParam, testNodeParam)
 			DeferCleanup(deleteFAR, far)
 		})
 		When("running FAR to reboot two nodes", func() {
 			It("should successfully remediate the first node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore)
+				checkRemediation(testNodeName, nodeBootTimeBefore, creationTimePod, va, pod)
 			})
 			It("should successfully remediate the second node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore)
+				checkRemediation(testNodeName, nodeBootTimeBefore, creationTimePod, va, pod)
 			})
 		})
 	})
@@ -213,6 +234,28 @@ func randomizeWorkerNode(nodes *corev1.NodeList) string {
 	return nodeName
 }
 
+// createVA creates dummy volume attachment for testing the resource deletion
+func createVA(nodeName string) *storagev1.VolumeAttachment {
+	pv := "test-pv"
+	va := &storagev1.VolumeAttachment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testVolumeAttachment,
+			Namespace: testNsName,
+		},
+		Spec: storagev1.VolumeAttachmentSpec{
+			Attacher: pv,
+			Source: storagev1.VolumeAttachmentSource{
+				PersistentVolumeName: &pv,
+			},
+			NodeName: nodeName,
+		},
+	}
+
+	ExpectWithOffset(1, k8sClient.Create(context.Background(), va)).To(Succeed())
+	log.Info("Volume attachment has been created", "va", va.Name)
+	return va
+}
+
 // createFAR assigns the input to FenceAgentsRemediation object, creates CR, and returns the CR object
 func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.ParameterName]string, nodeParameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) *v1alpha1.FenceAgentsRemediation {
 	far := &v1alpha1.FenceAgentsRemediation{
@@ -238,6 +281,21 @@ func deleteFAR(far *v1alpha1.FenceAgentsRemediation) {
 	}, 2*time.Minute, 10*time.Second).ShouldNot(HaveOccurred(), "failed to delete far")
 }
 
+// cleanupTestedResources deletes an old pod and old va if it was not deleted from FAR CR
+func cleanupTestedResources(va *storagev1.VolumeAttachment, pod *corev1.Pod) {
+	newVa := &storagev1.VolumeAttachment{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(va), newVa); err == nil {
+		Expect(k8sClient.Delete(context.Background(), newVa)).To(Succeed())
+		log.Info("cleanup: Volume attachment has not been deleted by remediation", "va name", va.Name)
+	}
+
+	newPod := &corev1.Pod{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(pod), newPod); err == nil {
+		Expect(k8sClient.Delete(context.Background(), newPod)).To(Succeed())
+		log.Info("cleanup: Pod has not been deleted by remediation", "pod name", pod.Name)
+	}
+}
+
 // wasFarTaintAdded checks whether the FAR taint was added to the tested node
 func wasFarTaintAdded(nodeName string) {
 	farTaint := utils.CreateFARNoExecuteTaint()
@@ -251,7 +309,7 @@ func wasFarTaintAdded(nodeName string) {
 	log.Info("FAR taint was added", "node name", node.Name, "taint key", farTaint.Key, "taint effect", farTaint.Effect)
 }
 
-// checkFarLogs gets the FAR pod and checks whether it's logs have logString
+// checkFarLogs gets the FAR pod and checks whether its logs have logString
 func checkFarLogs(logString string) {
 	EventuallyWithOffset(1, func() string {
 		pod, err := utils.GetFenceAgentsRemediationPod(k8sClient)
@@ -291,8 +349,29 @@ func wasNodeRebooted(nodeName string, nodeBootTimeBefore time.Time) {
 	log.Info("successful reboot", "node", nodeName, "offset between last boot", nodeBootTimeAfter.Sub(nodeBootTimeBefore), "new boot time", nodeBootTimeAfter)
 }
 
+// checkVaDeleted verifies if the va has already been deleted due to resource deletion
+func checkVaDeleted(va *storagev1.VolumeAttachment) {
+	EventuallyWithOffset(1, func() bool {
+		newVa := &storagev1.VolumeAttachment{}
+		err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(va), newVa)
+		return apiErrors.IsNotFound(err)
+
+	}, timeoutDeletion, pollDeletion).Should(BeTrue())
+	log.Info("Volume Attachment has already been deleted", "va name", va.Name)
+}
+
+// checkPodDeleted vefifies if the pod has already been deleted due to resource deletion
+func checkPodDeleted(pod *corev1.Pod) {
+	ConsistentlyWithOffset(1, func() bool {
+		newPod := &corev1.Pod{}
+		err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(pod), newPod)
+		return apiErrors.IsNotFound(err)
+	}, timeoutDeletion, pollDeletion).Should(BeTrue())
+	log.Info("Pod has already been deleted", "pod name", pod.Name)
+}
+
 // checkRemediation verify whether the node was remediated
-func checkRemediation(nodeName string, nodeBootTimeBefore time.Time) {
+func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, oldPodCreationTime time.Time, va *storagev1.VolumeAttachment, pod *corev1.Pod) {
 	By("Check if FAR NoExecute taint was added")
 	wasFarTaintAdded(nodeName)
 
@@ -304,4 +383,10 @@ func checkRemediation(nodeName string, nodeBootTimeBefore time.Time) {
 
 	By("Getting new node's boot time")
 	wasNodeRebooted(nodeName, nodeBootTimeBefore)
+
+	By("checking if old VA has been deleted")
+	checkVaDeleted(va)
+
+	By("checking if old pod has been deleted")
+	checkPodDeleted(pod)
 }
