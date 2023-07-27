@@ -98,9 +98,10 @@ var _ = Describe("FAR E2e", func() {
 				Fail("No worker nodes found in the cluster")
 			}
 
-			testNodeName = randomizeWorkerNode(nodes)
-			previousNodeName = testNodeName
-			nodeNameParam := v1alpha1.NodeName(testNodeName)
+			selectedNode := randomizeWorkerNode(nodes)
+			nodeName = selectedNode.Name
+			previousNodeName = nodeName
+			nodeNameParam := v1alpha1.NodeName(nodeName)
 			parameterName := v1alpha1.ParameterName(nodeIdentifierPrefix)
 			testNodeID := testNodeParam[parameterName][nodeNameParam]
 			log.Info("Testing Node", "Node name", testNodeName, "Node ID", testNodeID)
@@ -120,7 +121,10 @@ var _ = Describe("FAR E2e", func() {
 			va = createVA(testNodeName)
 			DeferCleanup(cleanupTestedResources, va, pod)
 
-			far = createFAR(testNodeName, fenceAgent, testShareParam, testNodeParam)
+			// set the node as "unhealthy" by disabling kubelet
+			makeNodeUnready(selectedNode)
+
+			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam)
 			DeferCleanup(deleteFAR, far)
 		})
 		When("running FAR to reboot two nodes", func() {
@@ -221,17 +225,19 @@ func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha
 	return testNodeParam, nil
 }
 
-// randomizeWorkerNode returns a worker node name which is different than the previous one
+// randomizeWorkerNode returns a worker node that his name is different than the previous one
 // (on the first call it will allways return new node)
-func randomizeWorkerNode(nodes *corev1.NodeList) string {
+func randomizeWorkerNode(nodes *corev1.NodeList) *corev1.Node {
+	var node corev1.Node
 	nodeName := previousNodeName
 	for previousNodeName == nodeName {
 		// Generate a random seed based on the current time
 		r := rand.New(rand.NewSource(time.Now().UnixNano()))
 		// Randomly select a worker node
-		nodeName = nodes.Items[r.Intn(len(nodes.Items))].Name
+		node = nodes.Items[r.Intn(len(nodes.Items))]
+		nodeName = node.Name
 	}
-	return nodeName
+	return &node
 }
 
 // createVA creates dummy volume attachment for testing the resource deletion
@@ -307,6 +313,36 @@ func wasFarTaintAdded(nodeName string) {
 		return utils.TaintExists(node.Spec.Taints, &farTaint)
 	}, 1*time.Second, "200ms").Should(BeTrue())
 	log.Info("FAR taint was added", "node name", node.Name, "taint key", farTaint.Key, "taint effect", farTaint.Effect)
+}
+
+// waitForNodeHealthyCondition waits until the node's ready condition matches the given status, and it fails after timeout
+func waitForNodeHealthyCondition(node *corev1.Node, condStatus corev1.ConditionStatus) {
+	Eventually(func() corev1.ConditionStatus {
+		Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(node), node)).To(Succeed())
+		for _, cond := range node.Status.Conditions {
+			if cond.Type == corev1.NodeReady {
+				return cond.Status
+			}
+		}
+		return corev1.ConditionStatus("failure")
+	}, timeoutReboot, pollInterval).Should(Equal(condStatus))
+}
+
+// makeNodeUnready stops kubelet and wait for the node condition to be not ready unless the node was already unready
+func makeNodeUnready(node *corev1.Node) {
+	log.Info("making node unready", "node name", node.GetName())
+	// check if node is unready already
+	Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(node), node)).To(Succeed())
+	for _, cond := range node.Status.Conditions {
+		if cond.Type == corev1.NodeReady && cond.Status == corev1.ConditionUnknown {
+			log.Info("node is already unready", "node name", node.GetName())
+			return
+		}
+	}
+
+	Expect(e2eUtils.StopKubelet(clientSet, node.Name, testNsName, log)).To(Succeed())
+	waitForNodeHealthyCondition(node, corev1.ConditionUnknown)
+	log.Info("node is unready", "node name", node.GetName())
 }
 
 // checkFarLogs gets the FAR pod and checks whether its logs have logString
