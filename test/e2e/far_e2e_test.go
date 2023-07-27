@@ -20,6 +20,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/controllers"
 	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 	e2eUtils "github.com/medik8s/fence-agents-remediation/test/e2e/utils"
 )
@@ -30,7 +31,6 @@ const (
 	fenceAgentAction         = "reboot"
 	nodeIdentifierPrefixAWS  = "--plug"
 	nodeIdentifierPrefixIPMI = "--ipport"
-	succeesRebootMessage     = "\"Success: Rebooted"
 	containerName            = "manager"
 
 	//TODO: try to minimize timeout
@@ -104,11 +104,10 @@ var _ = Describe("FAR E2e", func() {
 		})
 		When("running FAR to reboot two nodes", func() {
 			It("should successfully remediate the first node", func() {
-				checkRemediation(nodeName, succeesRebootMessage, nodeBootTimeBefore)
+				checkRemediation(nodeName, nodeBootTimeBefore)
 			})
 			It("should successfully remediate the second node", func() {
-				checkRemediation(nodeName, succeesRebootMessage, nodeBootTimeBefore)
-
+				checkRemediation(nodeName, nodeBootTimeBefore)
 			})
 		})
 	})
@@ -293,7 +292,7 @@ func wasNodeRebooted(nodeName string, nodeBootTimeBefore time.Time) {
 }
 
 // checkRemediation verify whether the node was remediated
-func checkRemediation(nodeName, logString string, nodeBootTimeBefore time.Time) {
+func checkRemediation(nodeName string, nodeBootTimeBefore time.Time) {
 	By("Check if FAR NoExecute taint was added")
 	wasFarTaintAdded(nodeName)
 
@@ -301,7 +300,7 @@ func checkRemediation(nodeName, logString string, nodeBootTimeBefore time.Time) 
 	// TODO: When reboot is running only once and it is running on FAR node, then FAR pod will
 	// be recreated on a new node and since the FA command won't be exuected again, then the log
 	// won't include any success message
-	checkFarLogs(succeesRebootMessage)
+	checkFarLogs(controllers.SuccessFAResponse)
 
 	By("Getting new node's boot time")
 	wasNodeRebooted(nodeName, nodeBootTimeBefore)
