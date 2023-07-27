@@ -24,6 +24,10 @@ import (
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 )
 
+const (
+	containerTestName = "test-command"
+)
+
 // GetBootTime gets the boot time of the given node by running a pod on it executing uptime command
 func GetBootTime(c *kubernetes.Clientset, nodeName string, ns string, log logr.Logger) (time.Time, error) {
 	emptyTime := time.Time{}
@@ -44,7 +48,7 @@ func GetBootTime(c *kubernetes.Clientset, nodeName string, ns string, log logr.L
 func RunCommandInCluster(c *kubernetes.Clientset, nodeName string, ns string, command string, log logr.Logger) (string, error) {
 
 	// create a pod and wait that it's running
-	pod := getPod(nodeName)
+	pod := GetPod(nodeName, containerTestName)
 	pod, err := c.CoreV1().Pods(ns).Create(context.Background(), pod, metav1.CreateOptions{})
 	if err != nil {
 		return "", err
@@ -144,7 +148,7 @@ func waitForCondition(c *kubernetes.Clientset, pod *corev1.Pod, conditionType co
 	})
 }
 
-func getPod(nodeName string) *corev1.Pod {
+func GetPod(nodeName, containerName string) *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "far-test-",
@@ -161,7 +165,7 @@ func getPod(nodeName string) *corev1.Pod {
 			RestartPolicy: corev1.RestartPolicyNever,
 			Containers: []corev1.Container{
 				{
-					Name:  "test",
+					Name:  containerName,
 					Image: "registry.access.redhat.com/ubi8/ubi-minimal",
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: pointer.Bool(true),
