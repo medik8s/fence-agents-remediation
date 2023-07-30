@@ -79,13 +79,12 @@ var _ = Describe("FAR E2e", func() {
 
 	Context("stress cluster", func() {
 		var (
-			nodes, filteredNodes *corev1.NodeList
-			nodeName             string
+			nodes, filteredNodes                *corev1.NodeList
+			nodeName                            string
 			va                                  *storagev1.VolumeAttachment
 			pod                                 *corev1.Pod
 			creationTimePod, nodeBootTimeBefore time.Time
-			err                  error
-
+			err                                 error
 		)
 		BeforeEach(func() {
 			nodes = &corev1.NodeList{}

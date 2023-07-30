@@ -28,7 +28,7 @@ const (
 	containerTestName = "test-command"
 )
 
-// StopKubelet runs cmd connand to stop kubelet for the node and returns an error only if it fails
+// StopKubelet runs cmd command to stop kubelet for the node and returns an error only if it fails
 func StopKubelet(c *kubernetes.Clientset, nodeName string, testNsName string, log logr.Logger) error {
 	cmd := "microdnf install util-linux -y && /usr/bin/nsenter -m/proc/1/ns/mnt /bin/systemctl stop kubelet"
 	_, err := runCommandInCluster(c, nodeName, testNsName, cmd, log)
@@ -39,7 +39,7 @@ func StopKubelet(c *kubernetes.Clientset, nodeName string, testNsName string, lo
 	return err
 }
 
-// GetBootTime gets the boot time of the given node by running a pod on it executing uptime command
+// GetBootTime returns the node's boot time, otherwise it fails and returns an error
 func GetBootTime(c *kubernetes.Clientset, nodeName string, ns string, log logr.Logger) (time.Time, error) {
 	emptyTime := time.Time{}
 	output, err := runCommandInCluster(c, nodeName, ns, "microdnf install procps -y >/dev/null 2>&1 && uptime -s", log)
