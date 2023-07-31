@@ -37,7 +37,6 @@ import (
 
 const (
 	// errors
-	errorNhcTimedOut       = "stop remediation when NHC timed out annotaion exists"
 	errorMissingParams     = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
 	errorMissingNodeParams = "node parameter is required, and cannot be empty"
 	SuccessFAResponse      = "Success: Rebooted"
@@ -106,6 +105,13 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return emptyResult, nil
 	}
 
+	// Check NHC timeout annotation
+	if isTimedOutByNHC(far) {
+		r.Log.Info("FAR remediation was stopped by Node Healthcheck Operator")
+		// TODO: update status and return its error
+		return emptyResult, nil
+	}
+
 	// Add finalizer when the CR is created
 	if !controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) && far.ObjectMeta.DeletionTimestamp.IsZero() {
 		controllerutil.AddFinalizer(far, v1alpha1.FARFinalizer)
@@ -130,13 +136,6 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 		r.Log.Info("Finalizer was removed", "CR Name", req.Name)
 		return emptyResult, nil
-	}
-
-	// Check NHC timeout annotation
-	if isTimedOutByNHC(far) {
-		r.Log.Info("FAR remediation was stopped by Node Healthcheck Operator")
-		// TODO: update status and return its error
-		return emptyResult, errors.New(errorNhcTimedOut)
 	}
 
 	// Fetch the FAR's pod
