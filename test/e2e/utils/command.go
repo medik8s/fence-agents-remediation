@@ -28,10 +28,21 @@ const (
 	containerTestName = "test-command"
 )
 
-// GetBootTime gets the boot time of the given node by running a pod on it executing uptime command
+// StopKubelet runs cmd command to stop kubelet for the node and returns an error only if it fails
+func StopKubelet(c *kubernetes.Clientset, nodeName string, testNsName string, log logr.Logger) error {
+	cmd := "microdnf install util-linux -y && /usr/bin/nsenter -m/proc/1/ns/mnt /bin/systemctl stop kubelet"
+	_, err := runCommandInCluster(c, nodeName, testNsName, cmd, log)
+	if err != nil && strings.Contains(err.Error(), "connection refused") {
+		log.Info("ignoring expected error when stopping kubelet", "error", err.Error())
+		return nil
+	}
+	return err
+}
+
+// GetBootTime returns the node's boot time, otherwise it fails and returns an error
 func GetBootTime(c *kubernetes.Clientset, nodeName string, ns string, log logr.Logger) (time.Time, error) {
 	emptyTime := time.Time{}
-	output, err := RunCommandInCluster(c, nodeName, ns, "microdnf install procps -y >/dev/null 2>&1 && uptime -s", log)
+	output, err := runCommandInCluster(c, nodeName, ns, "microdnf install procps -y >/dev/null 2>&1 && uptime -s", log)
 	if err != nil {
 		return emptyTime, err
 	}
@@ -44,8 +55,8 @@ func GetBootTime(c *kubernetes.Clientset, nodeName string, ns string, log logr.L
 	return bootTime, nil
 }
 
-// RunCommandInCluster runs a command in a pod in the cluster and returns the output
-func RunCommandInCluster(c *kubernetes.Clientset, nodeName string, ns string, command string, log logr.Logger) (string, error) {
+// runCommandInCluster runs a command in a pod in the cluster and returns the output
+func runCommandInCluster(c *kubernetes.Clientset, nodeName string, ns string, command string, log logr.Logger) (string, error) {
 
 	// create a pod and wait that it's running
 	pod := GetPod(nodeName, containerTestName)
