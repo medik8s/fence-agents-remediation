@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,6 +36,8 @@ import (
 )
 
 const (
+	// errors
+	errorNhcTimedOut       = "stop remediation when NHC timed out annotaion exists"
 	errorMissingParams     = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
 	errorMissingNodeParams = "node parameter is required, and cannot be empty"
 	SuccessFAResponse      = "Success: Rebooted"
@@ -129,6 +132,13 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return emptyResult, nil
 	}
 
+	// Check NHC timeout annotation
+	if isTimedOutByNHC(far) {
+		r.Log.Info("FAR remediation was stopped by Node Healthcheck Operator")
+		// TODO: update status and return its error
+		return emptyResult, errors.New(errorNhcTimedOut)
+	}
+
 	// Fetch the FAR's pod
 	r.Log.Info("Fetch FAR's pod")
 	pod, err := utils.GetFenceAgentsRemediationPod(r.Client)
@@ -174,6 +184,15 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	return emptyResult, nil
+}
+
+// isTimedOutByNHC checks if NHC set a timeout annotation on the CR
+func isTimedOutByNHC(far *v1alpha1.FenceAgentsRemediation) bool {
+	if far != nil && far.Annotations != nil && far.DeletionTimestamp == nil {
+		_, isTimeoutIssued := far.Annotations[commonAnnotations.NhcTimedOut]
+		return isTimeoutIssued
+	}
+	return false
 }
 
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
