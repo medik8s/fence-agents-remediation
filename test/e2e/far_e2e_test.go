@@ -346,6 +346,13 @@ func makeNodeUnready(node *corev1.Node) {
 	log.Info("node is unready", "node name", node.GetName())
 }
 
+// buildExpectedLogOutput returns a string with a node identifier and a success message for the reboot action
+func buildExpectedLogOutput(nodeName, successMessage string) string {
+	expectedString := fmt.Sprintf("\"Node name\": \"%s\", \"Response\": \"%s", nodeName, successMessage)
+	log.Info("Substring to search in the logs", "expectedString", expectedString)
+	return expectedString
+}
+
 // checkFarLogs gets the FAR pod and checks whether it's logs have logString
 func checkFarLogs(farNodeName, logString string) {
 	EventuallyWithOffset(1, func() string {
@@ -420,7 +427,8 @@ func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, oldPodCreat
 	wasFarTaintAdded(nodeName)
 
 	By("Check if the response of the FA was a success")
-	checkFarLogs(nodeName, controllers.SuccessFAResponse)
+	expectedLog := buildExpectedLogOutput(nodeName, controllers.SuccessFAResponse)
+	checkFarLogs(nodeName, expectedLog)
 
 	By("Getting new node's boot time")
 	wasNodeRebooted(nodeName, nodeBootTimeBefore)

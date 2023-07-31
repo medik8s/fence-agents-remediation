@@ -165,6 +165,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "Fence Agent response wasn't a success message", "CR's Name", req.Name)
 		return emptyResult, err
 	}
+	r.Log.Info("Fence Agent command was finished successfully", "Fence Agent", far.Spec.Agent, "Node name", req.Name, "Response", SuccessFAResponse)
 
 	// Reboot was finished and now we remove workloads (pods and their VA)
 	r.Log.Info("Manual workload deletion", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
