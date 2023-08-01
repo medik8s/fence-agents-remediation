@@ -38,6 +38,14 @@ spec:
           which node is about to be fenced (i.e., they are common for all the nodes)
         displayName: Shared Parameters
         path: sharedparameters
+      statusDescriptors:
+      - description: 'Represents the observations of a FenceAgentsRemediation''s current
+          state. Known .status.conditions.type are: "Processing", "FenceAgentActionSucceeded",
+          and "Succeeded".'
+        displayName: conditions
+        path: conditions
+        x-descriptors:
+        - urn:alm:descriptor:io.kubernetes.conditions
       version: v1alpha1
     - description: FenceAgentsRemediationTemplate is the Schema for the fenceagentsremediationtemplates
         API
