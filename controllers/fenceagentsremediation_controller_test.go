@@ -23,12 +23,14 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	commonConditions "github.com/medik8s/common/pkg/conditions"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -46,6 +48,10 @@ const (
 	testPodName    = "far-pod-test-1"
 	vaName1        = "va-test-1"
 	vaName2        = "va-test-2"
+
+	// intervals
+	timeoutDeletion = 10 * time.Second // this timeout is used after all the other steps have finished successfully
+	pollInterval    = 250 * time.Millisecond
 )
 
 var (
@@ -158,6 +164,11 @@ var _ = Describe("FAR Controller", func() {
 				testVADeletion(vaName1, resourceDeletionWasTriggered)
 				testVADeletion(vaName2, resourceDeletionWasTriggered)
 				testPodDeletion(testPodName, resourceDeletionWasTriggered)
+
+				By("Having Succeed condition set to true")
+				verifyExpectedStatusConditionError(underTestFAR, commonConditions.ProcessingType, utils.ConditionSetAndMatchSuccess, metav1.ConditionFalse)
+				verifyExpectedStatusConditionError(underTestFAR, v1alpha1.FenceAgentActionSucceededType, utils.ConditionSetAndMatchSuccess, metav1.ConditionTrue)
+				verifyExpectedStatusConditionError(underTestFAR, commonConditions.SucceededType, utils.ConditionSetAndMatchSuccess, metav1.ConditionTrue)
 			})
 		})
 		When("creating invalid FAR CR Name", func() {
@@ -186,6 +197,11 @@ var _ = Describe("FAR Controller", func() {
 				testVADeletion(vaName1, resourceDeletionWasTriggered)
 				testVADeletion(vaName2, resourceDeletionWasTriggered)
 				testPodDeletion(testPodName, resourceDeletionWasTriggered)
+
+				By("Not having any condition set")
+				verifyExpectedStatusConditionError(underTestFAR, commonConditions.ProcessingType, utils.ConditionNotSetError, metav1.ConditionUnknown)
+				verifyExpectedStatusConditionError(underTestFAR, v1alpha1.FenceAgentActionSucceededType, utils.ConditionNotSetError, metav1.ConditionUnknown)
+				verifyExpectedStatusConditionError(underTestFAR, commonConditions.SucceededType, utils.ConditionNotSetError, metav1.ConditionUnknown)
 			})
 		})
 	})
@@ -294,6 +310,8 @@ func cliCommandsEquality(far *v1alpha1.FenceAgentsRemediation) (bool, error) {
 	return isEqualStringLists(mocksExecuter.command, expectedCommand), nil
 }
 
+// TODO: Think about using Generics for the next two functions
+
 // testVADeletion tests whether the volume attachment no longer exist for successful FAR CR
 // and consistently check if the volume attachment exist and was not deleted
 func testVADeletion(vaName string, resourceDeletionWasTriggered bool) {
@@ -307,7 +325,7 @@ func testVADeletion(vaName string, resourceDeletionWasTriggered bool) {
 			err := k8sClient.Get(context.Background(), vaKey, va)
 			return apierrors.IsNotFound(err)
 
-		}, 5*time.Second, 250*time.Millisecond).Should(BeTrue())
+		}, timeoutDeletion, pollInterval).Should(BeTrue())
 		log.Info("Volume attachment is no longer exist", "va", vaName)
 	} else {
 		ConsistentlyWithOffset(1, func() bool {
@@ -315,7 +333,7 @@ func testVADeletion(vaName string, resourceDeletionWasTriggered bool) {
 			err := k8sClient.Get(context.Background(), vaKey, va)
 			return apierrors.IsNotFound(err)
 
-		}, 5*time.Second, 250*time.Millisecond).Should(BeFalse())
+		}, timeoutDeletion, pollInterval).Should(BeFalse())
 		log.Info("Volume attachment exist", "va", vaName)
 	}
 }
@@ -333,7 +351,7 @@ func testPodDeletion(podName string, resourceDeletionWasTriggered bool) {
 			err := k8sClient.Get(context.Background(), podKey, pod)
 			return apierrors.IsNotFound(err)
 
-		}, 5*time.Second, 250*time.Millisecond).Should(BeTrue())
+		}, timeoutDeletion, pollInterval).Should(BeTrue())
 		log.Info("Pod is no longer exist", "pod", podName)
 	} else {
 		ConsistentlyWithOffset(1, func() bool {
@@ -341,9 +359,27 @@ func testPodDeletion(podName string, resourceDeletionWasTriggered bool) {
 			err := k8sClient.Get(context.Background(), podKey, pod)
 			return apierrors.IsNotFound(err)
 
-		}, 5*time.Second, 250*time.Millisecond).Should(BeFalse())
+		}, timeoutDeletion, pollInterval).Should(BeFalse())
 		log.Info("Pod exist", "pod", podName)
 	}
+}
+
+// verifyExpectedStatusConditionState checks whether the status condition state matches the expectedResult
+func verifyExpectedStatusConditionError(testFAR *v1alpha1.FenceAgentsRemediation, conditionType, expectedError string, conditionStatus metav1.ConditionStatus) {
+	far := &v1alpha1.FenceAgentsRemediation{}
+	Eventually(func() string {
+		if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(testFAR), far); err != nil {
+			return utils.NoFenceAgentsRemediationCRFound
+		}
+		if gotCondition := meta.FindStatusCondition(far.Status.Conditions, conditionType); gotCondition == nil {
+			return utils.ConditionNotSetError
+		}
+		if meta.IsStatusConditionPresentAndEqual(far.Status.Conditions, conditionType, conditionStatus) {
+			return utils.ConditionSetAndMatchSuccess
+		}
+		return utils.ConditionSetButNoMatchError
+
+	}, timeoutDeletion, pollInterval).Should(Equal(expectedError), "'%v' status condition was expected to be %v", conditionType, conditionStatus)
 }
 
 // Implements Execute function to mock/test Execute of FenceAgentsRemediationReconciler

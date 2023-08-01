@@ -20,12 +20,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
+	commonConditions "github.com/medik8s/common/pkg/conditions"
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilErrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -39,9 +44,10 @@ const (
 	// errors
 	errorMissingParams     = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
 	errorMissingNodeParams = "node parameter is required, and cannot be empty"
-	SuccessFAResponse      = "Success: Rebooted"
-	parameterActionName    = "--action"
-	parameterActionValue   = "reboot"
+
+	SuccessFAResponse    = "Success: Rebooted"
+	parameterActionName  = "--action"
+	parameterActionValue = "reboot"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
@@ -76,7 +82,7 @@ func (r *FenceAgentsRemediationReconciler) SetupWithManager(mgr ctrl.Manager) er
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.2/pkg/reconcile
-func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (finalResult ctrl.Result, finalErr error) {
 	r.Log.Info("Begin FenceAgentsRemediation Reconcile")
 	defer r.Log.Info("Finish FenceAgentsRemediation Reconcile")
 	emptyResult := ctrl.Result{}
@@ -93,6 +99,17 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "Failed to get FenceAgentsRemediation CR")
 		return emptyResult, err
 	}
+
+	// At the end of each Reconcile try to update CR's status
+	defer func() {
+		if updateErr := r.updateStatus(ctx, far); updateErr != nil {
+			if !apiErrors.IsConflict(updateErr) {
+				finalErr = utilErrors.NewAggregate([]error{updateErr, finalErr})
+			}
+			finalResult.RequeueAfter = time.Second
+		}
+	}()
+
 	// Validate FAR CR name to match a nodeName from the cluster
 	r.Log.Info("Check FAR CR's name")
 	valid, err := utils.IsNodeNameValid(r.Client, req.Name)
@@ -119,12 +136,23 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			return emptyResult, fmt.Errorf("failed to add finalizer to the CR - %w", err)
 		}
 		r.Log.Info("Finalizer was added", "CR Name", req.Name)
-		return emptyResult, nil
-		// TODO: should return Requeue: true when the CR has a status and not end reconcile with empty result when a finalizer has been added
-		//return ctrl.Result{Requeue: true}, nil
+
+		if err := updateConditions(v1alpha1.RemediationStarted, &far.Status.Conditions, r.Log); err != nil {
+			return emptyResult, err
+		}
+		return ctrl.Result{Requeue: true}, nil
 	} else if controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) && !far.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Delete CR only when a finalizer and DeletionTimestamp are set
 		r.Log.Info("CR's deletion timestamp is not zero, and FAR finalizer exists", "CR Name", req.Name)
+
+		if !meta.IsStatusConditionPresentAndEqual(far.Status.Conditions, commonConditions.SucceededType, metav1.ConditionTrue) {
+			processingCondition := meta.FindStatusCondition(far.Status.Conditions, commonConditions.ProcessingType).Status
+			fenceAgentActionSucceededCondition := meta.FindStatusCondition(far.Status.Conditions, v1alpha1.FenceAgentActionSucceededType).Status
+			succeededCondition := meta.FindStatusCondition(far.Status.Conditions, commonConditions.SucceededType).Status
+			r.Log.Info("FAR didn't finish remediate the node ", "CR Name", req.Name, "processing condition", processingCondition,
+				"fenceAgentActionSucceeded condition", fenceAgentActionSucceededCondition, "succeeded condition", succeededCondition)
+		}
+
 		// remove node's taints
 		if err := utils.RemoveTaint(r.Client, far.Name); err != nil && !apiErrors.IsNotFound(err) {
 			return emptyResult, err
@@ -137,50 +165,69 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Info("Finalizer was removed", "CR Name", req.Name)
 		return emptyResult, nil
 	}
-
-	// Fetch the FAR's pod
-	r.Log.Info("Fetch FAR's pod")
-	pod, err := utils.GetFenceAgentsRemediationPod(r.Client)
-	if err != nil {
-		r.Log.Error(err, "Can't find FAR's pod by its label", "CR's Name", req.Name)
-		return emptyResult, err
-	}
-	//TODO: Check that FA is excutable? run cli.IsExecuteable
-
-	// Build FA parameters
-	r.Log.Info("Combine fence agent parameters", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
-	faParams, err := buildFenceAgentParams(far)
-	if err != nil {
-		r.Log.Error(err, "Invalid sharedParameters/nodeParameters from CR - edit/recreate the CR", "CR's Name", req.Name)
-		return emptyResult, nil
-	}
-	// Add medik8s remediation taint
-	r.Log.Info("Add Medik8s remediation taint", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
+	// Add FAR (medik8s) remediation taint
+	r.Log.Info("Try adding FAR (Medik8s) remediation taint", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
 	if err := utils.AppendTaint(r.Client, far.Name); err != nil {
 		return emptyResult, err
 	}
-	cmd := append([]string{far.Spec.Agent}, faParams...)
-	// The Fence Agent is excutable and the parameters structure are valid, but we don't check their values
-	r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
-	outputRes, outputErr, err := r.Executor.Execute(pod, cmd)
-	if err != nil {
-		// response was a failure message
-		r.Log.Error(err, "Fence Agent response was a failure", "CR's Name", req.Name)
-		return emptyResult, err
-	}
-	if outputErr != "" || outputRes != SuccessFAResponse+"\n" {
-		// response wasn't failure or sucesss message
-		err := fmt.Errorf("unknown fence agent response - expecting `%s` response, but we received `%s`", SuccessFAResponse, outputRes)
-		r.Log.Error(err, "Fence Agent response wasn't a success message", "CR's Name", req.Name)
-		return emptyResult, err
-	}
-	r.Log.Info("Fence Agent command was finished successfully", "Fence Agent", far.Spec.Agent, "Node name", req.Name, "Response", SuccessFAResponse)
 
-	// Reboot was finished and now we remove workloads (pods and their VA)
-	r.Log.Info("Manual workload deletion", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
-	if err := utils.DeleteResources(ctx, r.Client, req.Name); err != nil {
-		r.Log.Error(err, "Manual workload deletion has failed", "CR's Name", req.Name)
-		return emptyResult, err
+	if meta.IsStatusConditionTrue(far.Status.Conditions, commonConditions.ProcessingType) &&
+		!meta.IsStatusConditionTrue(far.Status.Conditions, v1alpha1.FenceAgentActionSucceededType) {
+		// The remeditation has already been processed, thus we can begin with exuecting the FA for the node
+		// We run the FA until its action (reboot) was succeeded, and we verify it with the fenceAgentActionSucceeded condition
+
+		// Fetch the FAR's pod
+		r.Log.Info("Fetch FAR's pod")
+		pod, err := utils.GetFenceAgentsRemediationPod(r.Client)
+		if err != nil {
+			r.Log.Error(err, "Can't find FAR's pod by its label", "CR's Name", req.Name)
+			return emptyResult, err
+		}
+		//TODO: Check that FA is excutable? run cli.IsExecuteable
+
+		// Build FA parameters
+		r.Log.Info("Combine fence agent parameters", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
+		faParams, err := buildFenceAgentParams(far)
+		if err != nil {
+			r.Log.Error(err, "Invalid sharedParameters/nodeParameters from CR - edit/recreate the CR", "CR's Name", req.Name)
+			return emptyResult, nil
+		}
+
+		cmd := append([]string{far.Spec.Agent}, faParams...)
+		// The Fence Agent is excutable and the parameters structure are valid, but we don't check their values
+		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
+		outputRes, outputErr, err := r.Executor.Execute(pod, cmd)
+		if err != nil {
+			// response was a failure message
+			r.Log.Error(err, "Fence Agent response was a failure", "CR's Name", req.Name)
+			return emptyResult, err
+		}
+		if outputErr != "" || outputRes != SuccessFAResponse+"\n" {
+			// response wasn't failure or sucesss message
+			err := fmt.Errorf("unknown fence agent response - expecting `%s` response, but we received `%s`", SuccessFAResponse, outputRes)
+			r.Log.Error(err, "Fence Agent response wasn't a success message", "CR's Name", req.Name)
+			return emptyResult, err
+		}
+
+		r.Log.Info("Fence Agent command was finished successfully", "Fence Agent", far.Spec.Agent, "Node name", req.Name, "Response", SuccessFAResponse)
+		if err := updateConditions(v1alpha1.FenceAgentSucceeded, &far.Status.Conditions, r.Log); err != nil {
+			return emptyResult, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+	}
+	if meta.IsStatusConditionTrue(far.Status.Conditions, v1alpha1.FenceAgentActionSucceededType) &&
+		!meta.IsStatusConditionTrue(far.Status.Conditions, commonConditions.SucceededType) {
+		// Fence agent action succeeded, and now we try to remove workloads (pods and their volume attachments)
+		r.Log.Info("Manual workload deletion", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
+		if err := utils.DeleteResources(ctx, r.Client, req.Name); err != nil {
+			r.Log.Error(err, "Manual workload deletion has failed", "CR's Name", req.Name)
+			return emptyResult, err
+		}
+
+		if err := updateConditions(v1alpha1.RemediationFinished, &far.Status.Conditions, r.Log); err != nil {
+			return emptyResult, err
+		}
+		r.Log.Info("FenceAgentsRemediation CR has completed to remediate the node", "Node Name", req.Name)
 	}
 
 	return emptyResult, nil
@@ -193,6 +240,95 @@ func isTimedOutByNHC(far *v1alpha1.FenceAgentsRemediation) bool {
 		return isTimeoutIssued
 	}
 	return false
+}
+
+// updateStatus updates the CR status, and returns an error if it fails
+func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) error {
+	if err := r.Client.Status().Update(ctx, far); err != nil {
+		if !apiErrors.IsConflict(err) {
+			r.Log.Error(err, "failed to update far status")
+		}
+		return err
+	}
+	return nil
+}
+
+// updateConditions updates the status conditions of a FenceAgentsRemediation object based on the provided ProcessingChangeReason.
+// return an error if an unknown ProcessingChangeReason is provided
+func updateConditions(reason v1alpha1.ProcessingChangeReason, currentConditions *[]metav1.Condition, log logr.Logger) error {
+
+	var (
+		processingConditionStatus, fenceAgentActionSucceededConditionStatus, succeededConditionStatus metav1.ConditionStatus
+		conditionMessage                                                                              string
+	)
+	// All the ProcessingChangeReasons can happen one after another
+	// RemediationStarted will always be the first reason.
+	// FenceAgentSucceeded can only happen after RemediationStarted happened
+	// RemediationFinished can only happen after FenceAgentSucceeded happened
+
+	switch reason {
+	case v1alpha1.RemediationStarted:
+		processingConditionStatus = metav1.ConditionTrue
+		fenceAgentActionSucceededConditionStatus = metav1.ConditionUnknown
+		succeededConditionStatus = metav1.ConditionUnknown
+		conditionMessage = v1alpha1.RemediationStartedConditionMessage
+	case v1alpha1.FenceAgentSucceeded:
+		fenceAgentActionSucceededConditionStatus = metav1.ConditionTrue
+		conditionMessage = v1alpha1.FenceAgentSucceededConditionMessage
+	case v1alpha1.RemediationFinished:
+		processingConditionStatus = metav1.ConditionFalse
+		succeededConditionStatus = metav1.ConditionTrue
+		conditionMessage = v1alpha1.RemediationFinishedConditionMessage
+	default:
+		err := fmt.Errorf("unknown processingChangeReason:%s", reason)
+		log.Error(err, "couldn't update FAR Status Conditions")
+		return err
+	}
+
+	// if ProcessingType is already false, then it cannot be changed to true again
+	if processingConditionStatus == metav1.ConditionTrue &&
+		meta.IsStatusConditionFalse(*currentConditions, commonConditions.ProcessingType) {
+		return nil
+	}
+
+	// if FenceAgentActionSucceededType is already false, then it cannot be changed to true again
+	if fenceAgentActionSucceededConditionStatus == metav1.ConditionTrue &&
+		meta.IsStatusConditionFalse(*currentConditions, v1alpha1.FenceAgentActionSucceededType) {
+		return nil
+	}
+
+	log.Info("updating Status Condition", "processingConditionStatus", processingConditionStatus, "fenceAgentActionSucceededConditionStatus", fenceAgentActionSucceededConditionStatus, "succededConditionStatus", succeededConditionStatus, "reason", string(reason))
+	// if the requested Status.Conditions.Processing is different then the current one, then update Status.Conditions.Processing value
+	if processingConditionStatus != "" && !meta.IsStatusConditionPresentAndEqual(*currentConditions, commonConditions.ProcessingType, processingConditionStatus) {
+		meta.SetStatusCondition(currentConditions, metav1.Condition{
+			Type:    commonConditions.ProcessingType,
+			Status:  processingConditionStatus,
+			Reason:  string(reason),
+			Message: conditionMessage,
+		})
+	}
+
+	// if the requested Status.Conditions.FenceAgentActionSucceeded is different then the current one, then update Status.Conditions.FenceAgentActionSucceeded value
+	if fenceAgentActionSucceededConditionStatus != "" && !meta.IsStatusConditionPresentAndEqual(*currentConditions, v1alpha1.FenceAgentActionSucceededType, fenceAgentActionSucceededConditionStatus) {
+		meta.SetStatusCondition(currentConditions, metav1.Condition{
+			Type:    v1alpha1.FenceAgentActionSucceededType,
+			Status:  fenceAgentActionSucceededConditionStatus,
+			Reason:  string(reason),
+			Message: conditionMessage,
+		})
+	}
+
+	// if the requested Status.Conditions.Succeeded is different then the current one, then update Status.Conditions.Succeeded value
+	if succeededConditionStatus != "" && !meta.IsStatusConditionPresentAndEqual(*currentConditions, commonConditions.SucceededType, succeededConditionStatus) {
+		meta.SetStatusCondition(currentConditions, metav1.Condition{
+			Type:    commonConditions.SucceededType,
+			Status:  succeededConditionStatus,
+			Reason:  string(reason),
+			Message: conditionMessage,
+		})
+	}
+
+	return nil
 }
 
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters

@@ -23,15 +23,33 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-type ParameterName string
-type NodeName string
-
 const (
 	// FARFinalizer is a finalizer for a FenceAgentsRemediation CR deletion
 	FARFinalizer string = "fence-agents-remediation.medik8s.io/far-finalizer"
 	// Taints
 	FARNoExecuteTaintKey = "medik8s.io/fence-agents-remediation"
+	// FenceAgentActionSucceededType is the condition type used to signal whether the Fence Agent action was succeeded successfully or not
+	FenceAgentActionSucceededType = "FenceAgentActionSucceeded"
+	// condition messages
+	RemediationStartedConditionMessage  = "FAR CR was found, the CR name matches one of the cluster nodes, and a finalizer was set"
+	FenceAgentSucceededConditionMessage = "FAR taint was added, fence agent command has been created and executed successfully"
+	RemediationFinishedConditionMessage = "The unhealthy node was fully remediated (it was tainted, fenced using FA and all the node resources have been deleted)"
 )
+
+// ProcessingChangeReason represents the reason of updating the processing condition
+type ProcessingChangeReason string
+
+const (
+	// RemediationStarted - CR was found, its name matches a node, and a finalizer was set
+	RemediationStarted ProcessingChangeReason = "RemediationStarted"
+	// FenceAgentSucceeded - FAR taint was added, fence agent command has been created and executed successfully
+	FenceAgentSucceeded ProcessingChangeReason = "FenceAgentSucceeded"
+	// RemediationFinished - The unhealthy node was fully remediated (it was tainted, fenced by FA and all of its resources have been deleted)
+	RemediationFinished ProcessingChangeReason = "RemediationFinished"
+)
+
+type ParameterName string
+type NodeName string
 
 // FenceAgentsRemediationSpec defines the desired state of FenceAgentsRemediation
 type FenceAgentsRemediationSpec struct {
@@ -52,6 +70,14 @@ type FenceAgentsRemediationSpec struct {
 type FenceAgentsRemediationStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// Represents the observations of a FenceAgentsRemediation's current state.
+	// Known .status.conditions.type are: "Processing", "FenceAgentActionSucceeded", and "Succeeded".
+	// +listType=map
+	// +listMapKey=type
+	//+optional
+	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="conditions",xDescriptors="urn:alm:descriptor:io.kubernetes.conditions"
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 //+kubebuilder:object:root=true
