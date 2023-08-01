@@ -346,13 +346,28 @@ func makeNodeUnready(node *corev1.Node) {
 	log.Info("node is unready", "node name", node.GetName())
 }
 
-// checkFarLogs gets the FAR pod and checks whether its logs have logString
-func checkFarLogs(logString string) {
+// buildExpectedLogOutput returns a string with a node identifier and a success message for the reboot action
+func buildExpectedLogOutput(nodeName, successMessage string) string {
+	expectedString := fmt.Sprintf("\"Node name\": \"%s\", \"Response\": \"%s", nodeName, successMessage)
+	log.Info("Substring to search in the logs", "expectedString", expectedString)
+	return expectedString
+}
+
+// checkFarLogs gets the FAR pod and checks whether it's logs have logString, and if the pod was in the unhealthyNode
+// then we don't look for the expected logString
+func checkFarLogs(unhealthyNodeName, logString string) {
 	EventuallyWithOffset(1, func() string {
 		pod, err := utils.GetFenceAgentsRemediationPod(k8sClient)
 		if err != nil {
 			log.Error(err, "failed to get FAR pod. Might try again")
 			return ""
+		}
+		if pod.Spec.NodeName == unhealthyNodeName {
+			// When reboot is running on FAR node, then FAR pod will be recreated on a new node
+			// and since the FA command won't be executed again, then the log won't include
+			// any success message, so we won't verfiy the FAR success message on this scenario
+			log.Info("The created FAR CR is for the node FAR pod resides, thus we won't test its logs", "expected string", logString)
+			return logString
 		}
 		logs, err := e2eUtils.GetLogs(clientSet, pod, containerName)
 		if err != nil {
@@ -413,10 +428,8 @@ func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, oldPodCreat
 	wasFarTaintAdded(nodeName)
 
 	By("Check if the response of the FA was a success")
-	// TODO: When reboot is running only once and it is running on FAR node, then FAR pod will
-	// be recreated on a new node and since the FA command won't be exuected again, then the log
-	// won't include any success message
-	checkFarLogs(controllers.SuccessFAResponse)
+	expectedLog := buildExpectedLogOutput(nodeName, controllers.SuccessFAResponse)
+	checkFarLogs(nodeName, expectedLog)
 
 	By("Getting new node's boot time")
 	wasNodeRebooted(nodeName, nodeBootTimeBefore)
