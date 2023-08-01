@@ -353,15 +353,16 @@ func buildExpectedLogOutput(nodeName, successMessage string) string {
 	return expectedString
 }
 
-// checkFarLogs gets the FAR pod and checks whether it's logs have logString
-func checkFarLogs(farNodeName, logString string) {
+// checkFarLogs gets the FAR pod and checks whether it's logs have logString, and if the pod was in the unhealthyNode
+// then we don't look for the expected logString
+func checkFarLogs(unhealthyNodeName, logString string) {
 	EventuallyWithOffset(1, func() string {
 		pod, err := utils.GetFenceAgentsRemediationPod(k8sClient)
 		if err != nil {
 			log.Error(err, "failed to get FAR pod. Might try again")
 			return ""
 		}
-		if pod.Spec.NodeName == farNodeName {
+		if pod.Spec.NodeName == unhealthyNodeName {
 			// When reboot is running on FAR node, then FAR pod will be recreated on a new node
 			// and since the FA command won't be executed again, then the log won't include
 			// any success message, so we won't verfiy the FAR success message on this scenario
