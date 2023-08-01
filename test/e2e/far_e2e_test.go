@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"time"
 
+	commonConditions "github.com/medik8s/common/pkg/conditions"
 	medik8sLabels "github.com/medik8s/common/pkg/labels"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -13,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -422,6 +424,25 @@ func checkPodDeleted(pod *corev1.Pod) {
 	log.Info("Pod has already been deleted", "pod name", pod.Name)
 }
 
+// verifyExpectedStatusConditionState checks whether the status condition state matches the expectedResult
+func verifyExpectedStatusConditionError(nodeName, conditionType, expectedError string, conditionStatus metav1.ConditionStatus) {
+	far := &v1alpha1.FenceAgentsRemediation{}
+	farNamespacedName := client.ObjectKey{Name: nodeName, Namespace: operatorNsName}
+	Eventually(func() string {
+		if err := k8sClient.Get(context.Background(), farNamespacedName, far); err != nil {
+			return utils.NoFenceAgentsRemediationCRFound
+		}
+		if gotCondition := meta.FindStatusCondition(far.Status.Conditions, conditionType); gotCondition == nil {
+			return utils.ConditionNotSetError
+		}
+		if meta.IsStatusConditionPresentAndEqual(far.Status.Conditions, conditionType, conditionStatus) {
+			return utils.ConditionSetAndMatchSuccess
+		}
+		return utils.ConditionSetButNoMatchError
+
+	}, timeoutDeletion, pollInterval).Should(Equal(expectedError), "'%v' status condition was expected to be %v", conditionType, conditionStatus)
+}
+
 // checkRemediation verify whether the node was remediated
 func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, oldPodCreationTime time.Time, va *storagev1.VolumeAttachment, pod *corev1.Pod) {
 	By("Check if FAR NoExecute taint was added")
@@ -439,4 +460,10 @@ func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, oldPodCreat
 
 	By("checking if old pod has been deleted")
 	checkPodDeleted(pod)
+
+	By("checking if the status conditions match a successful remediation")
+	verifyExpectedStatusConditionError(nodeName, commonConditions.ProcessingType, utils.ConditionSetAndMatchSuccess, metav1.ConditionFalse)
+	verifyExpectedStatusConditionError(nodeName, v1alpha1.FenceAgentActionSucceededType, utils.ConditionSetAndMatchSuccess, metav1.ConditionTrue)
+	verifyExpectedStatusConditionError(nodeName, commonConditions.SucceededType, utils.ConditionSetAndMatchSuccess, metav1.ConditionTrue)
+
 }
