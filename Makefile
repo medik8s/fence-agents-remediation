@@ -35,9 +35,9 @@ IMAGE_TAG = v$(VERSION)
 endif
 export IMAGE_TAG
 
-CHANNELS = candidate
+CHANNELS = stable
 export CHANNELS
-DEFAULT_CHANNEL = candidate
+DEFAULT_CHANNEL = stable
 export DEFAULT_CHANNEL
 
 # VERSION defines the project version for the bundle.
