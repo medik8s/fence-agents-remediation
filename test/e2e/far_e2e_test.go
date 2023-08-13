@@ -309,10 +309,10 @@ func cleanupTestedResources(va *storagev1.VolumeAttachment, pod *corev1.Pod) {
 func wasFarTaintAdded(nodeName string) {
 	farTaint := utils.CreateFARNoExecuteTaint()
 	var node *corev1.Node
-	Eventually(func() bool {
+	Eventually(func(g Gomega) bool {
 		var err error
 		node, err = utils.GetNodeWithName(k8sClient, nodeName)
-		Expect(err).ToNot(HaveOccurred())
+		g.Expect(err).ToNot(HaveOccurred())
 		return utils.TaintExists(node.Spec.Taints, &farTaint)
 	}, 1*time.Second, "200ms").Should(BeTrue())
 	log.Info("FAR taint was added", "node name", node.Name, "taint key", farTaint.Key, "taint effect", farTaint.Effect)
@@ -320,8 +320,8 @@ func wasFarTaintAdded(nodeName string) {
 
 // waitForNodeHealthyCondition waits until the node's ready condition matches the given status, and it fails after timeout
 func waitForNodeHealthyCondition(node *corev1.Node, condStatus corev1.ConditionStatus) {
-	Eventually(func() corev1.ConditionStatus {
-		Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(node), node)).To(Succeed())
+	Eventually(func(g Gomega) corev1.ConditionStatus {
+		g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(node), node)).To(Succeed())
 		for _, cond := range node.Status.Conditions {
 			if cond.Type == corev1.NodeReady {
 				return cond.Status

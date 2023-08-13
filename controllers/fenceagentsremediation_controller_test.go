@@ -149,9 +149,9 @@ var _ = Describe("FAR Controller", func() {
 			})
 			It("should have finalizer, taint, while the two VAs and one pod will be deleted", func() {
 				By("Searching for remediation taint")
-				Eventually(func() bool {
-					Expect(k8sClient.Get(context.Background(), nodeKey, node)).To(Succeed())
-					Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
+				Eventually(func(g Gomega) bool {
+					g.Expect(k8sClient.Get(context.Background(), nodeKey, node)).To(Succeed())
+					g.Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
 					res, _ := cliCommandsEquality(underTestFAR)
 					return utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint) && res
 				}, 100*time.Millisecond, 10*time.Millisecond).Should(BeTrue(), "taint should be added, and command format is correct")
@@ -184,8 +184,8 @@ var _ = Describe("FAR Controller", func() {
 
 				By("Not having finalizer")
 				farNamespacedName.Name = underTestFAR.Name
-				Eventually(func() bool {
-					Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
+				Eventually(func(g Gomega) bool {
+					g.Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
 					return controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)
 				}, 100*time.Millisecond, 10*time.Millisecond).Should(BeFalse(), "finalizer shouldn't be added")
 
