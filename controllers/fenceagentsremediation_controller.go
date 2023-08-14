@@ -293,18 +293,6 @@ func updateConditions(reason v1alpha1.ConditionsChangeReason, currentConditions 
 		return err
 	}
 
-	// if ProcessingType is already false, then it cannot be changed to true again
-	if processingConditionStatus == metav1.ConditionTrue &&
-		meta.IsStatusConditionFalse(*currentConditions, commonConditions.ProcessingType) {
-		return nil
-	}
-
-	// if FenceAgentActionSucceededType is already false, then it cannot be changed to true again
-	if fenceAgentActionSucceededConditionStatus == metav1.ConditionTrue &&
-		meta.IsStatusConditionFalse(*currentConditions, v1alpha1.FenceAgentActionSucceededType) {
-		return nil
-	}
-
 	log.Info("updating Status Condition", "processingConditionStatus", processingConditionStatus, "fenceAgentActionSucceededConditionStatus", fenceAgentActionSucceededConditionStatus, "succededConditionStatus", succeededConditionStatus, "reason", string(reason))
 	// if the requested Status.Conditions.Processing is different then the current one, then update Status.Conditions.Processing value
 	if processingConditionStatus != "" && !meta.IsStatusConditionPresentAndEqual(*currentConditions, commonConditions.ProcessingType, processingConditionStatus) {
