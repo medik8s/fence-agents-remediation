@@ -124,7 +124,7 @@ var _ = Describe("FAR E2e", func() {
 			pod = e2eUtils.GetPod(nodeName, testContainerName)
 			pod.Name = testPodName
 			pod.Namespace = testNsName
-			Expect(k8sClient.Create(context.Background(), pod)).To(Succeed())
+			ExpectWithOffset(1, k8sClient.Create(context.Background(), pod)).To(Succeed())
 			log.Info("Tested pod has been created", "pod", testPodName)
 			creationTimePod = metav1.Now().Time
 			va = createVA(nodeName)
@@ -405,7 +405,7 @@ func wasNodeRebooted(nodeName string, nodeBootTimeBefore time.Time) {
 
 // checkVaDeleted verifies if the va has already been deleted due to resource deletion
 func checkVaDeleted(va *storagev1.VolumeAttachment) {
-	EventuallyWithOffset(1, func() bool {
+	ConsistentlyWithOffset(1, func() bool {
 		newVa := &storagev1.VolumeAttachment{}
 		err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(va), newVa)
 		return apiErrors.IsNotFound(err)
@@ -455,11 +455,11 @@ func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, oldPodCreat
 	By("Getting new node's boot time")
 	wasNodeRebooted(nodeName, nodeBootTimeBefore)
 
-	By("checking if old VA has been deleted")
-	checkVaDeleted(va)
-
 	By("checking if old pod has been deleted")
 	checkPodDeleted(pod)
+
+	By("checking if old volume attachment has been deleted")
+	checkVaDeleted(va)
 
 	By("checking if the status conditions match a successful remediation")
 	verifyExpectedStatusConditionError(nodeName, commonConditions.ProcessingType, utils.ConditionSetAndMatchSuccess, metav1.ConditionFalse)
