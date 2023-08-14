@@ -125,6 +125,7 @@ var _ = Describe("FAR Controller", func() {
 		farNamespacedName := client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}
 		farNoExecuteTaint := utils.CreateFARNoExecuteTaint()
 		resourceDeletionWasTriggered := true // corresponds to testVADeletion bool value
+		conditionStatusPointer := func(status metav1.ConditionStatus) *metav1.ConditionStatus { return &status }
 		BeforeEach(func() {
 			// Create two VAs and two pods, and at the end clean them up with DeferCleanup
 			va1 := createVA(vaName1, workerNode)
@@ -166,7 +167,6 @@ var _ = Describe("FAR Controller", func() {
 				testPodDeletion(testPodName, resourceDeletionWasTriggered)
 
 				By("Having Succeed condition set to true")
-				conditionStatusPointer := func(status metav1.ConditionStatus) *metav1.ConditionStatus { return &status }
 				verifyStatusCondition(workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
 				verifyStatusCondition(workerNode, v1alpha1.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionTrue))
 				verifyStatusCondition(workerNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionTrue))
@@ -200,9 +200,9 @@ var _ = Describe("FAR Controller", func() {
 				testPodDeletion(testPodName, resourceDeletionWasTriggered)
 
 				By("Not having any condition set")
-				verifyStatusCondition(dummyNode, commonConditions.ProcessingType, nil)
-				verifyStatusCondition(dummyNode, v1alpha1.FenceAgentActionSucceededType, nil)
-				verifyStatusCondition(dummyNode, commonConditions.SucceededType, nil)
+				verifyStatusCondition(dummyNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
+				verifyStatusCondition(dummyNode, v1alpha1.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
+				verifyStatusCondition(dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
 			})
 		})
 	})
