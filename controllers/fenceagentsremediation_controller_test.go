@@ -149,9 +149,9 @@ var _ = Describe("FAR Controller", func() {
 			})
 			It("should have finalizer, taint, while the two VAs and one pod will be deleted", func() {
 				By("Searching for remediation taint")
-				Eventually(func() bool {
-					Expect(k8sClient.Get(context.Background(), nodeKey, node)).To(Succeed())
-					Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
+				Eventually(func(g Gomega) bool {
+					g.Expect(k8sClient.Get(context.Background(), nodeKey, node)).To(Succeed())
+					g.Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
 					res, _ := cliCommandsEquality(underTestFAR)
 					return utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint) && res
 				}, 100*time.Millisecond, 10*time.Millisecond).Should(BeTrue(), "taint should be added, and command format is correct")
@@ -166,9 +166,10 @@ var _ = Describe("FAR Controller", func() {
 				testPodDeletion(testPodName, resourceDeletionWasTriggered)
 
 				By("Having Succeed condition set to true")
-				verifyExpectedStatusConditionError(underTestFAR, commonConditions.ProcessingType, utils.ConditionSetAndMatchSuccess, metav1.ConditionFalse)
-				verifyExpectedStatusConditionError(underTestFAR, v1alpha1.FenceAgentActionSucceededType, utils.ConditionSetAndMatchSuccess, metav1.ConditionTrue)
-				verifyExpectedStatusConditionError(underTestFAR, commonConditions.SucceededType, utils.ConditionSetAndMatchSuccess, metav1.ConditionTrue)
+				conditionStatusPointer := func(status metav1.ConditionStatus) *metav1.ConditionStatus { return &status }
+				verifyStatusCondition(workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
+				verifyStatusCondition(workerNode, v1alpha1.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionTrue))
+				verifyStatusCondition(workerNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionTrue))
 			})
 		})
 		When("creating invalid FAR CR Name", func() {
@@ -183,8 +184,8 @@ var _ = Describe("FAR Controller", func() {
 
 				By("Not having finalizer")
 				farNamespacedName.Name = underTestFAR.Name
-				Eventually(func() bool {
-					Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
+				Eventually(func(g Gomega) bool {
+					g.Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
 					return controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)
 				}, 100*time.Millisecond, 10*time.Millisecond).Should(BeFalse(), "finalizer shouldn't be added")
 
@@ -199,9 +200,9 @@ var _ = Describe("FAR Controller", func() {
 				testPodDeletion(testPodName, resourceDeletionWasTriggered)
 
 				By("Not having any condition set")
-				verifyExpectedStatusConditionError(underTestFAR, commonConditions.ProcessingType, utils.ConditionNotSetError, metav1.ConditionUnknown)
-				verifyExpectedStatusConditionError(underTestFAR, v1alpha1.FenceAgentActionSucceededType, utils.ConditionNotSetError, metav1.ConditionUnknown)
-				verifyExpectedStatusConditionError(underTestFAR, commonConditions.SucceededType, utils.ConditionNotSetError, metav1.ConditionUnknown)
+				verifyStatusCondition(dummyNode, commonConditions.ProcessingType, nil)
+				verifyStatusCondition(dummyNode, v1alpha1.FenceAgentActionSucceededType, nil)
+				verifyStatusCondition(dummyNode, commonConditions.SucceededType, nil)
 			})
 		})
 	})
@@ -364,22 +365,20 @@ func testPodDeletion(podName string, resourceDeletionWasTriggered bool) {
 	}
 }
 
-// verifyExpectedStatusConditionState checks whether the status condition state matches the expectedResult
-func verifyExpectedStatusConditionError(testFAR *v1alpha1.FenceAgentsRemediation, conditionType, expectedError string, conditionStatus metav1.ConditionStatus) {
+// verifyStatusCondition checks if the status condition is not set, and if it is set then it has an expected value
+func verifyStatusCondition(nodeName, conditionType string, conditionStatus *metav1.ConditionStatus) {
 	far := &v1alpha1.FenceAgentsRemediation{}
-	Eventually(func() string {
-		if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(testFAR), far); err != nil {
-			return utils.NoFenceAgentsRemediationCRFound
+	farNamespacedName := client.ObjectKey{Name: nodeName, Namespace: defaultNamespace}
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(context.Background(), farNamespacedName, far)).To(Succeed(), "FAR CR was not found, thus we can't check its status")
+		condition := meta.FindStatusCondition(far.Status.Conditions, conditionType)
+		if conditionStatus == nil {
+			g.Expect(condition).To(BeNil(), "expected condition %v to not be set", conditionType)
+		} else {
+			g.Expect(condition).ToNot(BeNil(), "expected condition %v to be set", conditionType)
+			g.Expect(condition.Status).To(Equal(*conditionStatus), "expected condition %v to have status %v", conditionType, *conditionStatus)
 		}
-		if gotCondition := meta.FindStatusCondition(far.Status.Conditions, conditionType); gotCondition == nil {
-			return utils.ConditionNotSetError
-		}
-		if meta.IsStatusConditionPresentAndEqual(far.Status.Conditions, conditionType, conditionStatus) {
-			return utils.ConditionSetAndMatchSuccess
-		}
-		return utils.ConditionSetButNoMatchError
-
-	}, timeoutDeletion, pollInterval).Should(Equal(expectedError), "'%v' status condition was expected to be %v", conditionType, conditionStatus)
+	}, timeoutDeletion, pollInterval).Should(Succeed())
 }
 
 // Implements Execute function to mock/test Execute of FenceAgentsRemediationReconciler
