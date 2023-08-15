@@ -43,8 +43,8 @@ type ConditionsChangeReason string
 const (
 	// RemediationFinishedNodeNotFound - CR was found but its name doesn't matche a node
 	RemediationFinishedNodeNotFound ConditionsChangeReason = "RemediationFinishedNodeNotFound"
-	// RemediationStoppedByNHC - Remediation was interrupted by NHC timeout annotation
-	RemediationStoppedByNHC ConditionsChangeReason = "RemediationStoppedByNHC"
+	// RemediationInterruptedByNHC - Remediation was interrupted by NHC timeout annotation
+	RemediationInterruptedByNHC ConditionsChangeReason = "RemediationInterruptedByNHC"
 	// RemediationStarted - CR was found, its name matches a node, and a finalizer was set
 	RemediationStarted ConditionsChangeReason = "RemediationStarted"
 	// FenceAgentSucceeded - FAR taint was added, fence agent command has been created and executed successfully

@@ -126,7 +126,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	// Check NHC timeout annotation
 	if isTimedOutByNHC(far) {
 		r.Log.Info("FAR remediation was stopped by Node Healthcheck Operator")
-		err := updateConditions(v1alpha1.RemediationStoppedByNHC, &far.Status.Conditions, r.Log)
+		err := updateConditions(v1alpha1.RemediationInterruptedByNHC, &far.Status.Conditions, r.Log)
 		return emptyResult, err
 	}
 
@@ -262,14 +262,14 @@ func updateConditions(reason v1alpha1.ConditionsChangeReason, currentConditions 
 		processingConditionStatus, fenceAgentActionSucceededConditionStatus, succeededConditionStatus metav1.ConditionStatus
 		conditionMessage                                                                              string
 	)
-	// RemediationFinishedNodeNotFound and RemediationStoppedByNHC reasons can happen at any time the Reconcile runs
+	// RemediationFinishedNodeNotFound and RemediationInterruptedByNHC reasons can happen at any time the Reconcile runs
 	// Except these two reasons, there are another three reasons that can only happen one after another
 	// RemediationStarted will always be the first reason (out of these three)
 	// FenceAgentSucceeded can only happen after RemediationStarted happened
 	// RemediationFinishedSuccessfully can only happen after FenceAgentSucceeded happened
 
 	switch reason {
-	case v1alpha1.RemediationFinishedNodeNotFound, v1alpha1.RemediationStoppedByNHC:
+	case v1alpha1.RemediationFinishedNodeNotFound, v1alpha1.RemediationInterruptedByNHC:
 		processingConditionStatus = metav1.ConditionFalse
 		fenceAgentActionSucceededConditionStatus = metav1.ConditionFalse
 		succeededConditionStatus = metav1.ConditionFalse
