@@ -273,8 +273,12 @@ func updateConditions(reason v1alpha1.ConditionsChangeReason, currentConditions 
 		processingConditionStatus = metav1.ConditionFalse
 		fenceAgentActionSucceededConditionStatus = metav1.ConditionFalse
 		succeededConditionStatus = metav1.ConditionFalse
-		// These two reasons share the same message as they share the same effect
-		conditionMessage = v1alpha1.RemediationInterruptedConditionMessage
+		if reason == v1alpha1.RemediationFinishedNodeNotFound {
+			conditionMessage = v1alpha1.RemediationFinishedNodeNotFoundConditionMessage
+		} else {
+			conditionMessage = v1alpha1.RemediationInterruptedByNHCConditionMessage
+		}
+
 	case v1alpha1.RemediationStarted:
 		processingConditionStatus = metav1.ConditionTrue
 		fenceAgentActionSucceededConditionStatus = metav1.ConditionUnknown

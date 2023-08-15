@@ -31,7 +31,8 @@ const (
 	// FenceAgentActionSucceededType is the condition type used to signal whether the Fence Agent action was succeeded successfully or not
 	FenceAgentActionSucceededType = "FenceAgentActionSucceeded"
 	// condition messages
-	RemediationInterruptedConditionMessage          = "FAR CR name doesn't match a node name or Node Healthcheck timeout annotation has been set"
+	RemediationFinishedNodeNotFoundConditionMessage = "Node Healthcheck timeout annotation has been set"
+	RemediationInterruptedByNHCConditionMessage     = "FAR CR name doesn't match a node name"
 	RemediationStartedConditionMessage              = "FAR CR was found, its name matches one of the cluster nodes, and a finalizer was set to the CR"
 	FenceAgentSucceededConditionMessage             = "FAR taint was added, fence agent command has been created and executed successfully"
 	RemediationFinishedSuccessfullyConditionMessage = "The unhealthy node was fully remediated (it was tainted, fenced using FA and all the node resources have been deleted)"
