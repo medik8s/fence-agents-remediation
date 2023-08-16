@@ -31,21 +31,27 @@ const (
 	// FenceAgentActionSucceededType is the condition type used to signal whether the Fence Agent action was succeeded successfully or not
 	FenceAgentActionSucceededType = "FenceAgentActionSucceeded"
 	// condition messages
-	RemediationStartedConditionMessage  = "FAR CR was found, the CR name matches one of the cluster nodes, and a finalizer was set"
-	FenceAgentSucceededConditionMessage = "FAR taint was added, fence agent command has been created and executed successfully"
-	RemediationFinishedConditionMessage = "The unhealthy node was fully remediated (it was tainted, fenced using FA and all the node resources have been deleted)"
+	RemediationFinishedNodeNotFoundConditionMessage = "Node Healthcheck timeout annotation has been set"
+	RemediationInterruptedByNHCConditionMessage     = "FAR CR name doesn't match a node name"
+	RemediationStartedConditionMessage              = "FAR CR was found, its name matches one of the cluster nodes, and a finalizer was set to the CR"
+	FenceAgentSucceededConditionMessage             = "FAR taint was added, fence agent command has been created and executed successfully"
+	RemediationFinishedSuccessfullyConditionMessage = "The unhealthy node was fully remediated (it was tainted, fenced using FA and all the node resources have been deleted)"
 )
 
-// ProcessingChangeReason represents the reason of updating the processing condition
-type ProcessingChangeReason string
+// ConditionsChangeReason represents the reason of updating the some or all the conditions
+type ConditionsChangeReason string
 
 const (
+	// RemediationFinishedNodeNotFound - CR was found but its name doesn't matche a node
+	RemediationFinishedNodeNotFound ConditionsChangeReason = "RemediationFinishedNodeNotFound"
+	// RemediationInterruptedByNHC - Remediation was interrupted by NHC timeout annotation
+	RemediationInterruptedByNHC ConditionsChangeReason = "RemediationInterruptedByNHC"
 	// RemediationStarted - CR was found, its name matches a node, and a finalizer was set
-	RemediationStarted ProcessingChangeReason = "RemediationStarted"
+	RemediationStarted ConditionsChangeReason = "RemediationStarted"
 	// FenceAgentSucceeded - FAR taint was added, fence agent command has been created and executed successfully
-	FenceAgentSucceeded ProcessingChangeReason = "FenceAgentSucceeded"
-	// RemediationFinished - The unhealthy node was fully remediated (it was tainted, fenced by FA and all of its resources have been deleted)
-	RemediationFinished ProcessingChangeReason = "RemediationFinished"
+	FenceAgentSucceeded ConditionsChangeReason = "FenceAgentSucceeded"
+	// RemediationFinishedSuccessfully - The unhealthy node was fully remediated/fenced (it was tainted, fenced by FA and all of its resources have been deleted)
+	RemediationFinishedSuccessfully ConditionsChangeReason = "RemediationFinishedSuccessfully"
 )
 
 type ParameterName string

@@ -119,14 +119,15 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	}
 	if !valid {
 		r.Log.Error(err, "Didn't find a node matching the CR's name", "CR's Name", req.Name)
-		return emptyResult, nil
+		err := updateConditions(v1alpha1.RemediationFinishedNodeNotFound, &far.Status.Conditions, r.Log)
+		return emptyResult, err
 	}
 
 	// Check NHC timeout annotation
 	if isTimedOutByNHC(far) {
 		r.Log.Info("FAR remediation was stopped by Node Healthcheck Operator")
-		// TODO: update status and return its error
-		return emptyResult, nil
+		err := updateConditions(v1alpha1.RemediationInterruptedByNHC, &far.Status.Conditions, r.Log)
+		return emptyResult, err
 	}
 
 	// Add finalizer when the CR is created
@@ -224,7 +225,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			return emptyResult, err
 		}
 
-		if err := updateConditions(v1alpha1.RemediationFinished, &far.Status.Conditions, r.Log); err != nil {
+		if err := updateConditions(v1alpha1.RemediationFinishedSuccessfully, &far.Status.Conditions, r.Log); err != nil {
 			return emptyResult, err
 		}
 		r.Log.Info("FenceAgentsRemediation CR has completed to remediate the node", "Node Name", req.Name)
@@ -253,20 +254,36 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 	return nil
 }
 
-// updateConditions updates the status conditions of a FenceAgentsRemediation object based on the provided ProcessingChangeReason.
-// return an error if an unknown ProcessingChangeReason is provided
-func updateConditions(reason v1alpha1.ProcessingChangeReason, currentConditions *[]metav1.Condition, log logr.Logger) error {
+// updateConditions updates the status conditions of a FenceAgentsRemediation object based on the provided ConditionsChangeReason.
+// return an error if an unknown ConditionsChangeReason is provided
+func updateConditions(reason v1alpha1.ConditionsChangeReason, currentConditions *[]metav1.Condition, log logr.Logger) error {
 
 	var (
 		processingConditionStatus, fenceAgentActionSucceededConditionStatus, succeededConditionStatus metav1.ConditionStatus
 		conditionMessage                                                                              string
 	)
-	// All the ProcessingChangeReasons can happen one after another
-	// RemediationStarted will always be the first reason.
+	// RemediationFinishedNodeNotFound and RemediationInterruptedByNHC reasons can happen at any time the Reconcile runs
+	// Except these two reasons, there are another three reasons that can only happen one after another
+	// RemediationStarted will always be the first reason (out of these three)
 	// FenceAgentSucceeded can only happen after RemediationStarted happened
-	// RemediationFinished can only happen after FenceAgentSucceeded happened
+	// RemediationFinishedSuccessfully can only happen after FenceAgentSucceeded happened
 
 	switch reason {
+	case v1alpha1.RemediationFinishedNodeNotFound, v1alpha1.RemediationInterruptedByNHC:
+		processingConditionStatus = metav1.ConditionFalse
+		fenceAgentActionSucceededConditionStatus = metav1.ConditionFalse
+		succeededConditionStatus = metav1.ConditionFalse
+		// Different reasons share the same effect to the conditions, but they have different message
+		switch reason {
+		case v1alpha1.RemediationFinishedNodeNotFound:
+			conditionMessage = v1alpha1.RemediationFinishedNodeNotFoundConditionMessage
+		case v1alpha1.RemediationInterruptedByNHC:
+			conditionMessage = v1alpha1.RemediationInterruptedByNHCConditionMessage
+		default:
+			err := fmt.Errorf("unknown ConditionsChangeReason:%s", reason)
+			log.Error(err, "couldn't update FAR Status Conditions")
+			return err
+		}
 	case v1alpha1.RemediationStarted:
 		processingConditionStatus = metav1.ConditionTrue
 		fenceAgentActionSucceededConditionStatus = metav1.ConditionUnknown
@@ -275,26 +292,14 @@ func updateConditions(reason v1alpha1.ProcessingChangeReason, currentConditions 
 	case v1alpha1.FenceAgentSucceeded:
 		fenceAgentActionSucceededConditionStatus = metav1.ConditionTrue
 		conditionMessage = v1alpha1.FenceAgentSucceededConditionMessage
-	case v1alpha1.RemediationFinished:
+	case v1alpha1.RemediationFinishedSuccessfully:
 		processingConditionStatus = metav1.ConditionFalse
 		succeededConditionStatus = metav1.ConditionTrue
-		conditionMessage = v1alpha1.RemediationFinishedConditionMessage
+		conditionMessage = v1alpha1.RemediationFinishedSuccessfullyConditionMessage
 	default:
-		err := fmt.Errorf("unknown processingChangeReason:%s", reason)
+		err := fmt.Errorf("unknown ConditionsChangeReason:%s", reason)
 		log.Error(err, "couldn't update FAR Status Conditions")
 		return err
-	}
-
-	// if ProcessingType is already false, then it cannot be changed to true again
-	if processingConditionStatus == metav1.ConditionTrue &&
-		meta.IsStatusConditionFalse(*currentConditions, commonConditions.ProcessingType) {
-		return nil
-	}
-
-	// if FenceAgentActionSucceededType is already false, then it cannot be changed to true again
-	if fenceAgentActionSucceededConditionStatus == metav1.ConditionTrue &&
-		meta.IsStatusConditionFalse(*currentConditions, v1alpha1.FenceAgentActionSucceededType) {
-		return nil
 	}
 
 	log.Info("updating Status Condition", "processingConditionStatus", processingConditionStatus, "fenceAgentActionSucceededConditionStatus", fenceAgentActionSucceededConditionStatus, "succededConditionStatus", succeededConditionStatus, "reason", string(reason))
