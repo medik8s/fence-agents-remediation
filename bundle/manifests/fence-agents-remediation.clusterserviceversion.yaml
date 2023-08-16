@@ -48,6 +48,7 @@ metadata:
     createdAt: ""
     description: Fence Agents Remediation Operator for remediating nodes using upstream
       fence-agents.
+    olm.skipRange: '>=0.0.1'
     operators.operatorframework.io/builder: operator-sdk-v1.30.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/medik8s/fence-agents-remediation
