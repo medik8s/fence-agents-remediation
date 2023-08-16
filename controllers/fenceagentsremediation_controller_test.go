@@ -166,7 +166,7 @@ var _ = Describe("FAR Controller", func() {
 				testVADeletion(vaName2, resourceDeletionWasTriggered)
 				testPodDeletion(testPodName, resourceDeletionWasTriggered)
 
-				By("Having Succeed condition set to true")
+				By("Having Succeeded, FenceAgentActionSucceeded conditions set to true, and Processing set to false")
 				verifyStatusCondition(workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
 				verifyStatusCondition(workerNode, v1alpha1.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionTrue))
 				verifyStatusCondition(workerNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionTrue))
@@ -199,7 +199,7 @@ var _ = Describe("FAR Controller", func() {
 				testVADeletion(vaName2, resourceDeletionWasTriggered)
 				testPodDeletion(testPodName, resourceDeletionWasTriggered)
 
-				By("Not having any condition set")
+				By("Having all three conditions set to false")
 				verifyStatusCondition(dummyNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
 				verifyStatusCondition(dummyNode, v1alpha1.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
 				verifyStatusCondition(dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))

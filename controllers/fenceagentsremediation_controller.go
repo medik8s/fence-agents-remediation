@@ -273,12 +273,17 @@ func updateConditions(reason v1alpha1.ConditionsChangeReason, currentConditions 
 		processingConditionStatus = metav1.ConditionFalse
 		fenceAgentActionSucceededConditionStatus = metav1.ConditionFalse
 		succeededConditionStatus = metav1.ConditionFalse
-		if reason == v1alpha1.RemediationFinishedNodeNotFound {
+		// Different reasons share the same effect to the conditions, but they have different message
+		switch reason {
+		case v1alpha1.RemediationFinishedNodeNotFound:
 			conditionMessage = v1alpha1.RemediationFinishedNodeNotFoundConditionMessage
-		} else {
+		case v1alpha1.RemediationInterruptedByNHC:
 			conditionMessage = v1alpha1.RemediationInterruptedByNHCConditionMessage
+		default:
+			err := fmt.Errorf("unknown ConditionsChangeReason:%s", reason)
+			log.Error(err, "couldn't update FAR Status Conditions")
+			return err
 		}
-
 	case v1alpha1.RemediationStarted:
 		processingConditionStatus = metav1.ConditionTrue
 		fenceAgentActionSucceededConditionStatus = metav1.ConditionUnknown
