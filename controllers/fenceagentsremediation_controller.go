@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/go-logr/logr"
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
@@ -84,8 +83,10 @@ func (r *FenceAgentsRemediationReconciler) SetupWithManager(mgr ctrl.Manager) er
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.2/pkg/reconcile
 func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (finalResult ctrl.Result, finalErr error) {
 	r.Log.Info("Begin FenceAgentsRemediation Reconcile")
-	defer r.Log.Info("Finish FenceAgentsRemediation Reconcile")
+
+	// Reconcile requeue results
 	emptyResult := ctrl.Result{}
+	requeueImmediately := ctrl.Result{Requeue: true}
 
 	// Fetch the FenceAgentsRemediation instance
 	far := &v1alpha1.FenceAgentsRemediation{}
@@ -100,14 +101,15 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return emptyResult, err
 	}
 
-	// At the end of each Reconcile try to update CR's status
+	// At the end of each Reconcile we try to update CR's status
 	defer func() {
 		if updateErr := r.updateStatus(ctx, far); updateErr != nil {
-			if !apiErrors.IsConflict(updateErr) {
-				finalErr = utilErrors.NewAggregate([]error{updateErr, finalErr})
+			if apiErrors.IsConflict(updateErr) {
+				r.Log.Info("Conflict has occurred on updating the CR status")
 			}
-			finalResult.RequeueAfter = time.Second
+			finalErr = utilErrors.NewAggregate([]error{updateErr, finalErr})
 		}
+		r.Log.Info("Finish FenceAgentsRemediation Reconcile")
 	}()
 
 	// Validate FAR CR name to match a nodeName from the cluster
@@ -141,7 +143,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		if err := updateConditions(v1alpha1.RemediationStarted, &far.Status.Conditions, r.Log); err != nil {
 			return emptyResult, err
 		}
-		return ctrl.Result{Requeue: true}, nil
+		return requeueImmediately, nil
 	} else if controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) && !far.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Delete CR only when a finalizer and DeletionTimestamp are set
 		r.Log.Info("CR's deletion timestamp is not zero, and FAR finalizer exists", "CR Name", req.Name)
@@ -214,7 +216,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		if err := updateConditions(v1alpha1.FenceAgentSucceeded, &far.Status.Conditions, r.Log); err != nil {
 			return emptyResult, err
 		}
-		return ctrl.Result{Requeue: true}, nil
+		return requeueImmediately, nil
 	}
 	if meta.IsStatusConditionTrue(far.Status.Conditions, v1alpha1.FenceAgentActionSucceededType) &&
 		!meta.IsStatusConditionTrue(far.Status.Conditions, commonConditions.SucceededType) {
@@ -247,7 +249,7 @@ func isTimedOutByNHC(far *v1alpha1.FenceAgentsRemediation) bool {
 func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) error {
 	if err := r.Client.Status().Update(ctx, far); err != nil {
 		if !apiErrors.IsConflict(err) {
-			r.Log.Error(err, "failed to update far status")
+			r.Log.Error(err, "failed to update far status in case on a non conflict")
 		}
 		return err
 	}
