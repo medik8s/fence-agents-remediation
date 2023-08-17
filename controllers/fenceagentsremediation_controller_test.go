@@ -50,7 +50,7 @@ const (
 	vaName2        = "va-test-2"
 
 	// intervals
-	timeoutDeletion = 10 * time.Second // this timeout is used after all the other steps have finished successfully
+	timeoutDeletion = 2 * time.Second // this timeout is used after all the other steps have finished successfully
 	pollInterval    = 250 * time.Millisecond
 )
 
@@ -166,7 +166,8 @@ var _ = Describe("FAR Controller", func() {
 				testVADeletion(vaName2, resourceDeletionWasTriggered)
 				testPodDeletion(testPodName, resourceDeletionWasTriggered)
 
-				By("Having Succeeded, FenceAgentActionSucceeded conditions set to true, and Processing set to false")
+				By("Verifying correct conditions for successfull remediation")
+				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
 				verifyStatusCondition(workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
 				verifyStatusCondition(workerNode, v1alpha1.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionTrue))
 				verifyStatusCondition(workerNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionTrue))
@@ -184,7 +185,7 @@ var _ = Describe("FAR Controller", func() {
 
 				By("Not having finalizer")
 				farNamespacedName.Name = underTestFAR.Name
-				Eventually(func(g Gomega) bool {
+				Consistently(func(g Gomega) bool {
 					g.Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
 					return controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)
 				}, 100*time.Millisecond, 10*time.Millisecond).Should(BeFalse(), "finalizer shouldn't be added")
@@ -199,7 +200,8 @@ var _ = Describe("FAR Controller", func() {
 				testVADeletion(vaName2, resourceDeletionWasTriggered)
 				testPodDeletion(testPodName, resourceDeletionWasTriggered)
 
-				By("Having all three conditions set to false")
+				By("Verifying correct conditions for unsuccessfull remediation")
+				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
 				verifyStatusCondition(dummyNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
 				verifyStatusCondition(dummyNode, v1alpha1.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
 				verifyStatusCondition(dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))

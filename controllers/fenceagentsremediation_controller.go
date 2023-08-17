@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
@@ -30,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilErrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/wait"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -83,7 +85,7 @@ func (r *FenceAgentsRemediationReconciler) SetupWithManager(mgr ctrl.Manager) er
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.2/pkg/reconcile
 func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (finalResult ctrl.Result, finalErr error) {
 	r.Log.Info("Begin FenceAgentsRemediation Reconcile")
-
+	defer r.Log.Info("Finish FenceAgentsRemediation Reconcile")
 	// Reconcile requeue results
 	emptyResult := ctrl.Result{}
 	requeueImmediately := ctrl.Result{Requeue: true}
@@ -109,7 +111,6 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			}
 			finalErr = utilErrors.NewAggregate([]error{updateErr, finalErr})
 		}
-		r.Log.Info("Finish FenceAgentsRemediation Reconcile")
 	}()
 
 	// Validate FAR CR name to match a nodeName from the cluster
@@ -121,14 +122,14 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	}
 	if !valid {
 		r.Log.Error(err, "Didn't find a node matching the CR's name", "CR's Name", req.Name)
-		err := updateConditions(v1alpha1.RemediationFinishedNodeNotFound, &far.Status.Conditions, r.Log)
+		err := updateConditions(v1alpha1.RemediationFinishedNodeNotFound, far, r.Log)
 		return emptyResult, err
 	}
 
 	// Check NHC timeout annotation
 	if isTimedOutByNHC(far) {
 		r.Log.Info("FAR remediation was stopped by Node Healthcheck Operator")
-		err := updateConditions(v1alpha1.RemediationInterruptedByNHC, &far.Status.Conditions, r.Log)
+		err := updateConditions(v1alpha1.RemediationInterruptedByNHC, far, r.Log)
 		return emptyResult, err
 	}
 
@@ -140,7 +141,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 		r.Log.Info("Finalizer was added", "CR Name", req.Name)
 
-		if err := updateConditions(v1alpha1.RemediationStarted, &far.Status.Conditions, r.Log); err != nil {
+		if err := updateConditions(v1alpha1.RemediationStarted, far, r.Log); err != nil {
 			return emptyResult, err
 		}
 		return requeueImmediately, nil
@@ -213,7 +214,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		r.Log.Info("Fence Agent command was finished successfully", "Fence Agent", far.Spec.Agent, "Node name", req.Name, "Response", SuccessFAResponse)
-		if err := updateConditions(v1alpha1.FenceAgentSucceeded, &far.Status.Conditions, r.Log); err != nil {
+		if err := updateConditions(v1alpha1.FenceAgentSucceeded, far, r.Log); err != nil {
 			return emptyResult, err
 		}
 		return requeueImmediately, nil
@@ -226,8 +227,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			r.Log.Error(err, "Manual workload deletion has failed", "CR's Name", req.Name)
 			return emptyResult, err
 		}
-
-		if err := updateConditions(v1alpha1.RemediationFinishedSuccessfully, &far.Status.Conditions, r.Log); err != nil {
+		if err := updateConditions(v1alpha1.RemediationFinishedSuccessfully, far, r.Log); err != nil {
 			return emptyResult, err
 		}
 		r.Log.Info("FenceAgentsRemediation CR has completed to remediate the node", "Node Name", req.Name)
@@ -253,23 +253,42 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 		}
 		return err
 	}
+	// Wait until the cache is updated in order to prevent reading a stale status in the next reconcile
+	// and making wrong decisions based on it.
+	pollingTimeout := 5 * time.Second
+	pollErr := wait.PollUntilContextTimeout(ctx, 200*time.Millisecond, pollingTimeout, true, func(ctx context.Context) (bool, error) {
+		tmpFar := &v1alpha1.FenceAgentsRemediation{}
+		if err := r.Client.Get(ctx, client.ObjectKeyFromObject(far), tmpFar); err != nil {
+			if apiErrors.IsNotFound(err) {
+				// nothing we can do anymore
+				return true, nil
+			}
+			return false, nil
+		}
+		return tmpFar.Status.LastUpdateTime != nil && (tmpFar.Status.LastUpdateTime.Equal(far.Status.LastUpdateTime) || tmpFar.Status.LastUpdateTime.After(far.Status.LastUpdateTime.Time)), nil
+	})
+	if pollErr != nil {
+		return fmt.Errorf("failed to wait for updated cache to be updated in status update after %s seconds of timeout - %w", pollingTimeout.String(), pollErr)
+	}
 	return nil
 }
 
 // updateConditions updates the status conditions of a FenceAgentsRemediation object based on the provided ConditionsChangeReason.
 // return an error if an unknown ConditionsChangeReason is provided
-func updateConditions(reason v1alpha1.ConditionsChangeReason, currentConditions *[]metav1.Condition, log logr.Logger) error {
+func updateConditions(reason v1alpha1.ConditionsChangeReason, far *v1alpha1.FenceAgentsRemediation, log logr.Logger) error {
 
 	var (
 		processingConditionStatus, fenceAgentActionSucceededConditionStatus, succeededConditionStatus metav1.ConditionStatus
 		conditionMessage                                                                              string
 	)
+	currentConditions := &far.Status.Conditions
+	conditionHasBeenChanged := false
+
 	// RemediationFinishedNodeNotFound and RemediationInterruptedByNHC reasons can happen at any time the Reconcile runs
 	// Except these two reasons, there are another three reasons that can only happen one after another
 	// RemediationStarted will always be the first reason (out of these three)
 	// FenceAgentSucceeded can only happen after RemediationStarted happened
 	// RemediationFinishedSuccessfully can only happen after FenceAgentSucceeded happened
-
 	switch reason {
 	case v1alpha1.RemediationFinishedNodeNotFound, v1alpha1.RemediationInterruptedByNHC:
 		processingConditionStatus = metav1.ConditionFalse
@@ -304,7 +323,6 @@ func updateConditions(reason v1alpha1.ConditionsChangeReason, currentConditions 
 		return err
 	}
 
-	log.Info("updating Status Condition", "processingConditionStatus", processingConditionStatus, "fenceAgentActionSucceededConditionStatus", fenceAgentActionSucceededConditionStatus, "succededConditionStatus", succeededConditionStatus, "reason", string(reason))
 	// if the requested Status.Conditions.Processing is different then the current one, then update Status.Conditions.Processing value
 	if processingConditionStatus != "" && !meta.IsStatusConditionPresentAndEqual(*currentConditions, commonConditions.ProcessingType, processingConditionStatus) {
 		meta.SetStatusCondition(currentConditions, metav1.Condition{
@@ -313,6 +331,7 @@ func updateConditions(reason v1alpha1.ConditionsChangeReason, currentConditions 
 			Reason:  string(reason),
 			Message: conditionMessage,
 		})
+		conditionHasBeenChanged = true
 	}
 
 	// if the requested Status.Conditions.FenceAgentActionSucceeded is different then the current one, then update Status.Conditions.FenceAgentActionSucceeded value
@@ -323,6 +342,7 @@ func updateConditions(reason v1alpha1.ConditionsChangeReason, currentConditions 
 			Reason:  string(reason),
 			Message: conditionMessage,
 		})
+		conditionHasBeenChanged = true
 	}
 
 	// if the requested Status.Conditions.Succeeded is different then the current one, then update Status.Conditions.Succeeded value
@@ -333,7 +353,14 @@ func updateConditions(reason v1alpha1.ConditionsChangeReason, currentConditions 
 			Reason:  string(reason),
 			Message: conditionMessage,
 		})
+		conditionHasBeenChanged = true
 	}
+	// Only update lastUpdate when there were other changes
+	if conditionHasBeenChanged {
+		now := metav1.Now()
+		far.Status.LastUpdateTime = &now
+	}
+	log.Info("Updating Status Condition", "processingConditionStatus", processingConditionStatus, "fenceAgentActionSucceededConditionStatus", fenceAgentActionSucceededConditionStatus, "succededConditionStatus", succeededConditionStatus, "reason", string(reason), "LastUpdateTime", far.Status.LastUpdateTime)
 
 	return nil
 }
