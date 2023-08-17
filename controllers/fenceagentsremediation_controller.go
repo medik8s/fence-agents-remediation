@@ -268,7 +268,7 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 		return tmpFar.Status.LastUpdateTime != nil && (tmpFar.Status.LastUpdateTime.Equal(far.Status.LastUpdateTime) || tmpFar.Status.LastUpdateTime.After(far.Status.LastUpdateTime.Time)), nil
 	})
 	if pollErr != nil {
-		return fmt.Errorf("failed to wait for updated cache to be updated in status update after %s seconds of timeout - %w", pollingTimeout.String(), pollErr)
+		return fmt.Errorf("failed to wait for updated cache to be updated in status update after %f seconds of timeout - %w", pollingTimeout.Seconds(), pollErr)
 	}
 	return nil
 }
