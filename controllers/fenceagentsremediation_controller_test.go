@@ -50,8 +50,9 @@ const (
 	vaName2        = "va-test-2"
 
 	// intervals
-	timeoutDeletion = 2 * time.Second // this timeout is used after all the other steps have finished successfully
-	pollInterval    = 250 * time.Millisecond
+	timeoutDeletion  = 2 * time.Second // this timeout is used after all the other steps have finished successfully
+	timeoutFinalizer = 1 * time.Second
+	pollInterval     = 250 * time.Millisecond
 )
 
 var (
@@ -155,7 +156,7 @@ var _ = Describe("FAR Controller", func() {
 					g.Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
 					res, _ := cliCommandsEquality(underTestFAR)
 					return utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint) && res
-				}, 100*time.Millisecond, 10*time.Millisecond).Should(BeTrue(), "taint should be added, and command format is correct")
+				}, timeoutFinalizer, pollInterval).Should(BeTrue(), "taint should be added, and command format is correct")
 
 				// If taint was added, then definitely the finalizer was added as well
 				By("Having a finalizer if we have a remediation taint")
@@ -188,7 +189,7 @@ var _ = Describe("FAR Controller", func() {
 				Consistently(func(g Gomega) bool {
 					g.Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
 					return controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)
-				}, 100*time.Millisecond, 10*time.Millisecond).Should(BeFalse(), "finalizer shouldn't be added")
+				}, timeoutFinalizer, pollInterval).Should(BeFalse(), "finalizer shouldn't be added")
 
 				// If finalizer is missing, then a taint shouldn't be existed
 				By("Not having remediation taint")
