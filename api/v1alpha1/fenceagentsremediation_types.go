@@ -84,6 +84,14 @@ type FenceAgentsRemediationStatus struct {
 	//+optional
 	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="conditions",xDescriptors="urn:alm:descriptor:io.kubernetes.conditions"
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// LastUpdateTime is the last time the status was updated.
+	//
+	//+optional
+	//+kubebuilder:validation:Type=string
+	//+kubebuilder:validation:Format=date-time
+	//+operator-sdk:csv:customresourcedefinitions:type=status
+	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
 }
 
 //+kubebuilder:object:root=true

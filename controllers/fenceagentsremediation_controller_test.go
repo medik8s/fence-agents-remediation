@@ -50,8 +50,9 @@ const (
 	vaName2        = "va-test-2"
 
 	// intervals
-	timeoutDeletion = 10 * time.Second // this timeout is used after all the other steps have finished successfully
-	pollInterval    = 250 * time.Millisecond
+	timeoutDeletion  = 2 * time.Second // this timeout is used after all the other steps have finished successfully
+	timeoutFinalizer = 1 * time.Second
+	pollInterval     = 250 * time.Millisecond
 )
 
 var (
@@ -155,7 +156,7 @@ var _ = Describe("FAR Controller", func() {
 					g.Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
 					res, _ := cliCommandsEquality(underTestFAR)
 					return utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint) && res
-				}, 100*time.Millisecond, 10*time.Millisecond).Should(BeTrue(), "taint should be added, and command format is correct")
+				}, timeoutFinalizer, pollInterval).Should(BeTrue(), "taint should be added, and command format is correct")
 
 				// If taint was added, then definitely the finalizer was added as well
 				By("Having a finalizer if we have a remediation taint")
@@ -166,7 +167,8 @@ var _ = Describe("FAR Controller", func() {
 				testVADeletion(vaName2, resourceDeletionWasTriggered)
 				testPodDeletion(testPodName, resourceDeletionWasTriggered)
 
-				By("Having Succeeded, FenceAgentActionSucceeded conditions set to true, and Processing set to false")
+				By("Verifying correct conditions for successfull remediation")
+				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
 				verifyStatusCondition(workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
 				verifyStatusCondition(workerNode, v1alpha1.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionTrue))
 				verifyStatusCondition(workerNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionTrue))
@@ -184,10 +186,10 @@ var _ = Describe("FAR Controller", func() {
 
 				By("Not having finalizer")
 				farNamespacedName.Name = underTestFAR.Name
-				Eventually(func(g Gomega) bool {
+				Consistently(func(g Gomega) bool {
 					g.Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
 					return controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)
-				}, 100*time.Millisecond, 10*time.Millisecond).Should(BeFalse(), "finalizer shouldn't be added")
+				}, timeoutFinalizer, pollInterval).Should(BeFalse(), "finalizer shouldn't be added")
 
 				// If finalizer is missing, then a taint shouldn't be existed
 				By("Not having remediation taint")
@@ -199,7 +201,8 @@ var _ = Describe("FAR Controller", func() {
 				testVADeletion(vaName2, resourceDeletionWasTriggered)
 				testPodDeletion(testPodName, resourceDeletionWasTriggered)
 
-				By("Having all three conditions set to false")
+				By("Verifying correct conditions for unsuccessfull remediation")
+				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
 				verifyStatusCondition(dummyNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
 				verifyStatusCondition(dummyNode, v1alpha1.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
 				verifyStatusCondition(dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
