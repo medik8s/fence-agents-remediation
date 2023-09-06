@@ -12,7 +12,7 @@ spec:
     listKind: FenceAgentsRemediationTemplateList
     plural: fenceagentsremediationtemplates
     shortNames:
-    - fart
+    - fartemplate
     singular: fenceagentsremediationtemplate
   scope: Namespaced
   versions:
