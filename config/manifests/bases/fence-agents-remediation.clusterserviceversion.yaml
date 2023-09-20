@@ -76,13 +76,21 @@ spec:
         displayName: Shared Parameters
         path: template.spec.sharedparameters
       version: v1alpha1
-  description: "Fence Agents Remediation Operator (FAR)\n\nThe operator will remediate/fence
-    a node when a FenceAgentsRemediation (far) custom resource exists with the node's
-    name.\nFAR uses an existing set of upstream fencing agents for environments with
-    a \ntraditional API end-point (e.g., IPMI) for power cycling cluster nodes.\n\nThe
-    operator is recommended to be used with Node Healthcheck Operator for easier and
-    smoother experience,\nbut it can also work as a standalonde remediator for the
-    more advanced user.\n"
+  description: |
+    Fence Agents Remediation (*FAR*) is a Kubernetes operator that provides high availability for Kubernetes nodes in an automatic manner.
+    Using a management interface or traditional API, FAR runs a fence agent to remediate a node from an unhealthy state by power cycling the node.
+    By doing so it minimizes downtime for stateful applications and restores compute capacity if transient failures occur.
+
+    FAR is one of the remediator operators by [Medik8s](https://www.medik8s.io/remediation/remediation/),
+    such as [Self Node Remediation](https://github.com/medik8s/self-node-remediation) and [Machine Deletion Remediation](https://github.com/medik8s/machine-deletion-remediation),
+    that were designed to run with the Node HealthCheck Operator [(NHC)](https://github.com/medik8s/node-healthcheck-operator) as an external remediator.
+    It is recommended to use FAR with NHC for an easier and smoother experience, but it can be used as a standalone remediator for the more experienced user.
+
+    FAR is recommended when a node becomes unhealthy, and we want to completely isolate the node from a cluster, since we can not “trust” the unhealthy node,
+    to prevent it from accessing the shared resources like [RWO volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes).
+    Moreover, FAR is robust as it can remediate an unhealthy node using a management interface (e.g., IPMI) while still keeping control plane connectivity,
+    and it is diverse since it includes [numerous fence agents](https://github.com/ClusterLabs/fence-agents) to choose from, and each one of them
+    is designed for different types of clusters, such as bare metal servers, virtual machines, cloud platforms, etc.
   displayName: Fence Agents Remediation Operator
   icon:
   - base64data: base64EncodedIcon
