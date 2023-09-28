@@ -247,6 +247,11 @@ func isTimedOutByNHC(far *v1alpha1.FenceAgentsRemediation) bool {
 
 // updateStatus updates the CR status, and returns an error if it fails
 func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) error {
+	// When FAR doesn't include a finalizer after successful remediation then there is no need to update the status, since it will be removed soon.
+	if !controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) && meta.IsStatusConditionTrue(far.Status.Conditions, v1alpha1.FenceAgentActionSucceededType) &&
+		meta.IsStatusConditionTrue(far.Status.Conditions, commonConditions.SucceededType) {
+		return nil
+	}
 	if err := r.Client.Status().Update(ctx, far); err != nil {
 		if !apiErrors.IsConflict(err) {
 			r.Log.Error(err, "failed to update far status in case on a non conflict")
