@@ -250,7 +250,7 @@ bundle-reset-date: ## Reset bundle's createdAt
 	sed -r -i "s|createdAt: .*|createdAt: \"\"|;" ${BUNDLE_CSV}
 
 .PHONY: bundle-community
-bundle-community: ## Update displayName field in the bundle's CSV
+bundle-community: bundle ## Update displayName field in the bundle's CSV
 	sed -r -i "s|displayName: Fence Agents Remediation Operator|displayName: Fence Agents Remediation Operator - Community Edition|;" ${BUNDLE_CSV}
 	$(MAKE) bundle-update
 
