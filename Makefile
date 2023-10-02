@@ -86,6 +86,9 @@ CATALOG_IMG ?= $(IMAGE_TAG_BASE)-operator-catalog:$(IMAGE_TAG)
 # Image URL to use all building/pushing image targets
 IMG ?= $(IMAGE_TAG_BASE)-operator:$(IMAGE_TAG)
 
+# Image URL to use for building/pushing fencing agents image
+JOB_IMG ?= $(IMAGE_TAG_BASE)-fencing-agents:$(IMAGE_TAG)
+
 # BUNDLE_GEN_FLAGS are the flags passed to the operator-sdk generate bundle command
 BUNDLE_GEN_FLAGS ?= -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 
@@ -208,6 +211,17 @@ docker-build: test-no-verify ## Build docker image with the manager.
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
+
+
+.PHONY: docker-build-fa
+docker-build-fa: test-no-verify ## Build docker image with the fencing-agents.
+	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	docker build -f Dockerfile_fencing_agents -t ${JOB_IMG} .
+
+.PHONY: docker-push-fa
+docker-push-fa: ## Push docker image with the fencing agents.
+	docker push ${JOB_IMG}
+
 
 ##@ Deployment
 

@@ -30,16 +30,10 @@ COPY .git/ .git/
 # Build
 RUN ./hack/build.sh
 
-FROM quay.io/centos/centos:stream8
-
+# Use ubi8 micro as base image to package the manager binary
+FROM registry.access.redhat.com/ubi8/ubi-micro:latest
 WORKDIR /
 COPY --from=builder /workspace/manager .
-
-# Add Fence Agents and fence-agents-aws packages
-RUN dnf install -y dnf-plugins-core \
-    && dnf config-manager --set-enabled ha \
-    && dnf install -y fence-agents-all fence-agents-aws \
-    && dnf clean all -y
-
 USER 65532:65532
+
 ENTRYPOINT ["/manager"]

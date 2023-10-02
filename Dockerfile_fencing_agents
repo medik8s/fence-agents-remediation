@@ -1,0 +1,7 @@
+FROM quay.io/centos/centos:stream8
+
+# Add Fence Agents and fence-agents-aws packages
+RUN dnf install -y dnf-plugins-core \
+    && dnf config-manager --set-enabled ha \
+    && dnf install -y fence-agents-all fence-agents-aws \
+    && dnf clean all -y
