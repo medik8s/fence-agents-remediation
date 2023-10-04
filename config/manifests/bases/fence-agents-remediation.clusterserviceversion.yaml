@@ -7,8 +7,8 @@ metadata:
     categories: OpenShift Optional
     containerImage: ""
     createdAt: ""
-    description: Fence Agents Remediation Operator can help to increase availability
-      of workloads in an automatic manner using well-known fence agents.
+    description: Fence Agents Remediation Operator can help to increase workload availability
+      in an automatic manner using well-known fence agents.
     olm.skipRange: '>=0.0.1'
     repository: https://github.com/medik8s/fence-agents-remediation
     support: Medik8s
@@ -77,7 +77,7 @@ spec:
         path: template.spec.sharedparameters
       version: v1alpha1
   description: |
-    Fence Agents Remediation (*FAR*) is a Kubernetes operator that can help to increase availability of workloads in an automatic manner using well-known fence agents.
+    Fence Agents Remediation (*FAR*) is a Kubernetes operator that can help to increase workload availability in an automatic manner using well-known fence agents.
     Using a management interface or traditional API, FAR runs a fence agent to remediate a node from an unhealthy state by power cycling the node.
     By doing so it minimizes downtime for stateful applications and restores compute capacity if transient failures occur.
 
