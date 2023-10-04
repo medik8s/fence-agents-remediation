@@ -16,7 +16,10 @@ import (
 func GetFenceAgentsRemediationPod(r client.Reader) (*corev1.Pod, error) {
 	podList := &corev1.PodList{}
 	selector := labels.NewSelector()
-	requirement, _ := labels.NewRequirement("app.kubernetes.io/name", selection.Equals, []string{"fence-agents-remediation-operator"})
+	requirement, err := labels.NewRequirement("app.kubernetes.io/name", selection.Equals, []string{"fence-agents-remediation-operator"})
+	if err != nil {
+		return nil, fmt.Errorf("failed creating FAR label - %w", err)
+	}
 	selector = selector.Add(*requirement)
 	podNamespace, err := GetDeploymentNamespace()
 	if err != nil {
