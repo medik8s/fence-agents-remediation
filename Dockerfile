@@ -38,7 +38,7 @@ COPY --from=builder /workspace/manager .
 # Add Fence Agents and fence-agents-aws packages
 RUN dnf install -y dnf-plugins-core \
     && dnf config-manager --set-enabled ha \
-    && dnf install -y fence-agents-all fence-agents-aws \
+    && dnf install -y fence-agents-all fence-agents-aws fence-agents-azure-arm \
     && dnf clean all -y
 
 USER 65532:65532
