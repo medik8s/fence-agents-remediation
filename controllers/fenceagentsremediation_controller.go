@@ -25,6 +25,7 @@ import (
 	"github.com/go-logr/logr"
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 	commonConditions "github.com/medik8s/common/pkg/conditions"
+	commonResources "github.com/medik8s/common/pkg/resources"
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -224,7 +225,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		!meta.IsStatusConditionTrue(far.Status.Conditions, commonConditions.SucceededType) {
 		// Fence agent action succeeded, and now we try to remove workloads (pods and their volume attachments)
 		r.Log.Info("Manual workload deletion", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
-		if err := utils.DeleteResources(ctx, r.Client, req.Name); err != nil {
+		if err := commonResources.DeletePods(ctx, r.Client, req.Name); err != nil {
 			r.Log.Error(err, "Manual workload deletion has failed", "CR's Name", req.Name)
 			return emptyResult, err
 		}
