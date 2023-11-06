@@ -162,9 +162,7 @@ var _ = Describe("FAR Controller", func() {
 				By("Having a finalizer if we have a remediation taint")
 				Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
 
-				By("Not having any VAs nor the test pod")
-				testVADeletion(vaName1, resourceDeletionWasTriggered)
-				testVADeletion(vaName2, resourceDeletionWasTriggered)
+				By("Not having any test pod")
 				testPodDeletion(testPodName, resourceDeletionWasTriggered)
 
 				By("Verifying correct conditions for successfull remediation")
@@ -195,10 +193,8 @@ var _ = Describe("FAR Controller", func() {
 				By("Not having remediation taint")
 				Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeFalse())
 
-				By("Still having all the VAs and one test pod")
+				By("Still having one test pod")
 				resourceDeletionWasTriggered = false
-				testVADeletion(vaName1, resourceDeletionWasTriggered)
-				testVADeletion(vaName2, resourceDeletionWasTriggered)
 				testPodDeletion(testPodName, resourceDeletionWasTriggered)
 
 				By("Verifying correct conditions for unsuccessfull remediation")
@@ -312,34 +308,6 @@ func cliCommandsEquality(far *v1alpha1.FenceAgentsRemediation) (bool, error) {
 
 	fmt.Printf("%s is the command from production environment, and %s is the hardcoded expected command from test environment.\n", mocksExecuter.command, expectedCommand)
 	return isEqualStringLists(mocksExecuter.command, expectedCommand), nil
-}
-
-// TODO: Think about using Generics for the next two functions
-
-// testVADeletion tests whether the volume attachment no longer exist for successful FAR CR
-// and consistently check if the volume attachment exist and was not deleted
-func testVADeletion(vaName string, resourceDeletionWasTriggered bool) {
-	vaKey := client.ObjectKey{
-		Namespace: defaultNamespace,
-		Name:      vaName,
-	}
-	if resourceDeletionWasTriggered {
-		EventuallyWithOffset(1, func() bool {
-			va := &storagev1.VolumeAttachment{}
-			err := k8sClient.Get(context.Background(), vaKey, va)
-			return apierrors.IsNotFound(err)
-
-		}, timeoutDeletion, pollInterval).Should(BeTrue())
-		log.Info("Volume attachment is no longer exist", "va", vaName)
-	} else {
-		ConsistentlyWithOffset(1, func() bool {
-			va := &storagev1.VolumeAttachment{}
-			err := k8sClient.Get(context.Background(), vaKey, va)
-			return apierrors.IsNotFound(err)
-
-		}, timeoutDeletion, pollInterval).Should(BeFalse())
-		log.Info("Volume attachment exist", "va", vaName)
-	}
 }
 
 // testPodDeletion tests whether the pod no longer exist for successful FAR CR

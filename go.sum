@@ -76,8 +76,8 @@ github.com/mailru/easyjson v0.7.7 h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0
 github.com/mailru/easyjson v0.7.7/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
 github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 h1:jWpvCLoY8Z/e3VKvlsiIGKtc+UG6U5vzxaoagmhXfyg=
 github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0/go.mod h1:QUyp042oQthUoa9bqDv0ER0wrtXnBruoNd7aNjkbP+k=
-github.com/medik8s/common v1.7.0 h1:JwimhWigPTAszGG2jYJmh+uVHq2nFUPRRljw7ZhlQhg=
-github.com/medik8s/common v1.7.0/go.mod h1:ZT/3hfMXJLmZEcqmxRWB5LGC8Wl+qKGGQ4zM8hOE7PY=
+github.com/medik8s/common v1.9.0 h1:nMMffmj+e0l0xRB0RfpsbdDpW9upXU2MFeGGADJlwyE=
+github.com/medik8s/common v1.9.0/go.mod h1:ZT/3hfMXJLmZEcqmxRWB5LGC8Wl+qKGGQ4zM8hOE7PY=
 github.com/moby/spdystream v0.2.0 h1:cjW1zVyyoiM0T7b6UoySUFqzXMoqRckQtXwGPiBhOM8=
 github.com/moby/spdystream v0.2.0/go.mod h1:f7i0iNDQJ059oMTcWxx8MA/zKFIuD/lY+0GqbN2Wy8c=
 github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
