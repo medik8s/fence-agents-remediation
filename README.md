@@ -1,9 +1,9 @@
 # Fence Agents Remediation (FAR)
 
-The fence-agents-remediation (*FAR*) is a Kubrenetes operator generated using the [operator-sdk](https://github.com/operator-framework/operator-sdk), and it is part of [Medik8s](https://github.com/medik8s) operators. This operator is desgined to run an existing set of [upstream fencing agents](https://github.com/ClusterLabs/fence-agents) for environments with a traditional API end-point (e.g., [IPMI](https://en.wikipedia.org/wiki/Intelligent_Platform_Management_Interface)) for power cycling cluster nodes.
+The fence-agents-remediation (*FAR*) is a Kubernetes operator generated using the [operator-sdk](https://github.com/operator-framework/operator-sdk), and it is part of [Medik8s](https://github.com/medik8s) operators. This operator is designed to run an existing set of [upstream fencing agents](https://github.com/ClusterLabs/fence-agents) for environments with a traditional API end-point (e.g., [IPMI](https://en.wikipedia.org/wiki/Intelligent_Platform_Management_Interface)) for power cycling cluster nodes.
 
 The operator watches for new or deleted custom resources (CRs) called `FenceAgentsRemediation` (or `far`) which trigger a fence-agent to remediate a node, based on the CR's name.
-FAR operator was designed to run with the Node HealthCheck Operator [(NHC)](https://github.com/medik8s/node-healthcheck-operator) as extrenal remediatior for easier and smoother experience, but it can be used as a standalone remeidatior for the more advanced user.
+FAR operator was designed to run with the Node HealthCheck Operator [(NHC)](https://github.com/medik8s/node-healthcheck-operator) as external remediator for easier and smoother experience, but it can be used as a standalone remediation for the more advanced user.
 FAR joins Medik8s as another remediator alternative for NHC, apart from [Self Node Remediation](https://github.com/medik8s/self-node-remediation) and [Machine Deletion Remediation](https://github.com/medik8s/machine-deletion-remediation) which are also from the [Medik8s](https://www.medik8s.io/) group.
 
 FAR operator includes plenty of well known [fence-agents](https://github.com/medik8s/fence-agents-remediation/blob/main/Dockerfile#L31) to choose from (see [here](https://github.com/ClusterLabs/fence-agents/tree/main/agents) for the full list), thanks to the upstream [fence-agents repo](https://github.com/ClusterLabs/fence-agents) from *ClusterLabs*.
@@ -22,7 +22,7 @@ There are two ways to install the operator:
 After every PR is merged to the `main` branch, then the images are built and pushed to [`quay.io`](quay.io/medik8s/fence-agents-remediation-operator-bundle) (due to the [*post-submit* job](https://github.com/medik8s/fence-agents-remediation/blob/main/.github/workflows/post-submit.yaml) ).
 For deployment of FAR using these images you need:
 
-* Install `operator-sdk` binary from their [offical website](https://sdk.operatorframework.io/docs/installation/#install-from-github-release).
+* Install `operator-sdk` binary from their [official website](https://sdk.operatorframework.io/docs/installation/#install-from-github-release).
 
 * A running OpenShift cluster, or a Kubernetes cluster with Operator Lifecycle Manager ([OLM](https://olm.operatorframework.io/docs/)) installed (to install it run `operator-sdk olm install`).
 
@@ -32,17 +32,17 @@ Then, run `operator-sdk run bundle quay.io/medik8s/fence-agents-remediation-oper
 
 ### Build and deploy from sources
 
-* Clone FAR repoistory.
+* Clone FAR repository.
 
-* Follow OLM's [instructions](https://sdk.operatorframework.io/docs/building-operators/golang/tutorial/#configure-the-operators-image-registry) on how to configure the operator's image reistry (build and push the operator container).
+* Follow OLM's [instructions](https://sdk.operatorframework.io/docs/building-operators/golang/tutorial/#configure-the-operators-image-registry) on how to configure the operator's image registry (build and push the operator container).
 * Run FAR using one the [suggested options from OLM](https://sdk.operatorframework.io/docs/building-operators/golang/tutorial/#run-the-operator) to run it locally, in the cluster, and in the cluster using bundle container (similar to the [above installation](#deploy-the-latest-version)).
 
 ## Usage
 
-FAR is recommended for using with NHC to create a complete solution for unhealty nodes, since NHC detects unhelthy nodes and creates an extrenal remediation CR, e.g., FAR's CR, for unhealthy nodes.
-This automated way is preferable as it gives the responsibily on FAR CRs (creation and deletion) to NHC, even though FAR can also act as standalone remediator, but it with expense from the administrator to create and delete CRs.
+FAR is recommended for using with NHC to create a complete solution for unhealthy nodes, since NHC detects unhealthy nodes and creates an external remediation CR, e.g., FAR's CR, for unhealthy nodes.
+This automated way is preferable as it gives the responsibility on FAR CRs (creation and deletion) to NHC, even though FAR can also act as standalone remediator, but it with expense from the administrator to create and delete CRs.
 
-Either way a user must be familier with fence agent to be used - Knowing its parameters and any other requirements on the cluster (e.g., fence_ipmilan needs machines that support IPMI).
+Either way a user must be familiar with fence agent to be used - Knowing its parameters and any other requirements on the cluster (e.g., fence_ipmilan needs machines that support IPMI).
 
 ### FAR with NHC
 
@@ -85,7 +85,7 @@ spec:
     namespace: default
 ```
 
-NHC creates FAR CR using FAR Template after it detects an unhelathy node (according to NHC unhealthy conditions).
+NHC creates FAR CR using FAR Template after it detects an unhealthy node (according to NHC unhealthy conditions).
 FAR CRs are deleted by NHC after it sees the Node is healthy again.
 
 ### Standalone FAR
