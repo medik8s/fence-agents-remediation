@@ -193,7 +193,7 @@ bundle-run: operator-sdk ## Run bundle image. Default NS is "openshift-operators
 
 .PHONY: bundle-cleanup
 bundle-cleanup: operator-sdk ## Remove bundle installed via bundle-run
-	$(OPERATOR_SDK) -n openshift-operators cleanup $(OPERATOR_NAME)
+	$(OPERATOR_SDK) -n $(BUNDLE_RUN_NAMESPACE) cleanup $(OPERATOR_NAME)
 
 ##@ Build
 
