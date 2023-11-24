@@ -415,6 +415,6 @@ func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, oldPodCreat
 	By("checking if the status conditions match a successful remediation")
 	conditionStatusPointer := func(status metav1.ConditionStatus) *metav1.ConditionStatus { return &status }
 	verifyStatusCondition(nodeName, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
-	verifyStatusCondition(nodeName, v1alpha1.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionTrue))
+	verifyStatusCondition(nodeName, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionTrue))
 	verifyStatusCondition(nodeName, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionTrue))
 }

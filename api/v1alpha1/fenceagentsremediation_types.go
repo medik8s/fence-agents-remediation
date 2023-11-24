@@ -28,14 +28,6 @@ const (
 	FARFinalizer string = "fence-agents-remediation.medik8s.io/far-finalizer"
 	// Taints
 	FARNoExecuteTaintKey = "medik8s.io/fence-agents-remediation"
-	// FenceAgentActionSucceededType is the condition type used to signal whether the Fence Agent action was succeeded successfully or not
-	FenceAgentActionSucceededType = "FenceAgentActionSucceeded"
-	// condition messages
-	RemediationFinishedNodeNotFoundConditionMessage = "FAR CR name doesn't match a node name"
-	RemediationInterruptedByNHCConditionMessage     = "Node Healthcheck timeout annotation has been set"
-	RemediationStartedConditionMessage              = "FAR CR was found, its name matches one of the cluster nodes, and a finalizer was set to the CR"
-	FenceAgentSucceededConditionMessage             = "FAR taint was added and the fence agent command has been created and executed successfully"
-	RemediationFinishedSuccessfullyConditionMessage = "The unhealthy node was fully remediated (it was tainted, fenced using FA and all the node resources have been deleted)"
 )
 
 // ConditionsChangeReason represents the reason of updating the some or all the conditions
