@@ -29,7 +29,7 @@ const (
 type ConditionsChangeReason string
 
 const (
-	// RemediationFinishedNodeNotFound - CR was found but its name doesn't matche a node
+	// RemediationFinishedNodeNotFound - CR was found but its name doesn't match any node
 	RemediationFinishedNodeNotFound ConditionsChangeReason = "RemediationFinishedNodeNotFound"
 	// RemediationInterruptedByNHC - Remediation was interrupted by NHC timeout annotation
 	RemediationInterruptedByNHC ConditionsChangeReason = "RemediationInterruptedByNHC"
@@ -142,7 +142,7 @@ func UpdateConditions(reason ConditionsChangeReason, far *v1alpha1.FenceAgentsRe
 		now := metav1.Now()
 		far.Status.LastUpdateTime = &now
 	}
-	log.Info("Updating Status Condition", "processingConditionStatus", processingConditionStatus, "fenceAgentActionSucceededConditionStatus", fenceAgentActionSucceededConditionStatus, "succededConditionStatus", succeededConditionStatus, "reason", string(reason), "LastUpdateTime", far.Status.LastUpdateTime)
+	log.Info("Updating Status Condition", "processingConditionStatus", processingConditionStatus, "fenceAgentActionSucceededConditionStatus", fenceAgentActionSucceededConditionStatus, "succeededConditionStatus", succeededConditionStatus, "reason", string(reason), "LastUpdateTime", far.Status.LastUpdateTime)
 
 	return nil
 }

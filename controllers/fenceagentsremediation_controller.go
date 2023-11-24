@@ -181,7 +181,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 
 	if meta.IsStatusConditionTrue(far.Status.Conditions, commonConditions.ProcessingType) &&
 		!meta.IsStatusConditionTrue(far.Status.Conditions, utils.FenceAgentActionSucceededType) {
-		// The remeditation has already been processed, thus we can begin with exuecting the FA for the node
+		// The remeditation has already been processed, thus we can begin with executing the FA for the node
 
 		if r.Executor.Exists(far.GetUID()) {
 			r.Log.Info("A Fence Agent is already running", "Fence Agent", far.Spec.Agent, "Node Name", req.Name, "FAR uid", far.GetUID())
@@ -234,7 +234,7 @@ func isTimedOutByNHC(far *v1alpha1.FenceAgentsRemediation) bool {
 
 // updateStatus updates the CR status, and returns an error if it fails
 func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) error {
-	// When CR doesn't include a finalizer and the CR deletionTimestamp exsists
+	// When CR doesn't include a finalizer and the CR deletionTimestamp exists
 	// then we can skip update, since it will be removed soon.
 	if !controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) && !far.ObjectMeta.DeletionTimestamp.IsZero() {
 		return nil
@@ -266,7 +266,7 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 }
 
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
-// or the CR's name don't match nodeParamter name or it has an action which is different than reboot, then return an error
+// or the CR's name don't match nodeParameter name or it has an action which is different than reboot, then return an error
 func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, error) {
 	logger := ctrl.Log.WithName("build-fa-parameters")
 	if far.Spec.NodeParameters == nil || far.Spec.SharedParameters == nil {
@@ -280,7 +280,7 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, erro
 		if paramName != parameterActionName {
 			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
 		} else if paramVal != parameterActionValue {
-			// --action attribute was selected but it is differemt than reboot
+			// --action attribute was selected but it is different than reboot
 			err := errors.New("FAR doesn't support any other action than reboot")
 			logger.Error(err, "can't build CR with this action attribute", "action", paramVal)
 			return nil, err

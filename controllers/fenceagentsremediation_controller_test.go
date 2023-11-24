@@ -169,7 +169,7 @@ var _ = Describe("FAR Controller", func() {
 				By("Not having any test pod")
 				checkPodIsNotFound(testPodName, true)
 
-				By("Verifying correct conditions for successfull remediation")
+				By("Verifying correct conditions for successful remediation")
 				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
 				verifyStatusCondition(workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
 				verifyStatusCondition(workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionTrue))
@@ -200,7 +200,7 @@ var _ = Describe("FAR Controller", func() {
 				By("Still having one test pod")
 				checkPodIsNotFound(testPodName, false)
 
-				By("Verifying correct conditions for unsuccessfull remediation")
+				By("Verifying correct conditions for unsuccessful remediation")
 				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
 				verifyStatusCondition(dummyNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
 				verifyStatusCondition(dummyNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
