@@ -102,7 +102,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	executer, err := cli.NewExecuter(mgr.GetConfig())
+	executer, err := cli.NewExecuter(mgr.GetClient())
 	if err != nil {
 		setupLog.Error(err, "unable to create executer")
 		os.Exit(1)

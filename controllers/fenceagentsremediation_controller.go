@@ -57,7 +57,7 @@ type FenceAgentsRemediationReconciler struct {
 	client.Client
 	Log      logr.Logger
 	Scheme   *runtime.Scheme
-	Executor cli.Executer
+	Executor *cli.Executer
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -180,46 +180,23 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	if meta.IsStatusConditionTrue(far.Status.Conditions, commonConditions.ProcessingType) &&
 		!meta.IsStatusConditionTrue(far.Status.Conditions, utils.FenceAgentActionSucceededType) {
 		// The remeditation has already been processed, thus we can begin with exuecting the FA for the node
-		// We run the FA until its action (reboot) was succeeded, and we verify it with the fenceAgentActionSucceeded condition
 
-		// Fetch the FAR's pod
-		r.Log.Info("Fetch FAR's pod")
-		pod, err := utils.GetFenceAgentsRemediationPod(r.Client)
-		if err != nil {
-			r.Log.Error(err, "Can't find FAR's pod by its label", "CR's Name", req.Name)
-			return emptyResult, err
+		if r.Executor.Exists(far.GetUID()) {
+			r.Log.Info("A Fence Agent is already running", "Fence Agent", far.Spec.Agent, "Node Name", req.Name, "FAR uid", far.GetUID())
+			return emptyResult, nil
 		}
-		//TODO: Check that FA is excutable? run cli.IsExecuteable
 
-		// Build FA parameters
-		r.Log.Info("Combine fence agent parameters", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
+		r.Log.Info("Build fence agent command line", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
 		faParams, err := buildFenceAgentParams(far)
 		if err != nil {
-			r.Log.Error(err, "Invalid sharedParameters/nodeParameters from CR - edit/recreate the CR", "CR's Name", req.Name)
+			r.Log.Error(err, "Invalid shared or node parameters from CR", "Name", req.Name)
 			return emptyResult, nil
 		}
 
 		cmd := append([]string{far.Spec.Agent}, faParams...)
-		// The Fence Agent is excutable and the parameters structure are valid, but we don't check their values
-		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
-		outputRes, outputErr, err := r.Executor.Execute(pod, cmd)
-		if err != nil {
-			// response was a failure message
-			r.Log.Error(err, "Fence Agent response was a failure", "CR's Name", req.Name)
-			return emptyResult, err
-		}
-		if outputErr != "" || outputRes != SuccessFAResponse+"\n" {
-			// response wasn't failure or sucesss message
-			err := fmt.Errorf("unknown fence agent response - expecting `%s` response, but we received `%s`", SuccessFAResponse, outputRes)
-			r.Log.Error(err, "Fence Agent response wasn't a success message", "CR's Name", req.Name)
-			return emptyResult, err
-		}
-
-		r.Log.Info("Fence Agent command was finished successfully", "Fence Agent", far.Spec.Agent, "Node name", req.Name, "Response", SuccessFAResponse)
-		if err := utils.UpdateConditions(utils.FenceAgentSucceeded, far, r.Log); err != nil {
-			return emptyResult, err
-		}
-		return requeueImmediately, nil
+		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", req.Name, "FAR uid", far.GetUID())
+		r.Executor.AsyncExecute(ctx, far.GetUID(), cmd)
+		return emptyResult, nil
 	}
 
 	if meta.IsStatusConditionTrue(far.Status.Conditions, utils.FenceAgentActionSucceededType) &&

@@ -21,10 +21,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap/zapcore"
 
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,6 +37,7 @@ import (
 
 	//+kubebuilder:scaffold:imports ## https://github.com/kubernetes-sigs/kubebuilder/issues/1487 ?
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/pkg/cli"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -47,7 +50,11 @@ var k8sManager manager.Manager
 var testEnv *envtest.Environment
 var ctx context.Context
 var cancel context.CancelFunc
-var mocksExecuter *mockExecuter
+
+var (
+	storedCommand []string
+	mockError     error
+)
 
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -82,7 +89,8 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
-	mocksExecuter = newMockExecuter()
+
+	executor, _ := cli.NewFakeExecuter(k8sClient, controlledRun)
 
 	os.Setenv("DEPLOYMENT_NAMESPACE", defaultNamespace)
 
@@ -90,7 +98,7 @@ var _ = BeforeSuite(func() {
 		Client:   k8sClient,
 		Log:      k8sManager.GetLogger().WithName("test far reconciler"),
 		Scheme:   k8sManager.GetScheme(),
-		Executor: mocksExecuter,
+		Executor: executor,
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -108,3 +116,8 @@ var _ = AfterSuite(func() {
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
 })
+
+func controlledRun(ctx context.Context, uid types.UID, command []string, logger logr.Logger) (stdout, stderr string, err error) {
+	storedCommand = command
+	return "", "", mockError
+}

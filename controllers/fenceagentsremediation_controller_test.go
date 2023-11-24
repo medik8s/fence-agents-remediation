@@ -19,7 +19,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/go-logr/logr"
 	commonConditions "github.com/medik8s/common/pkg/conditions"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -143,8 +142,9 @@ var _ = Describe("FAR Controller", func() {
 			// Create node, and FAR CR, and at the end clean them up with DeferCleanup
 			Expect(k8sClient.Create(context.Background(), node)).To(Succeed())
 			DeferCleanup(k8sClient.Delete, context.Background(), node)
+
 			Expect(k8sClient.Create(context.Background(), underTestFAR)).To(Succeed())
-			DeferCleanup(k8sClient.Delete, context.Background(), underTestFAR)
+			DeferCleanup(cleanupFar, context.Background(), underTestFAR)
 		})
 
 		// TODO: add more scenarios?
@@ -159,7 +159,7 @@ var _ = Describe("FAR Controller", func() {
 				Eventually(func(g Gomega) {
 					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
 					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
-					g.Expect(mocksExecuter.command).To(ConsistOf([]string{"fence_ipmilan", "--lanplus", "--password=password", "--username=admin", "--action=reboot", "--ip=192.168.111.1", "--ipport=6233"}))
+					g.Expect(storedCommand).To(ConsistOf([]string{"fence_ipmilan", "--lanplus", "--password=password", "--username=admin", "--action=reboot", "--ip=192.168.111.1", "--ipport=6233"}))
 					g.Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeTrue(), "remediation taint should exist")
 				}, timeoutFinalizer, pollInterval).Should(Succeed())
 
@@ -205,6 +205,37 @@ var _ = Describe("FAR Controller", func() {
 				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
 				verifyStatusCondition(dummyNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
 				verifyStatusCondition(dummyNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
+				verifyStatusCondition(dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
+			})
+		})
+
+		When("Fence Agent fails", func() {
+			BeforeEach(func() {
+				node = utils.GetNode("", workerNode)
+				mockError = errors.New("mock error")
+				DeferCleanup(func() { mockError = nil })
+
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam)
+			})
+
+			It("should update the status accordingly", func() {
+				Eventually(func(g Gomega) {
+					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
+					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
+					g.Expect(storedCommand).To(ConsistOf([]string{fenceAgentIPMI, "--lanplus", "--password=password", "--username=admin", "--action=reboot", "--ip=192.168.111.1", "--ipport=6233"}))
+					g.Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeTrue(), "remediation taint should exist")
+				}, timeoutFinalizer, pollInterval).Should(Succeed())
+
+				// If taint was added, then definitely the finalizer was added as well
+				Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
+
+				By("Still having one test pod")
+				checkPodIsNotFound(testPodName, false)
+
+				By("Verifying correct conditions for un-successful remediation")
+				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
+				verifyStatusCondition(workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
+				verifyStatusCondition(workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
 				verifyStatusCondition(dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
 			})
 		})
@@ -321,22 +352,12 @@ func verifyStatusCondition(nodeName, conditionType string, conditionStatus *meta
 	}, timeoutDeletion, pollInterval).Should(Succeed())
 }
 
-// Implements Execute function to mock/test Execute of FenceAgentsRemediationReconciler
-type mockExecuter struct {
-	command []string
-	mockLog logr.Logger
-}
+// cleanupFar removes FAR finalizer and deletes the FAR CR
+func cleanupFar(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) {
+	// Remove finalizer
+	far.ObjectMeta.Finalizers = []string{}
+	Expect(k8sClient.Update(ctx, far)).To(Succeed())
 
-// newMockExecuter is a dummy function for testing
-func newMockExecuter() *mockExecuter {
-	mockLogger := ctrl.Log.WithName("mockExecuter")
-	mockE := mockExecuter{mockLog: mockLogger}
-	return &mockE
-}
-
-// Execute is a dummy function for testing which stores the production command
-func (m *mockExecuter) Execute(_ *corev1.Pod, command []string) (stdout string, stderr string, err error) {
-	m.command = command
-	m.mockLog.Info("Executed command has been stored", "command", m.command)
-	return SuccessFAResponse + "\n", "", nil
+	// Delete the FAR
+	Expect(k8sClient.Delete(ctx, far)).To(Succeed())
 }

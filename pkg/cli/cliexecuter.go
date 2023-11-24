@@ -1,97 +1,156 @@
 package cli
 
 import (
-	"bytes"
-	"errors"
+	"context"
+	"fmt"
+	"os/exec"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/go-logr/logr"
 
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
-	restclient "k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/remotecommand"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 )
 
-type Executer interface {
-	Execute(pod *corev1.Pod, command []string) (stdout string, stderr string, err error)
+type Executer struct {
+	client.Client
+	log      logr.Logger
+	routines map[types.UID]bool
+	mapLock  sync.Mutex
+	runner   runnerFunc
 }
 
-type executer struct {
-	log       logr.Logger
-	config    *restclient.Config
-	clientSet *kubernetes.Clientset
-}
+// runnerFunc is a function that runs the command and returns the stdout, stderr and error
+// it is configurable in Executer for testing purposes
+type runnerFunc func(ctx context.Context, uid types.UID, command []string, logger logr.Logger) (string, string, error)
 
-var _ Executer = executer{}
-
-// NewExecuter builds the executer
-func NewExecuter(config *restclient.Config) (Executer, error) {
+// NewExecuter builds the Executer
+func NewExecuter(client client.Client) (*Executer, error) {
 	logger := ctrl.Log.WithName("executer")
 
-	clientSet, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		logger.Error(err, "failed building k8s client")
-		return nil, err
-	}
-
-	return &executer{
-		log:       logger,
-		config:    config,
-		clientSet: clientSet,
+	return &Executer{
+		Client:   client,
+		log:      logger,
+		routines: make(map[types.UID]bool),
+		runner:   run,
 	}, nil
 }
 
-// Execute builds and runs a Post request on contianer for SPDY (shell) executor
-func (e executer) Execute(pod *corev1.Pod, command []string) (stdout string, stderr string, err error) {
-	if len(pod.Spec.Containers) == 0 {
-		err := errors.New("create cli executer failed")
-		e.log.Error(err, "No container found in Pod", "Pod Name", pod.Name)
-		return "", "", err
+// NewExecuter builds an Executer with configurable runnerFunc for testing
+func NewFakeExecuter(client client.Client, fn runnerFunc) (*Executer, error) {
+	logger := ctrl.Log.WithName("fakeExecuter")
+
+	return &Executer{
+		Client:   client,
+		log:      logger,
+		routines: make(map[types.UID]bool),
+		runner:   fn,
+	}, nil
+}
+
+// AsyncExecute runs the command in a goroutine mapped to the UID
+func (e *Executer) AsyncExecute(ctx context.Context, uid types.UID, command []string) {
+	e.mapLock.Lock()
+	defer e.mapLock.Unlock()
+	if _, exist := e.routines[uid]; !exist {
+		e.routines[uid] = true
+
+		go func(uid types.UID, command []string) {
+			e.log.Info("fence agent start", "uid", uid, "command", command)
+
+			stdout, stderr, fa_err := e.runner(ctx, uid, command, e.log)
+
+			e.log.Info("fence agent done", "uid", uid, "command", command, "stdout", stdout, "stderr", stderr, "err", fa_err)
+
+			// loop to handle only the updateStatus error cases where:
+			// - FAR cannot be found, but it does exist
+			// - the status update fails for conflicts
+			for {
+				far, err := e.getFenceAgentsRemediationByUID(ctx, uid)
+				if err != nil {
+					if !apiErrors.IsNotFound(err) {
+						continue
+					}
+					e.log.Error(err, "could not update status", "FAR uid", uid)
+					break
+				}
+
+				err = e.updateStatus(ctx, far, fa_err)
+				if err == nil {
+					e.log.Info("status updated", "FAR uid", uid)
+					break
+				}
+				if apiErrors.IsConflict(err) {
+					e.log.Error(err, "conflict while updating the status", "FAR uid", uid)
+					time.Sleep(1 * time.Second)
+				}
+				e.log.Error(err, "failed to update status", "FAR uid", uid)
+				break
+			}
+		}(uid, command)
+	}
+}
+
+// Exists checks if there is already a running Fence Agent command mapped to the UID
+func (e *Executer) Exists(uid types.UID) bool {
+	e.mapLock.Lock()
+	defer e.mapLock.Unlock()
+	_, exist := e.routines[uid]
+	return exist
+}
+
+// run runs the command in the container and updates the status of the FAR instance maching the UID
+func run(ctx context.Context, uid types.UID, command []string, logger logr.Logger) (stdout, stderr string, err error) {
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
+
+	var outBuilder, errBuilder strings.Builder
+	cmd.Stdout = &outBuilder
+	cmd.Stderr = &errBuilder
+
+	err = cmd.Run()
+
+	return outBuilder.String(), errBuilder.String(), err
+}
+
+func (e *Executer) getFenceAgentsRemediationByUID(ctx context.Context, uid types.UID) (*v1alpha1.FenceAgentsRemediation, error) {
+	farList := &v1alpha1.FenceAgentsRemediationList{}
+	if err := e.List(ctx, farList, &client.ListOptions{}); err != nil || len(farList.Items) == 0 {
+		e.log.Error(err, "failed to list FAR", "FAR uid", uid)
+		return nil, err
 	}
 
-	var (
-		stdoutBuf bytes.Buffer
-		stderrBuf bytes.Buffer
-	)
-
-	//containerName := pod.Spec.Containers[0].Name
-	containerName := "manager"
-
-	// Build the Post request for SPDY (shell) executor
-	req := e.clientSet.CoreV1().RESTClient().Post().
-		Resource("pods").
-		Name(pod.Name).
-		Namespace(pod.Namespace).
-		SubResource("exec").
-		Param("container", containerName)
-
-	req.VersionedParams(&corev1.PodExecOptions{
-		Container: containerName,
-		Command:   command,
-		Stdin:     false,
-		Stdout:    true,
-		Stderr:    true,
-		TTY:       false,
-	}, scheme.ParameterCodec)
-
-	execSPDY, err := remotecommand.NewSPDYExecutor(e.config, "POST", req.URL())
-	if err != nil {
-		e.log.Error(err, "failed building SPDY (shell) executor")
-		return "", "", err
+	for _, far := range farList.Items {
+		if far.UID == uid {
+			return &far, nil
+		}
 	}
 
-	// Execute the Post request for SPDY (shell) executor
-	err = execSPDY.Stream(remotecommand.StreamOptions{
-		Stdout: &stdoutBuf,
-		Stderr: &stderrBuf,
-		Tty:    false,
-	})
-	if err != nil {
-		e.log.Error(err, "Failed to run exec command", "stdout", stdoutBuf.String(), "stderr", stderrBuf.String())
+	err := fmt.Errorf("could not find any FAR matching the UID")
+	e.log.Error(err, "failed to get far", "uid", uid)
+
+	return nil, err
+}
+
+func (e *Executer) updateStatus(ctx context.Context, far *v1alpha1.FenceAgentsRemediation, err error) error {
+	var reason utils.ConditionsChangeReason
+
+	if err == nil {
+		reason = utils.FenceAgentSucceeded
 	} else {
-		e.log.Info("Command has been executed successfully", "stdout", stdoutBuf.String())
+		reason = utils.FenceAgentFailed
 	}
-	return stdoutBuf.String(), stderrBuf.String(), err
+
+	err = utils.UpdateConditions(reason, far, e.log)
+	if err != nil {
+		e.log.Error(err, "failed to update conditions", "FAR uid", far.UID)
+		return err
+	}
+	return e.Status().Update(ctx, far)
 }

@@ -20,6 +20,7 @@ const (
 	RemediationInterruptedByNHCConditionMessage     = "Node Healthcheck timeout annotation has been set"
 	RemediationStartedConditionMessage              = "FAR CR was found, its name matches one of the cluster nodes, and a finalizer was set to the CR"
 	FenceAgentSucceededConditionMessage             = "FAR taint was added and the fence agent command has been created and executed successfully"
+	FenceAgentFailedConditionMessage                = "Fence agent command has failed"
 	RemediationFinishedSuccessfullyConditionMessage = "The unhealthy node was fully remediated (it was tainted, fenced using FA and all the node resources have been deleted)"
 )
 
@@ -81,6 +82,11 @@ func UpdateConditions(reason ConditionsChangeReason, far *v1alpha1.FenceAgentsRe
 	case FenceAgentSucceeded:
 		fenceAgentActionSucceededConditionStatus = metav1.ConditionTrue
 		conditionMessage = FenceAgentSucceededConditionMessage
+	case FenceAgentFailed:
+		processingConditionStatus = metav1.ConditionFalse
+		fenceAgentActionSucceededConditionStatus = metav1.ConditionFalse
+		succeededConditionStatus = metav1.ConditionFalse
+		conditionMessage = FenceAgentFailedConditionMessage
 	case RemediationFinishedSuccessfully:
 		processingConditionStatus = metav1.ConditionFalse
 		succeededConditionStatus = metav1.ConditionTrue
