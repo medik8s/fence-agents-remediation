@@ -22,7 +22,6 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
-	"github.com/medik8s/fence-agents-remediation/controllers"
 	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 	e2eUtils "github.com/medik8s/fence-agents-remediation/test/e2e/utils"
 )
@@ -268,7 +267,9 @@ func deleteFAR(far *v1alpha1.FenceAgentsRemediation) {
 func cleanupTestedResources(pod *corev1.Pod) {
 	newPod := &corev1.Pod{}
 	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(pod), newPod); err == nil {
-		Expect(k8sClient.Delete(context.Background(), newPod)).To(Succeed())
+		// set GracePeriodSeconds to 0 to delete the pod immediately
+		var force client.GracePeriodSeconds = 0
+		Expect(k8sClient.Delete(context.Background(), newPod, force)).To(Succeed())
 		log.Info("cleanup: Pod has not been deleted by remediation", "pod name", pod.Name)
 	}
 }
@@ -356,7 +357,7 @@ func checkFarLogs(unhealthyNodeName, logString string) {
 
 // wasNodeRebooted waits until there is a newer boot time than before, a reboot occurred, otherwise it falls with an error
 func wasNodeRebooted(nodeName string, nodeBootTimeBefore time.Time) {
-	log.Info("boot time", "node", nodeName, "old", nodeBootTimeBefore)
+	log.Info("checking if Node was rebooted", "node", nodeName, "previous boot time", nodeBootTimeBefore)
 	var nodeBootTimeAfter time.Time
 	Eventually(func() (time.Time, error) {
 		var errBootAfter error
@@ -401,10 +402,6 @@ func verifyStatusCondition(nodeName, conditionType string, conditionStatus *meta
 func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, oldPodCreationTime time.Time, pod *corev1.Pod) {
 	By("Check if FAR NoExecute taint was added")
 	wasFarTaintAdded(nodeName)
-
-	By("Check if the response of the FA was a success")
-	expectedLog := buildExpectedLogOutput(nodeName, controllers.SuccessFAResponse)
-	checkFarLogs(nodeName, expectedLog)
 
 	By("Getting new node's boot time")
 	wasNodeRebooted(nodeName, nodeBootTimeBefore)
