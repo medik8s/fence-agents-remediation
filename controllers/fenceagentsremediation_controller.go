@@ -195,7 +195,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 
 		cmd := append([]string{far.Spec.Agent}, faParams...)
 		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", req.Name, "FAR uid", far.GetUID())
-		r.Executor.AsyncExecute(ctx, far.GetUID(), cmd)
+		r.Executor.AsyncExecute(ctx, far.GetUID(), cmd, far.Spec.RetryCount, far.Spec.RetryInterval.Duration, far.Spec.Timeout.Duration)
 		return emptyResult, nil
 	}
 

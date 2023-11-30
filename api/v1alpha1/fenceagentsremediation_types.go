@@ -55,6 +55,25 @@ type FenceAgentsRemediationSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Agent string `json:"agent"`
 
+	// RetryCount is the number of times the fencing agent will be executed
+	//+kubebuilder:default:=100
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	RetryCount int `json:"retrycount,omitempty"`
+
+	// RetryInterval is the interval between each fencing agent execution
+	//+kubebuilder:default:="5s"
+	//+kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+	//+kubebuilder:validation:Type=string
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	RetryInterval metav1.Duration `json:"retryinterval,omitempty"`
+
+	// Timeout is the timeout for each fencing agent execution
+	//+kubebuilder:default:="60s"
+	//+kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+	//+kubebuilder:validation:Type=string
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	Timeout metav1.Duration `json:"timeout,omitempty"`
+
 	// SharedParameters are passed to the fencing agent regardless of which node is about to be fenced (i.e., they are common for all the nodes)
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	SharedParameters map[ParameterName]string `json:"sharedparameters,omitempty"`

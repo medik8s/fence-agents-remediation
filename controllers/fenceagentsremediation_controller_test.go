@@ -90,6 +90,7 @@ var _ = Describe("FAR Controller", func() {
 
 	Context("Functionality", func() {
 		BeforeEach(func() {
+			plogs.Clear()
 			underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam)
 		})
 
@@ -135,7 +136,6 @@ var _ = Describe("FAR Controller", func() {
 
 			farPod := createRunningPod("far-manager-test", farPodName, "")
 			DeferCleanup(k8sClient.Delete, context.Background(), farPod)
-
 		})
 
 		JustBeforeEach(func() {
@@ -209,7 +209,7 @@ var _ = Describe("FAR Controller", func() {
 			})
 		})
 
-		When("Fence Agent fails", func() {
+		Context("Fence Agent Failures", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
 				mockError = errors.New("mock error")
@@ -218,25 +218,65 @@ var _ = Describe("FAR Controller", func() {
 				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam)
 			})
 
-			It("should update the status accordingly", func() {
-				Eventually(func(g Gomega) {
-					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
-					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
-					g.Expect(storedCommand).To(ConsistOf([]string{fenceAgentIPMI, "--lanplus", "--password=password", "--username=admin", "--action=reboot", "--ip=192.168.111.1", "--ipport=6233"}))
-					g.Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeTrue(), "remediation taint should exist")
-				}, timeoutFinalizer, pollInterval).Should(Succeed())
+			When("Fence Agent command fails", func() {
+				BeforeEach(func() {
+					underTestFAR.Spec.RetryCount = 3
+				})
+				It("should retry the fence agent command as configured and update the status accordingly", func() {
+					Eventually(func(g Gomega) {
+						g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
+						g.Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeTrue(), "remediation taint should exist")
+					}, timeoutFinalizer, pollInterval).Should(Succeed())
 
-				// If taint was added, then definitely the finalizer was added as well
-				Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
+					By("Still having one test pod")
+					checkPodIsNotFound(testPodName, false)
 
-				By("Still having one test pod")
-				checkPodIsNotFound(testPodName, false)
+					By("Expected number of retries")
+					Eventually(func() int {
+						return plogs.CountOccurences("command failed")
+					}).Should(Equal(3))
 
-				By("Verifying correct conditions for un-successful remediation")
-				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
-				verifyStatusCondition(workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
-				verifyStatusCondition(workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
-				verifyStatusCondition(dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
+					By("Verifying correct conditions for un-successful remediation")
+					Eventually(func(g Gomega) {
+						g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
+					}).Should(Succeed())
+					Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
+					verifyStatusCondition(workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
+					verifyStatusCondition(workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
+					verifyStatusCondition(dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
+
+				})
+			})
+			When("Fence Agent command times out", func() {
+				BeforeEach(func() {
+					forcedDelay = 10 * time.Second
+					underTestFAR.Spec.Timeout = metav1.Duration{Duration: 2 * time.Second}
+				})
+				It("should stop Fence Agent execution and update the status accordingly", func() {
+					Eventually(func(g Gomega) {
+						g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
+						g.Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeTrue(), "remediation taint should exist")
+					}, timeoutFinalizer, pollInterval).Should(Succeed())
+
+					By("Still having one test pod")
+					checkPodIsNotFound(testPodName, false)
+
+					By("Context timeout occurred")
+					Eventually(func() bool {
+						return plogs.Contains("command timed out")
+					}).Should(BeTrue())
+
+					By("Verifying correct conditions for un-successful remediation")
+					Eventually(func(g Gomega) {
+						g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
+					}).Should(Succeed())
+
+					Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
+					verifyStatusCondition(workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
+					verifyStatusCondition(workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
+					verifyStatusCondition(dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
+
+				})
 			})
 		})
 	})
@@ -250,6 +290,8 @@ func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[v1al
 			Agent:            agent,
 			SharedParameters: sharedparameters,
 			NodeParameters:   nodeparameters,
+			// Set the retry count to the minimum for the majority of the tests
+			RetryCount: 1,
 		},
 	}
 }

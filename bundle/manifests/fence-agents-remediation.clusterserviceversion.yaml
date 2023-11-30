@@ -76,10 +76,19 @@ spec:
           node that is fenced, since they are node specific
         displayName: Node Parameters
         path: nodeparameters
+      - description: RetryCount is the number of times the fencing agent will be executed
+        displayName: Retry Count
+        path: retrycount
+      - description: RetryInterval is the interval between each fencing agent execution
+        displayName: Retry Interval
+        path: retryinterval
       - description: SharedParameters are passed to the fencing agent regardless of
           which node is about to be fenced (i.e., they are common for all the nodes)
         displayName: Shared Parameters
         path: sharedparameters
+      - description: Timeout is the timeout for each fencing agent execution
+        displayName: Timeout
+        path: timeout
       statusDescriptors:
       - description: 'Represents the observations of a FenceAgentsRemediation''s current
           state. Known .status.conditions.type are: "Processing", "FenceAgentActionSucceeded",
@@ -112,10 +121,19 @@ spec:
           node that is fenced, since they are node specific
         displayName: Node Parameters
         path: template.spec.nodeparameters
+      - description: RetryCount is the number of times the fencing agent will be executed
+        displayName: Retry Count
+        path: template.spec.retrycount
+      - description: RetryInterval is the interval between each fencing agent execution
+        displayName: Retry Interval
+        path: template.spec.retryinterval
       - description: SharedParameters are passed to the fencing agent regardless of
           which node is about to be fenced (i.e., they are common for all the nodes)
         displayName: Shared Parameters
         path: template.spec.sharedparameters
+      - description: Timeout is the timeout for each fencing agent execution
+        displayName: Timeout
+        path: template.spec.timeout
       version: v1alpha1
   description: "Fence Agents Remediation Operator (FAR)\n\nThe operator will remediate/fence
     a node when a FenceAgentsRemediation (far) custom resource exists with the node's

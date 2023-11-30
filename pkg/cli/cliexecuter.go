@@ -12,6 +12,7 @@ import (
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -56,18 +57,49 @@ func NewFakeExecuter(client client.Client, fn runnerFunc) (*Executer, error) {
 }
 
 // AsyncExecute runs the command in a goroutine mapped to the UID
-func (e *Executer) AsyncExecute(ctx context.Context, uid types.UID, command []string) {
+func (e *Executer) AsyncExecute(ctx context.Context, uid types.UID, command []string, retryCount int, retryDuration, timeout time.Duration) {
 	e.mapLock.Lock()
 	defer e.mapLock.Unlock()
 	if _, exist := e.routines[uid]; !exist {
 		e.routines[uid] = true
 
 		go func(uid types.UID, command []string) {
+
+			// Linear backoff
+			backoff := wait.Backoff{
+				Steps:    retryCount,
+				Duration: retryDuration,
+				Factor:   1.0,
+			}
+
+			var stdout, stderr string
+			var fa_err error
+
 			e.log.Info("fence agent start", "uid", uid, "command", command)
+			err := wait.ExponentialBackoffWithContext(ctx,
+				backoff,
+				func(ctx context.Context) (bool, error) {
+					fa_ctx, cancel := context.WithTimeout(ctx, timeout)
+					defer cancel()
+					stdout, stderr, fa_err = e.runner(fa_ctx, uid, command, e.log)
+					if fa_err != nil {
+						if wait.Interrupted(fa_err) {
+							e.log.Error(fa_err, "fence agent timeout", "uid", uid)
+							return false, fa_err
+						}
+						e.log.Info("command failed", "uid", uid, "response", stdout, "errMessage", stderr, "err", fa_err)
+						return false, nil
+					}
+					e.log.Info("command completed", "uid", uid, "response", stdout, "errMessage", stderr, "err", fa_err)
+					return true, nil
+				})
 
-			stdout, stderr, fa_err := e.runner(ctx, uid, command, e.log)
-
-			e.log.Info("fence agent done", "uid", uid, "command", command, "stdout", stdout, "stderr", stderr, "err", fa_err)
+			if wait.Interrupted(err) {
+				e.log.Error(err, "command timed out", "uid", uid)
+				fa_err = err
+			} else {
+				e.log.Info("fence agent done", "uid", uid, "command", command, "stdout", stdout, "stderr", stderr, "err", fa_err)
+			}
 
 			// loop to handle only the updateStatus error cases where:
 			// - FAR cannot be found, but it does exist
@@ -143,6 +175,8 @@ func (e *Executer) updateStatus(ctx context.Context, far *v1alpha1.FenceAgentsRe
 
 	if err == nil {
 		reason = utils.FenceAgentSucceeded
+	} else if wait.Interrupted(err) {
+		reason = utils.FenceAgentTimedOut
 	} else {
 		reason = utils.FenceAgentFailed
 	}

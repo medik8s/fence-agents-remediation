@@ -17,9 +17,12 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
@@ -45,16 +48,57 @@ import (
 
 const defaultNamespace = "default"
 
-var k8sClient client.Client
-var k8sManager manager.Manager
-var testEnv *envtest.Environment
-var ctx context.Context
-var cancel context.CancelFunc
-
 var (
+	k8sClient  client.Client
+	k8sManager manager.Manager
+	testEnv    *envtest.Environment
+	ctx        context.Context
+	cancel     context.CancelFunc
+
+	plogs *peekLogger
+
 	storedCommand []string
 	mockError     error
+	forcedDelay   time.Duration
 )
+
+// peekLogger allows to inspect operator's log for testing purpose.
+type peekLogger struct {
+	logs []string
+}
+
+func (p *peekLogger) Write(b []byte) (n int, err error) {
+	n, err = GinkgoWriter.Write(b)
+	if err != nil {
+		return n, err
+	}
+	p.logs = append(p.logs, string(b))
+	return n, err
+}
+
+func (p *peekLogger) Contains(s string) bool {
+	for _, log := range p.logs {
+		if strings.Contains(log, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// CountOccurences returns number of occurences of string s in logs.
+func (p *peekLogger) CountOccurences(s string) int {
+	count := 0
+	for _, log := range p.logs {
+		if strings.Contains(log, s) {
+			count++
+		}
+	}
+	return count
+}
+
+func (p *peekLogger) Clear() {
+	p.logs = make([]string, 0)
+}
 
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -62,11 +106,13 @@ func TestControllers(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	plogs = &peekLogger{logs: make([]string, 0)}
 	opts := zap.Options{
+		DestWriter:  plogs,
 		Development: true,
 		TimeEncoder: zapcore.RFC3339NanoTimeEncoder,
 	}
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseFlagOptions(&opts)))
+	logf.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -119,5 +165,14 @@ var _ = AfterSuite(func() {
 
 func controlledRun(ctx context.Context, uid types.UID, command []string, logger logr.Logger) (stdout, stderr string, err error) {
 	storedCommand = command
+	if forcedDelay > 0 {
+		select {
+		case <-ctx.Done():
+			return "", "", fmt.Errorf("context expired")
+		case <-time.After(forcedDelay):
+			log.Info("forced delay expired", "delay", forcedDelay)
+		}
+	}
+
 	return "", "", mockError
 }
