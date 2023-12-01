@@ -144,10 +144,9 @@ var _ = Describe("FAR Controller", func() {
 			DeferCleanup(k8sClient.Delete, context.Background(), node)
 
 			Expect(k8sClient.Create(context.Background(), underTestFAR)).To(Succeed())
-			DeferCleanup(cleanupFar, context.Background(), underTestFAR)
+			DeferCleanup(cleanupFar(), context.Background(), underTestFAR)
 		})
 
-		// TODO: add more scenarios?
 		When("creating valid FAR CR", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
@@ -211,17 +210,82 @@ var _ = Describe("FAR Controller", func() {
 
 		Context("Fence Agent Failures", func() {
 			BeforeEach(func() {
+				plogs.Clear()
 				node = utils.GetNode("", workerNode)
-				mockError = errors.New("mock error")
-				DeferCleanup(func() { mockError = nil })
 
 				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam)
 			})
 
+			When("CR is deleted in between fence agent retries", func() {
+				BeforeEach(func() {
+					// Set the controlledRun to fail to simulate a case where CR deletion occurs in between fence agent
+					// command calls.
+					mockError = errors.New("mock error")
+					DeferCleanup(func() { mockError = nil })
+
+					underTestFAR.Spec.RetryCount = 100
+					underTestFAR.Spec.RetryInterval = metav1.Duration{Duration: 1 * time.Second}
+				})
+
+				It("should exit immediately without trying to update the status conditions", func() {
+					Eventually(func(g Gomega) {
+						g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
+						g.Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeTrue(), "remediation taint should exist")
+					}, timeoutFinalizer, pollInterval).Should(Succeed())
+
+					By("Wait some retries")
+					Eventually(func() int {
+						return plogs.CountOccurences("command failed")
+					}, "10s", "1s").Should(BeNumerically(">", 3))
+
+					By("Deleting the CR")
+					Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
+					Expect(k8sClient.Delete(context.Background(), underTestFAR)).To(Succeed())
+
+					By("Verifying goroutine stopped without trying to update the conditions")
+					Eventually(func() bool {
+						return plogs.Contains("fence agent context canceled. Nothing to do")
+					}).Should(BeTrue())
+				})
+			})
+
+			When("CR is deleted in during fence agent execution", func() {
+				BeforeEach(func() {
+					// Set the controlledRun to fail to simulate a case where CR deletion occurs in between fence agent
+					// command retries.
+					forcedDelay = 10 * time.Second
+					DeferCleanup(func() { forcedDelay = 0 })
+
+					underTestFAR.Spec.RetryCount = 100
+					underTestFAR.Spec.RetryInterval = metav1.Duration{Duration: 1 * time.Second}
+				})
+
+				It("should exit immediately without trying to update the status conditions", func() {
+					Eventually(func(g Gomega) {
+						g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
+						g.Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeTrue(), "remediation taint should exist")
+					}, timeoutFinalizer, pollInterval).Should(Succeed())
+
+					By("Deleting the CR")
+					Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
+					Expect(k8sClient.Delete(context.Background(), underTestFAR)).To(Succeed())
+
+					By("Verifying goroutine stopped without trying to update the conditions")
+					Eventually(func() bool {
+						return plogs.Contains("fence agent context canceled. Nothing to do")
+					}).Should(BeTrue())
+				})
+			})
+
 			When("Fence Agent command fails", func() {
 				BeforeEach(func() {
+					mockError = errors.New("mock error")
+					DeferCleanup(func() { mockError = nil })
+
 					underTestFAR.Spec.RetryCount = 3
+					underTestFAR.Spec.RetryInterval = metav1.Duration{Duration: 1 * time.Millisecond}
 				})
+
 				It("should retry the fence agent command as configured and update the status accordingly", func() {
 					Eventually(func(g Gomega) {
 						g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
@@ -244,14 +308,17 @@ var _ = Describe("FAR Controller", func() {
 					verifyStatusCondition(workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
 					verifyStatusCondition(workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
 					verifyStatusCondition(dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
-
 				})
 			})
+
 			When("Fence Agent command times out", func() {
 				BeforeEach(func() {
 					forcedDelay = 10 * time.Second
+					DeferCleanup(func() { forcedDelay = 0 })
+
 					underTestFAR.Spec.Timeout = metav1.Duration{Duration: 2 * time.Second}
 				})
+
 				It("should stop Fence Agent execution and update the status accordingly", func() {
 					Eventually(func(g Gomega) {
 						g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
@@ -263,8 +330,8 @@ var _ = Describe("FAR Controller", func() {
 
 					By("Context timeout occurred")
 					Eventually(func() bool {
-						return plogs.Contains("command timed out")
-					}).Should(BeTrue())
+						return plogs.Contains("fence agent context timed out")
+					}).Should(BeTrue(), "fence agent should have timed out")
 
 					By("Verifying correct conditions for un-successful remediation")
 					Eventually(func(g Gomega) {
@@ -275,7 +342,6 @@ var _ = Describe("FAR Controller", func() {
 					verifyStatusCondition(workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
 					verifyStatusCondition(workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
 					verifyStatusCondition(dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
-
 				})
 			})
 		})
@@ -291,7 +357,9 @@ func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[v1al
 			SharedParameters: sharedparameters,
 			NodeParameters:   nodeparameters,
 			// Set the retry count to the minimum for the majority of the tests
-			RetryCount: 1,
+			RetryCount:    1,
+			RetryInterval: metav1.Duration{Duration: 5 * time.Second},
+			Timeout:       metav1.Duration{Duration: 60 * time.Second},
 		},
 	}
 }
@@ -395,11 +463,27 @@ func verifyStatusCondition(nodeName, conditionType string, conditionStatus *meta
 }
 
 // cleanupFar removes FAR finalizer and deletes the FAR CR
-func cleanupFar(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) {
-	// Remove finalizer
-	far.ObjectMeta.Finalizers = []string{}
-	Expect(k8sClient.Update(ctx, far)).To(Succeed())
+func cleanupFar() func(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) error {
+	return func(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) error {
+		cr := &v1alpha1.FenceAgentsRemediation{}
+		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(far), cr); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return err
+		}
 
-	// Delete the FAR
-	Expect(k8sClient.Delete(ctx, far)).To(Succeed())
+		var force client.GracePeriodSeconds = 0
+		if err := k8sClient.Delete(ctx, cr, force); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return err
+		}
+
+		Eventually(func(g Gomega) error {
+			return k8sClient.Get(ctx, client.ObjectKeyFromObject(far), cr)
+		}).Should(Not(BeNil()), "CR should be deleted")
+		return nil
+	}
 }

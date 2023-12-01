@@ -131,6 +131,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	// Check NHC timeout annotation
 	if isTimedOutByNHC(far) {
 		r.Log.Info("FAR remediation was stopped by Node Healthcheck Operator")
+		r.Executor.Remove(far.GetUID())
 		err := utils.UpdateConditions(utils.RemediationInterruptedByNHC, far, r.Log)
 		return emptyResult, err
 	}
@@ -157,6 +158,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			succeededCondition := meta.FindStatusCondition(far.Status.Conditions, commonConditions.SucceededType).Status
 			r.Log.Info("FAR didn't finish remediate the node ", "CR Name", req.Name, "processing condition", processingCondition,
 				"fenceAgentActionSucceeded condition", fenceAgentActionSucceededCondition, "succeeded condition", succeededCondition)
+			r.Executor.Remove(far.GetUID())
 		}
 
 		// remove node's taints
@@ -201,7 +203,12 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 
 	if meta.IsStatusConditionTrue(far.Status.Conditions, utils.FenceAgentActionSucceededType) &&
 		!meta.IsStatusConditionTrue(far.Status.Conditions, commonConditions.SucceededType) {
-		// Fence agent action succeeded, and now we try to remove workloads (pods and their volume attachments)
+		// Fence agent action succeeded
+		// - clean up Executor routine
+		// - try to remove workloads
+
+		r.Executor.Remove(far.GetUID())
+
 		r.Log.Info("Manual workload deletion", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
 		if err := commonResources.DeletePods(ctx, r.Client, req.Name); err != nil {
 			r.Log.Error(err, "Manual workload deletion has failed", "CR's Name", req.Name)

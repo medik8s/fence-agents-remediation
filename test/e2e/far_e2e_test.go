@@ -246,6 +246,9 @@ func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.Para
 			Agent:            agent,
 			SharedParameters: sharedParameters,
 			NodeParameters:   nodeParameters,
+			RetryCount:       100,
+			RetryInterval:    metav1.Duration{Duration: 5 * time.Second},
+			Timeout:          metav1.Duration{Duration: 60 * time.Second},
 		},
 	}
 	ExpectWithOffset(1, k8sClient.Create(context.Background(), far)).ToNot(HaveOccurred())
