@@ -14,6 +14,7 @@ import (
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -74,7 +75,6 @@ func (e *Executer) AsyncExecute(ctx context.Context, uid types.UID, command []st
 		e.routines[uid] = &routine
 
 		go func(faCtx, crCtx context.Context, uid types.UID, command []string) {
-
 			// Linear backoff
 			backoff := wait.Backoff{
 				Steps:    retryCount,
@@ -126,23 +126,39 @@ func (e *Executer) AsyncExecute(ctx context.Context, uid types.UID, command []st
 				}
 			}
 
-			// TODO: use ExponentialBackoffWithContext here as well
-			// loop to handle only the updateStatus error cases where:
+			// ExponantialBackoff to handle only the updateStatus error cases where:
 			// - FAR cannot be found, but it does exist
 			// - the status update fails for conflicts
 			e.log.Info("updating status", "FAR uid", uid)
-			for {
-				far, err := e.getFenceAgentsRemediationByUID(crCtx, uid)
-				if err != nil {
-					if !apiErrors.IsNotFound(err) && !wait.Interrupted(err) {
-						continue
-					}
-					e.log.Error(err, "could not update status", "FAR uid", uid)
-					break
-				}
+			wait.ExponentialBackoffWithContext(crCtx,
+				retry.DefaultBackoff,
+				func(ctx context.Context) (bool, error) {
+					far, err := e.getFenceAgentsRemediationByUID(crCtx, uid)
+					if err != nil {
+						if apiErrors.IsNotFound(err) {
+							e.log.Info("could not find FAR by UID", "FAR uid", uid)
+							return false, err
+						}
 
-				err = e.updateStatus(crCtx, far, faErr)
-				if err == nil {
+						if wait.Interrupted(err) {
+							e.log.Info("could not update status", "FAR uid", uid, "reason", err)
+							return false, err
+						}
+
+						e.log.Error(err, "could not update status", "FAR uid", uid)
+						return false, err
+					}
+
+					if err := e.updateStatus(crCtx, far, faErr); err != nil {
+						if apiErrors.IsConflict(err) &&
+							!wait.Interrupted(err) {
+							e.log.Error(err, "conflict while updating the status", "FAR uid", uid)
+							return true, nil
+						}
+						e.log.Error(err, "failed to update status", "FAR uid", uid)
+						return false, err
+					}
+
 					e.log.Info("status updated", "FAR uid", uid)
 					return false, nil
 				})
