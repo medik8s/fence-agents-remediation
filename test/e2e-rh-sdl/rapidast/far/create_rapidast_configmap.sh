@@ -1,0 +1,56 @@
+#!/bin/bash
+
+NAMESPACE="rapidast-far"
+# API_CLUSTER="https://kubernetes.default.svc"
+API_CLUSTER=$(grep "server: https://" $KUBECONFIG | sed -r 's#.+?//##' | head -1)
+# TOKEN=$(oc login -u kubeadmin -p $(cat ${HOME}/clusterconfigs/auth/kubeadmin-password) --server=https://${API_CLUSTER} > /dev/null 2>&1 ; oc whoami -t)
+TOKEN=$(oc create token privileged-sa -n rapidast-far)
+API_CLUSTER_NAME=$(echo $API_CLUSTER | cut -d ':' -f 1)
+OAST_CALLBACK_PORT=$(python -c "import socket; s=socket.socket(); s.bind((\"\", 0)); print(s.getsockname()[1]); s.close()")
+OAST_CALLBACK_ADDRESS=$(ip -o route get `(dig +short $API_CLUSTER_NAME)` | awk '{ print $3 }')
+
+# Define the content for the ConfigMap
+configmap_content=$(cat <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rapidast-configmap
+  namespace: ${NAMESPACE}
+data:
+  rapidastconfig.yaml: |
+    config:
+      configVersion: 4
+
+    application:
+      shortName: "far"
+      url: "https://${API_CLUSTER}"
+
+    general:
+      authentication:
+        type: "http_header"
+        parameters:
+          name: "Authorization"
+          value: "Bearer ${TOKEN}"
+      container:
+        type: "none"
+
+    scanners:
+      zap:
+        apiScan:
+          apis:
+            apiUrl: "https://$API_CLUSTER/openapi/v3/apis/fence-agents-remediation.medik8s.io/v1alpha1"
+        activeScan:
+          policy: "Operator-scan"
+        miscOptions:
+          enableUI: False
+          updateAddons: False
+          overrideConfigs:
+            - formhandler.fields.field(0).fieldId=namespace
+            - formhandler.fields.field(0).value=openshift-operators
+            - oast.callback.port=$OAST_CALLBACK_PORT
+            - oast.callback.remoteaddr=$OAST_CALLBACK_ADDRESS
+EOF
+)
+
+# Create the ConfigMap
+echo "$configmap_content" | oc -n ${NAMESPACE} create -f -
