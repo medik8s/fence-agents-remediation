@@ -167,7 +167,7 @@ var _ = Describe("FAR Controller", func() {
 				Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
 
 				By("Not having any test pod")
-				testPodDeletion(testPodName, true)
+				verifyPodDeleted(testPodName)
 
 				By("Verifying correct conditions for successfull remediation")
 				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
@@ -198,7 +198,7 @@ var _ = Describe("FAR Controller", func() {
 				Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeFalse())
 
 				By("Still having one test pod")
-				testPodDeletion(testPodName, false)
+				verifyPodExists(testPodName)
 
 				By("Verifying correct conditions for unsuccessfull remediation")
 				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
@@ -313,30 +313,32 @@ func cliCommandsEquality(far *v1alpha1.FenceAgentsRemediation) (bool, error) {
 	return isEqualStringLists(mocksExecuter.command, expectedCommand), nil
 }
 
-// testPodDeletion tests whether the pod no longer exist for successful FAR CR
-// and consistently check if the pod exist and was not deleted
-func testPodDeletion(podName string, resourceDeletionWasTriggered bool) {
+// verifyPodDeleted verifies whether the pod no longer exist for successful FAR CR
+func verifyPodDeleted(podName string) {
+	pod := &corev1.Pod{}
 	podKey := client.ObjectKey{
 		Namespace: defaultNamespace,
 		Name:      podName,
 	}
-	if resourceDeletionWasTriggered {
-		EventuallyWithOffset(1, func() bool {
-			pod := &corev1.Pod{}
-			err := k8sClient.Get(context.Background(), podKey, pod)
-			return apierrors.IsNotFound(err)
+	EventuallyWithOffset(1, func() bool {
+		err := k8sClient.Get(context.Background(), podKey, pod)
+		return apierrors.IsNotFound(err)
+	}, timeoutDeletion, pollInterval).Should(BeTrue())
+	log.Info("Pod is no longer exist", "pod", podName)
+}
 
-		}, timeoutDeletion, pollInterval).Should(BeTrue())
-		log.Info("Pod is no longer exist", "pod", podName)
-	} else {
-		ConsistentlyWithOffset(1, func() bool {
-			pod := &corev1.Pod{}
-			err := k8sClient.Get(context.Background(), podKey, pod)
-			return apierrors.IsNotFound(err)
-
-		}, timeoutDeletion, pollInterval).Should(BeFalse())
-		log.Info("Pod exist", "pod", podName)
+// verifyPodExists verifies whether the pod exist and was not deleted
+func verifyPodExists(podName string) {
+	pod := &corev1.Pod{}
+	podKey := client.ObjectKey{
+		Namespace: defaultNamespace,
+		Name:      podName,
 	}
+	ConsistentlyWithOffset(1, func() bool {
+		err := k8sClient.Get(context.Background(), podKey, pod)
+		return apierrors.IsNotFound(err)
+	}, timeoutDeletion, pollInterval).Should(BeFalse())
+	log.Info("Pod exist", "pod", podName)
 }
 
 // verifyStatusCondition checks if the status condition is not set, and if it is set then it has an expected value
