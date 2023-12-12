@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+set -eou pipefail
 
 # Temp directory to store generated pod yaml
 TMP_DIR=/tmp

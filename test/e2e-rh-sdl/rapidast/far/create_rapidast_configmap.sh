@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+set -eou pipefail
 
 NAMESPACE="rapidast-far"
-# API_CLUSTER="https://kubernetes.default.svc"
 API_CLUSTER=$(grep "server: https://" $KUBECONFIG | sed -r 's#.+?//##' | head -1)
-# TOKEN=$(oc login -u kubeadmin -p $(cat ${HOME}/clusterconfigs/auth/kubeadmin-password) --server=https://${API_CLUSTER} > /dev/null 2>&1 ; oc whoami -t)
 TOKEN=$(oc create token privileged-sa -n rapidast-far)
 API_CLUSTER_NAME=$(echo $API_CLUSTER | cut -d ':' -f 1)
 OAST_CALLBACK_PORT=$(python -c "import socket; s=socket.socket(); s.bind((\"\", 0)); print(s.getsockname()[1]); s.close()")
