@@ -49,6 +49,7 @@ const (
 	vaName1        = "va-test-1"
 	vaName2        = "va-test-2"
 
+	forced client.GracePeriodSeconds = 0
 	// intervals
 	timeoutDeletion  = 2 * time.Second // this timeout is used after all the other steps have finished successfully
 	timeoutFinalizer = 1 * time.Second
@@ -285,7 +286,7 @@ func cleanupTestedResources(va1, va2 *storagev1.VolumeAttachment, pod *corev1.Po
 	podTest := &corev1.Pod{}
 	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(pod), podTest); err == nil {
 		log.Info("Cleanup: clean pod", "pod name", podTest.Name)
-		Expect(k8sClient.Delete(context.Background(), podTest)).To(Succeed())
+		Expect(k8sClient.Delete(context.Background(), podTest, forced)).To(Succeed())
 	}
 }
 

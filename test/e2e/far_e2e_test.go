@@ -37,6 +37,7 @@ const (
 	testContainerName        = "test-container"
 	testPodName              = "test-pod"
 
+	forced client.GracePeriodSeconds = 0
 	//TODO: try to minimize timeout
 	// eventually parameters
 	timeoutLogs     = 3 * time.Minute
@@ -268,7 +269,7 @@ func deleteFAR(far *v1alpha1.FenceAgentsRemediation) {
 func cleanupTestedResources(pod *corev1.Pod) {
 	newPod := &corev1.Pod{}
 	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(pod), newPod); err == nil {
-		Expect(k8sClient.Delete(context.Background(), newPod)).To(Succeed())
+		Expect(k8sClient.Delete(context.Background(), newPod, forced)).To(Succeed())
 		log.Info("cleanup: Pod has not been deleted by remediation", "pod name", pod.Name)
 	}
 }
