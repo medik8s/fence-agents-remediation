@@ -79,11 +79,12 @@ var _ = Describe("FAR E2e", func() {
 
 	Context("stress cluster", func() {
 		var (
-			nodes, filteredNodes                *corev1.NodeList
-			nodeName                            string
-			pod                                 *corev1.Pod
-			creationTimePod, nodeBootTimeBefore time.Time
-			err                                 error
+			nodes, filteredNodes          *corev1.NodeList
+			nodeName                      string
+			pod                           *corev1.Pod
+			startTime, nodeBootTimeBefore time.Time
+			err                           error
+			remediationTimes              []time.Duration
 		)
 		BeforeEach(func() {
 			nodes = &corev1.NodeList{}
@@ -116,29 +117,40 @@ var _ = Describe("FAR E2e", func() {
 			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
 			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
 
-			// create tested pod, and save its creation time
-			// it will be deleted by FAR CR
+			// create tested pod which will be deleted by the far CR
 			pod = e2eUtils.GetPod(nodeName, testContainerName)
 			pod.Name = testPodName
 			pod.Namespace = testNsName
 			Expect(k8sClient.Create(context.Background(), pod)).To(Succeed())
-			log.Info("Tested pod has been created", "pod", testPodName)
-			creationTimePod = metav1.Now().Time
 			DeferCleanup(cleanupTestedResources, pod)
 
 			// set the node as "unhealthy" by disabling kubelet
 			makeNodeUnready(selectedNode)
 
+			startTime = time.Now()
 			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam)
 			DeferCleanup(deleteFAR, far)
 		})
 		When("running FAR to reboot two nodes", func() {
 			It("should successfully remediate the first node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore, creationTimePod, pod)
+				checkRemediation(nodeName, nodeBootTimeBefore, pod)
+				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
 			It("should successfully remediate the second node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore, creationTimePod, pod)
+				checkRemediation(nodeName, nodeBootTimeBefore, pod)
+				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
+		})
+		AfterEach(func() {
+			if len(remediationTimes) == 2 {
+				averageTimeDuration := 0.0
+				for index, remTime := range remediationTimes {
+					averageTimeDuration += remTime.Seconds()
+					fmt.Printf("\nRemediation time #%d: %s\n", index+1, remTime)
+				}
+				averageTime := int(averageTimeDuration)/ len(remediationTimes)
+				fmt.Printf("\nAverage remediation time: %d minutes and %d seconds\n", averageTime/60, averageTime%60)
+			}
 		})
 	})
 })
@@ -398,7 +410,7 @@ func verifyStatusCondition(nodeName, conditionType string, conditionStatus *meta
 }
 
 // checkRemediation verify whether the node was remediated
-func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, oldPodCreationTime time.Time, pod *corev1.Pod) {
+func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, pod *corev1.Pod) {
 	By("Check if FAR NoExecute taint was added")
 	wasFarTaintAdded(nodeName)
 
