@@ -100,6 +100,7 @@ var _ = Describe("FAR Controller", func() {
 					invalidValTestFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, invalidShareParam, testNodeParam)
 					invalidShareString, err := buildFenceAgentParams(invalidValTestFAR)
 					Expect(err).NotTo(HaveOccurred())
+					underTestFAR.ObjectMeta.Name = workerNode
 					validShareString, err := buildFenceAgentParams(underTestFAR)
 					Expect(err).NotTo(HaveOccurred())
 					// Eventually buildFenceAgentParams would return the same shareParam
@@ -126,7 +127,6 @@ var _ = Describe("FAR Controller", func() {
 		nodeKey := client.ObjectKey{Name: workerNode}
 		farNamespacedName := client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}
 		farNoExecuteTaint := utils.CreateFARNoExecuteTaint()
-		resourceDeletionWasTriggered := true // corresponds to testVADeletion bool value
 		conditionStatusPointer := func(status metav1.ConditionStatus) *metav1.ConditionStatus { return &status }
 		BeforeEach(func() {
 			// Create two VAs and two pods, and at the end clean them up with DeferCleanup
@@ -149,9 +149,12 @@ var _ = Describe("FAR Controller", func() {
 		When("creating valid FAR CR", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam)
 			})
 			It("should have finalizer, taint, while the two VAs and one pod will be deleted", func() {
 				By("Searching for remediation taint")
+				nodeKey = client.ObjectKey{Name: workerNode}
+				farNamespacedName = client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}
 				Eventually(func(g Gomega) bool {
 					g.Expect(k8sClient.Get(context.Background(), nodeKey, node)).To(Succeed())
 					g.Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
@@ -164,7 +167,7 @@ var _ = Describe("FAR Controller", func() {
 				Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
 
 				By("Not having any test pod")
-				testPodDeletion(testPodName, resourceDeletionWasTriggered)
+				verifyPodDeleted(testPodName)
 
 				By("Verifying correct conditions for successfull remediation")
 				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
@@ -180,11 +183,11 @@ var _ = Describe("FAR Controller", func() {
 			})
 			It("should not have a finalizer nor taint, while the two VAs and one pod will remain", func() {
 				By("Not finding a matching node to FAR CR's name")
-				nodeKey.Name = underTestFAR.Name
+				nodeKey = client.ObjectKey{Name: underTestFAR.Name}
 				Expect(k8sClient.Get(context.Background(), nodeKey, node)).To(Not(Succeed()))
 
 				By("Not having finalizer")
-				farNamespacedName.Name = underTestFAR.Name
+				farNamespacedName = client.ObjectKey{Name: underTestFAR.Name, Namespace: defaultNamespace}
 				Consistently(func(g Gomega) bool {
 					g.Expect(k8sClient.Get(context.Background(), farNamespacedName, underTestFAR)).To(Succeed())
 					return controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)
@@ -195,8 +198,7 @@ var _ = Describe("FAR Controller", func() {
 				Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeFalse())
 
 				By("Still having one test pod")
-				resourceDeletionWasTriggered = false
-				testPodDeletion(testPodName, resourceDeletionWasTriggered)
+				verifyPodExists(testPodName)
 
 				By("Verifying correct conditions for unsuccessfull remediation")
 				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
@@ -311,30 +313,32 @@ func cliCommandsEquality(far *v1alpha1.FenceAgentsRemediation) (bool, error) {
 	return isEqualStringLists(mocksExecuter.command, expectedCommand), nil
 }
 
-// testPodDeletion tests whether the pod no longer exist for successful FAR CR
-// and consistently check if the pod exist and was not deleted
-func testPodDeletion(podName string, resourceDeletionWasTriggered bool) {
+// verifyPodDeleted verifies whether the pod no longer exist for successful FAR CR
+func verifyPodDeleted(podName string) {
+	pod := &corev1.Pod{}
 	podKey := client.ObjectKey{
 		Namespace: defaultNamespace,
 		Name:      podName,
 	}
-	if resourceDeletionWasTriggered {
-		EventuallyWithOffset(1, func() bool {
-			pod := &corev1.Pod{}
-			err := k8sClient.Get(context.Background(), podKey, pod)
-			return apierrors.IsNotFound(err)
+	EventuallyWithOffset(1, func() bool {
+		err := k8sClient.Get(context.Background(), podKey, pod)
+		return apierrors.IsNotFound(err)
+	}, timeoutDeletion, pollInterval).Should(BeTrue())
+	log.Info("Pod is no longer exist", "pod", podName)
+}
 
-		}, timeoutDeletion, pollInterval).Should(BeTrue())
-		log.Info("Pod is no longer exist", "pod", podName)
-	} else {
-		ConsistentlyWithOffset(1, func() bool {
-			pod := &corev1.Pod{}
-			err := k8sClient.Get(context.Background(), podKey, pod)
-			return apierrors.IsNotFound(err)
-
-		}, timeoutDeletion, pollInterval).Should(BeFalse())
-		log.Info("Pod exist", "pod", podName)
+// verifyPodExists verifies whether the pod exist and was not deleted
+func verifyPodExists(podName string) {
+	pod := &corev1.Pod{}
+	podKey := client.ObjectKey{
+		Namespace: defaultNamespace,
+		Name:      podName,
 	}
+	ConsistentlyWithOffset(1, func() bool {
+		err := k8sClient.Get(context.Background(), podKey, pod)
+		return apierrors.IsNotFound(err)
+	}, timeoutDeletion, pollInterval).Should(BeFalse())
+	log.Info("Pod exist", "pod", podName)
 }
 
 // verifyStatusCondition checks if the status condition is not set, and if it is set then it has an expected value
