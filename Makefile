@@ -180,11 +180,13 @@ test: test-no-verify verify-unchanged ## Generate and format code, run tests, ge
 .PHONY: test-no-verify
 # -r: If set, ginkgo finds and runs test suites under the current directory recursively.
 # --keep-going:  If set, failures from earlier test suites do not prevent later test suites from running.
+# --randomize-all  If set, ginkgo will randomize all specs together.
+# By default, ginkgo only randomizes the top level Describe, Context and When containers
 # --require-suite: If set, Ginkgo fails if there are ginkgo tests in a directory but no invocation of RunSpecs.
 # --vv: If set, emits with maximal verbosity - includes skipped and pending tests.
 test-no-verify: manifests generate go-verify fmt vet fix-imports envtest ginkgo # Generate and format code, and run tests
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR)/$(ENVTEST_VERSION) -p path)" \
-	$(GINKGO) -r --keep-going --require-suite --vv -coverprofile cover.out ./pkg/... ./controllers/...
+	$(GINKGO) -r --keep-going --randomize-all --require-suite --vv --coverprofile cover.out ./pkg/... ./controllers/...
 
 .PHONY: bundle-run
 export BUNDLE_RUN_NAMESPACE ?= openshift-operators
