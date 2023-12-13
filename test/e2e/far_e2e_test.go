@@ -56,7 +56,7 @@ var _ = Describe("FAR E2e", func() {
 		// create FAR CR spec based on OCP platformn
 		clusterPlatform, err := e2eUtils.GetClusterInfo(configClient)
 		Expect(err).ToNot(HaveOccurred(), "can't identify the cluster platform")
-		fmt.Printf("\ncluster name: %s and PlatformType: %s \n", string(clusterPlatform.Name), string(clusterPlatform.Status.PlatformStatus.Type))
+		log.Info("Begin e2e test", "Cluster name", string(clusterPlatform.Name), "PlatformType", string(clusterPlatform.Status.PlatformStatus.Type))
 
 		switch clusterPlatform.Status.PlatformStatus.Type {
 		case configv1.AWSPlatformType:
@@ -148,7 +148,7 @@ var _ = Describe("FAR E2e", func() {
 					averageTimeDuration += remTime.Seconds()
 					fmt.Printf("\nRemediation time #%d: %s\n", index+1, remTime)
 				}
-				averageTime := int(averageTimeDuration)/ len(remediationTimes)
+				averageTime := int(averageTimeDuration) / len(remediationTimes)
 				fmt.Printf("\nAverage remediation time: %d minutes and %d seconds\n", averageTime/60, averageTime%60)
 			}
 		})
@@ -178,7 +178,7 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 	if clusterPlatformType == configv1.AWSPlatformType {
 		accessKey, secretKey, err := e2eUtils.GetSecretData(clientSet, secretAWSName, secretAWSNamespace, secretKeyAWS, secretValAWS)
 		if err != nil {
-			fmt.Printf("can't get AWS credentials\n")
+			log.Info("Can't get AWS credentials")
 			return nil, err
 		}
 
@@ -199,7 +199,7 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 		// then parse ip
 		username, password, err := e2eUtils.GetSecretData(clientSet, secretBMHName, secretBMHNamespace, secretKeyBM, secretValBM)
 		if err != nil {
-			fmt.Printf("can't get BMH credentials\n")
+			log.Info("Can't get BMH credentials")
 			return nil, err
 		}
 		testShareParam = map[v1alpha1.ParameterName]string{
@@ -225,7 +225,7 @@ func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha
 	if clusterPlatformType == configv1.AWSPlatformType {
 		nodeListParam, err = e2eUtils.GetAWSNodeInfoList(machineClient)
 		if err != nil {
-			fmt.Printf("can't get nodes' information - AWS instance ID\n")
+			log.Info("Can't get nodes' information - AWS instance ID is missing")
 			return nil, err
 		}
 		nodeIdentifier = v1alpha1.ParameterName(nodeIdentifierPrefixAWS)
@@ -233,7 +233,7 @@ func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha
 	} else if clusterPlatformType == configv1.BareMetalPlatformType {
 		nodeListParam, err = e2eUtils.GetBMHNodeInfoList(machineClient)
 		if err != nil {
-			fmt.Printf("can't get nodes' information - ports\n")
+			log.Info("Can't get nodes' information - ports are missing")
 			return nil, err
 		}
 		nodeIdentifier = v1alpha1.ParameterName(nodeIdentifierPrefixIPMI)
