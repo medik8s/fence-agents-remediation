@@ -46,6 +46,8 @@ const (
 	pollInterval    = 10 * time.Second
 )
 
+var remediationsTime []time.Duration
+
 var _ = Describe("FAR E2e", func() {
 	var (
 		fenceAgent, nodeIdentifierPrefix string
@@ -84,7 +86,6 @@ var _ = Describe("FAR E2e", func() {
 			pod                           *corev1.Pod
 			startTime, nodeBootTimeBefore time.Time
 			err                           error
-			remediationTimes              []time.Duration
 		)
 		BeforeEach(func() {
 			nodes = &corev1.NodeList{}
@@ -134,25 +135,26 @@ var _ = Describe("FAR E2e", func() {
 		When("running FAR to reboot two nodes", func() {
 			It("should successfully remediate the first node", func() {
 				checkRemediation(nodeName, nodeBootTimeBefore, pod)
-				remediationTimes = append(remediationTimes, time.Since(startTime))
+				remediationsTime = append(remediationsTime, time.Since(startTime))
 			})
 			It("should successfully remediate the second node", func() {
 				checkRemediation(nodeName, nodeBootTimeBefore, pod)
-				remediationTimes = append(remediationTimes, time.Since(startTime))
+				remediationsTime = append(remediationsTime, time.Since(startTime))
 			})
 		})
-		AfterEach(func() {
-			if len(remediationTimes) == 2 {
-				averageTimeDuration := 0.0
-				for index, remTime := range remediationTimes {
-					averageTimeDuration += remTime.Seconds()
-					fmt.Printf("\nRemediation time #%d: %s\n", index+1, remTime)
-				}
-				averageTime := int(averageTimeDuration) / len(remediationTimes)
-				fmt.Printf("\nAverage remediation time: %d minutes and %d seconds\n", averageTime/60, averageTime%60)
-			}
-		})
 	})
+})
+
+var _ = AfterSuite(func() {
+	if len(remediationsTime) > 0 {
+		averageTimeDuration := 0.0
+		for _, remTime := range remediationsTime {
+			averageTimeDuration += remTime.Seconds()
+			log.Info("Remediation was finished", "remediation time", remTime)
+		}
+		averageTime := int(averageTimeDuration) / len(remediationsTime)
+		log.Info("Average remediation time", "minutes", averageTime/60, "seconds", averageTime%60)
+	}
 })
 
 // buildSharedParameters returns a map key-value of shared parameters based on cluster platform type if it finds the credentials, otherwise an error
