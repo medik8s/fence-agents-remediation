@@ -28,15 +28,15 @@ type routine struct {
 
 type Executer struct {
 	client.Client
-	log      logr.Logger
-	routines map[types.UID]*routine
-	mapLock  sync.Mutex
-	runner   runnerFunc
+	log          logr.Logger
+	routines     map[types.UID]*routine
+	routinesLock sync.Mutex
+	runner       runnerFunc
 }
 
 // runnerFunc is a function that runs the command and returns the stdout, stderr and error
 // it is configurable in Executer for testing purposes
-type runnerFunc func(ctx context.Context, uid types.UID, command []string, logger logr.Logger) (string, string, error)
+type runnerFunc func(ctx context.Context, command []string) (string, string, error)
 
 // NewExecuter builds the Executer
 func NewExecuter(client client.Client) (*Executer, error) {
@@ -64,119 +64,120 @@ func NewFakeExecuter(client client.Client, fn runnerFunc) (*Executer, error) {
 
 // AsyncExecute runs the command in a goroutine mapped to the UID
 func (e *Executer) AsyncExecute(ctx context.Context, uid types.UID, command []string, retryCount int, retryDuration, timeout time.Duration) {
-	e.mapLock.Lock()
-	defer e.mapLock.Unlock()
-	if _, exist := e.routines[uid]; !exist {
-		// create a context for the fence agent command that the controller can cancel
-		cancellableCtx, cancel := context.WithCancel(ctx)
-		routine := routine{
-			cancel: cancel,
+	e.routinesLock.Lock()
+	defer e.routinesLock.Unlock()
+	if _, exist := e.routines[uid]; exist {
+		return
+	}
+	// create a context for the fence agent command that the controller can cancel
+	cancellableCtx, cancel := context.WithCancel(ctx)
+	routine := routine{
+		cancel: cancel,
+	}
+	e.routines[uid] = &routine
+
+	go func(faCtx, crCtx context.Context, uid types.UID, command []string) {
+		// Linear backoff
+		backoff := wait.Backoff{
+			Steps:    retryCount,
+			Duration: retryDuration,
+			Factor:   1.0,
 		}
-		e.routines[uid] = &routine
 
-		go func(faCtx, crCtx context.Context, uid types.UID, command []string) {
-			// Linear backoff
-			backoff := wait.Backoff{
-				Steps:    retryCount,
-				Duration: retryDuration,
-				Factor:   1.0,
+		var stdout, stderr string
+		var faErr error
+
+		e.log.Info("fence agent start", "uid", uid, "command", command, "retryCount", retryCount, "retryDuration", retryDuration, "timeout", timeout)
+		// ExponentialBackoff to handle the fence agent command execution where:
+		// - the command fails: the command is retried until the retryCount is reached
+		// - the command times out: the command is retried until the retryCount is reached
+		// - the FA context times out: the command is cancelled and the status is updated
+		// - the FA context is cancelled: the command is cancelled and the status is not updated
+		// - the command succeeds: the command is not retried and the status is updated
+		err := wait.ExponentialBackoffWithContext(faCtx,
+			backoff,
+			func(ctx context.Context) (bool, error) {
+				ctxWithTimeout, cancel := context.WithTimeout(faCtx, timeout)
+				defer cancel()
+				stdout, stderr, faErr = e.runner(ctxWithTimeout, command)
+				if faErr == nil {
+					e.log.Info("command completed", "uid", uid, "response", stdout, "errMessage", stderr, "err", faErr)
+					return true, nil
+				}
+
+				if wait.Interrupted(faErr) {
+					e.log.Error(faErr, "fence agent timeout", "uid", uid)
+					return false, faErr
+				}
+
+				e.log.Info("command failed", "uid", uid, "response", stdout, "errMessage", stderr, "err", faErr)
+				return false, nil
+			})
+
+		e.log.Info("fence agent done", "uid", uid, "command", command, "stdout", stdout, "stderr", stderr, "err", faErr)
+
+		if err != nil {
+			switch {
+			case errors.Is(err, context.Canceled):
+				e.log.Info("fence agent context canceled. Nothing to do")
+				return
+			case wait.Interrupted(err):
+				e.log.Info("fence agent context timed out")
+			default:
+				e.log.Error(err, "fence agent error")
 			}
+		}
 
-			var stdout, stderr string
-			var faErr error
+		// ExponantialBackoff to handle only the updateStatus error cases where:
+		// - FAR cannot be found, but it does exist
+		// - the status update fails for conflicts
+		e.log.Info("updating status", "FAR uid", uid)
+		wait.ExponentialBackoffWithContext(crCtx,
+			retry.DefaultBackoff,
+			func(ctx context.Context) (bool, error) {
+				far, err := e.getFenceAgentsRemediationByUID(crCtx, uid)
+				if err != nil {
+					if apiErrors.IsNotFound(err) {
+						e.log.Info("could not find FAR by UID", "FAR uid", uid)
+						return false, err
+					}
 
-			e.log.Info("fence agent start", "uid", uid, "command", command, "retryCount", retryCount, "retryDuration", retryDuration, "timeout", timeout)
-			// ExponentialBackoff to handle the fence agent command execution where:
-			// - the command fails: the command is retried until the retryCount is reached
-			// - the command times out: the command is retried until the retryCount is reached
-			// - the FA context times out: the command is cancelled and the status is updated
-			// - the FA context is cancelled: the command is cancelled and the status is not updated
-			// - the command succeeds: the command is not retried and the status is updated
-			err := wait.ExponentialBackoffWithContext(faCtx,
-				backoff,
-				func(ctx context.Context) (bool, error) {
-					ctxWithTimeout, cancel := context.WithTimeout(faCtx, timeout)
-					defer cancel()
-					stdout, stderr, faErr = e.runner(ctxWithTimeout, uid, command, e.log)
-					if faErr == nil {
-						e.log.Info("command completed", "uid", uid, "response", stdout, "errMessage", stderr, "err", faErr)
+					if wait.Interrupted(err) {
+						e.log.Info("could not update status", "FAR uid", uid, "reason", err)
+						return false, err
+					}
+
+					e.log.Error(err, "could not update status", "FAR uid", uid)
+					return false, err
+				}
+
+				if err := e.updateStatus(crCtx, far, faErr); err != nil {
+					if apiErrors.IsConflict(err) &&
+						!wait.Interrupted(err) {
+						e.log.Error(err, "conflict while updating the status", "FAR uid", uid)
 						return true, nil
 					}
-
-					if wait.Interrupted(faErr) {
-						e.log.Error(faErr, "fence agent timeout", "uid", uid)
-						return false, faErr
-					}
-
-					e.log.Info("command failed", "uid", uid, "response", stdout, "errMessage", stderr, "err", faErr)
-					return false, nil
-				})
-
-			e.log.Info("fence agent done", "uid", uid, "command", command, "stdout", stdout, "stderr", stderr, "err", faErr)
-
-			if err != nil {
-				switch {
-				case errors.Is(err, context.Canceled):
-					e.log.Info("fence agent context canceled. Nothing to do")
-					return
-				case wait.Interrupted(err):
-					e.log.Info("fence agent context timed out")
-				default:
-					e.log.Error(err, "fence agent error")
+					e.log.Error(err, "failed to update status", "FAR uid", uid)
+					return false, err
 				}
-			}
 
-			// ExponantialBackoff to handle only the updateStatus error cases where:
-			// - FAR cannot be found, but it does exist
-			// - the status update fails for conflicts
-			e.log.Info("updating status", "FAR uid", uid)
-			wait.ExponentialBackoffWithContext(crCtx,
-				retry.DefaultBackoff,
-				func(ctx context.Context) (bool, error) {
-					far, err := e.getFenceAgentsRemediationByUID(crCtx, uid)
-					if err != nil {
-						if apiErrors.IsNotFound(err) {
-							e.log.Info("could not find FAR by UID", "FAR uid", uid)
-							return false, err
-						}
-
-						if wait.Interrupted(err) {
-							e.log.Info("could not update status", "FAR uid", uid, "reason", err)
-							return false, err
-						}
-
-						e.log.Error(err, "could not update status", "FAR uid", uid)
-						return false, err
-					}
-
-					if err := e.updateStatus(crCtx, far, faErr); err != nil {
-						if apiErrors.IsConflict(err) &&
-							!wait.Interrupted(err) {
-							e.log.Error(err, "conflict while updating the status", "FAR uid", uid)
-							return true, nil
-						}
-						e.log.Error(err, "failed to update status", "FAR uid", uid)
-						return false, err
-					}
-
-					e.log.Info("status updated", "FAR uid", uid)
-					return false, nil
-				})
-		}(cancellableCtx, ctx, uid, command)
-	}
+				e.log.Info("status updated", "FAR uid", uid)
+				return false, nil
+			})
+	}(cancellableCtx, ctx, uid, command)
 }
 
 // Exists checks if there is already a running Fence Agent command mapped to the UID
 func (e *Executer) Exists(uid types.UID) bool {
-	e.mapLock.Lock()
-	defer e.mapLock.Unlock()
+	e.routinesLock.Lock()
+	defer e.routinesLock.Unlock()
 	_, exist := e.routines[uid]
 	return exist
 }
 
 func (e *Executer) Remove(uid types.UID) {
-	e.mapLock.Lock()
-	defer e.mapLock.Unlock()
+	e.routinesLock.Lock()
+	defer e.routinesLock.Unlock()
 	if routine, exist := e.routines[uid]; exist {
 		e.log.Info("cancelling fence agent routine", "uid", uid)
 		routine.cancel()
@@ -185,7 +186,7 @@ func (e *Executer) Remove(uid types.UID) {
 }
 
 // run runs the command in the container and updates the status of the FAR instance maching the UID
-func run(ctx context.Context, uid types.UID, command []string, logger logr.Logger) (stdout, stderr string, err error) {
+func run(ctx context.Context, command []string) (stdout, stderr string, err error) {
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 
 	var outBuilder, errBuilder strings.Builder

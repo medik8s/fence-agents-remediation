@@ -24,12 +24,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap/zapcore"
 
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -163,7 +161,7 @@ var _ = AfterSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 })
 
-func controlledRun(ctx context.Context, uid types.UID, command []string, logger logr.Logger) (stdout, stderr string, err error) {
+func controlledRun(ctx context.Context, command []string) (stdout, stderr string, err error) {
 	storedCommand = command
 	if forcedDelay > 0 {
 		select {
