@@ -63,7 +63,7 @@ func NewFakeExecuter(client client.Client, fn runnerFunc) (*Executer, error) {
 }
 
 // AsyncExecute runs the command in a goroutine mapped to the UID
-func (e *Executer) AsyncExecute(ctx context.Context, uid types.UID, command []string, retryCount int, retryDuration, timeout time.Duration) {
+func (e *Executer) AsyncExecute(ctx context.Context, uid types.UID, command []string, retryCount int, retryInterval, timeout time.Duration) {
 	e.routinesLock.Lock()
 	defer e.routinesLock.Unlock()
 	if _, exist := e.routines[uid]; exist {
@@ -77,12 +77,12 @@ func (e *Executer) AsyncExecute(ctx context.Context, uid types.UID, command []st
 	}
 	e.routines[uid] = &routine
 
-	go e.fenceAgentRoutine(cancellableCtx, uid, command, retryCount, retryDuration, timeout)
+	go e.fenceAgentRoutine(cancellableCtx, uid, command, retryCount, retryInterval, timeout)
 }
 
-func (e *Executer) fenceAgentRoutine(ctx context.Context, uid types.UID, command []string, retryCount int, retryDuration, timeout time.Duration) {
+func (e *Executer) fenceAgentRoutine(ctx context.Context, uid types.UID, command []string, retryCount int, retryInterval, timeout time.Duration) {
 	// run the command and update the status
-	retryErr, cmdErr := e.runWithRetry(ctx, uid, command, retryCount, retryDuration, timeout)
+	retryErr, cmdErr := e.runWithRetry(ctx, uid, command, retryCount, retryInterval, timeout)
 	if retryErr != nil {
 		switch {
 		case errors.Is(retryErr, context.Canceled):
@@ -106,7 +106,7 @@ func (e *Executer) fenceAgentRoutine(ctx context.Context, uid types.UID, command
 	}
 }
 
-func (e *Executer) runWithRetry(ctx context.Context, uid types.UID, command []string, retryCount int, retryDuration, timeout time.Duration) (retryErr, faErr error) {
+func (e *Executer) runWithRetry(ctx context.Context, uid types.UID, command []string, retryCount int, retryInterval, timeout time.Duration) (retryErr, faErr error) {
 	// Run the command with an exponantial backoff retry to handle the following cases:
 	// - the command fails: the command is retried until the retryCount is reached
 	// - the command times out: the command is retried until the retryCount is reached
@@ -117,11 +117,11 @@ func (e *Executer) runWithRetry(ctx context.Context, uid types.UID, command []st
 	// Linear backoff
 	backoff := wait.Backoff{
 		Steps:    retryCount,
-		Duration: retryDuration,
+		Duration: retryInterval,
 		Factor:   1.0,
 	}
 
-	e.log.Info("fence agent start", "uid", uid, "command", command, "retryCount", retryCount, "retryDuration", retryDuration, "timeout", timeout)
+	e.log.Info("fence agent start", "uid", uid, "command", command, "retryCount", retryCount, "retryInterval", retryInterval, "timeout", timeout)
 
 	var stdout, stderr string
 	retryErr = wait.ExponentialBackoffWithContext(ctx,
