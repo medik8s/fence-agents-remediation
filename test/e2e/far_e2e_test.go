@@ -46,7 +46,7 @@ const (
 	pollInterval    = 10 * time.Second
 )
 
-var remediationsTime []time.Duration
+var remediationTimes []time.Duration
 
 var _ = Describe("FAR E2e", func() {
 	var (
@@ -135,24 +135,24 @@ var _ = Describe("FAR E2e", func() {
 		When("running FAR to reboot two nodes", func() {
 			It("should successfully remediate the first node", func() {
 				checkRemediation(nodeName, nodeBootTimeBefore, pod)
-				remediationsTime = append(remediationsTime, time.Since(startTime))
+				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
 			It("should successfully remediate the second node", func() {
 				checkRemediation(nodeName, nodeBootTimeBefore, pod)
-				remediationsTime = append(remediationsTime, time.Since(startTime))
+				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
 		})
 	})
 })
 
 var _ = AfterSuite(func() {
-	if len(remediationsTime) > 0 {
+	if len(remediationTimes) > 0 {
 		averageTimeDuration := 0.0
-		for _, remTime := range remediationsTime {
+		for _, remTime := range remediationTimes {
 			averageTimeDuration += remTime.Seconds()
 			log.Info("Remediation was finished", "remediation time", remTime)
 		}
-		averageTime := int(averageTimeDuration) / len(remediationsTime)
+		averageTime := int(averageTimeDuration) / len(remediationTimes)
 		log.Info("Average remediation time", "minutes", averageTime/60, "seconds", averageTime%60)
 	}
 })
