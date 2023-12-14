@@ -52,14 +52,14 @@ const (
 )
 
 var (
-	faPodLabels  = map[string]string{"app.kubernetes.io/name": "fence-agents-remediation-operator"}
-	log          = ctrl.Log.WithName("controllers-unit-test")
-	underTestFAR = &v1alpha1.FenceAgentsRemediation{}
+	faPodLabels = map[string]string{"app.kubernetes.io/name": "fence-agents-remediation-operator"}
+	log         = ctrl.Log.WithName("controllers-unit-test")
 )
 
 var _ = Describe("FAR Controller", func() {
 	var (
-		node *corev1.Node
+		node         *corev1.Node
+		underTestFAR = &v1alpha1.FenceAgentsRemediation{}
 	)
 
 	invalidShareParam := map[v1alpha1.ParameterName]string{
@@ -171,9 +171,9 @@ var _ = Describe("FAR Controller", func() {
 
 				By("Verifying correct conditions for successful remediation")
 				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
-				verifyStatusCondition(workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
-				verifyStatusCondition(workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionTrue))
-				verifyStatusCondition(workerNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionTrue))
+				verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
+				verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionTrue))
+				verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionTrue))
 			})
 		})
 
@@ -202,9 +202,9 @@ var _ = Describe("FAR Controller", func() {
 
 				By("Verifying correct conditions for unsuccessful remediation")
 				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
-				verifyStatusCondition(dummyNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
-				verifyStatusCondition(dummyNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
-				verifyStatusCondition(dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
+				verifyStatusCondition(underTestFAR.Status.Conditions, dummyNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
+				verifyStatusCondition(underTestFAR.Status.Conditions, dummyNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
+				verifyStatusCondition(underTestFAR.Status.Conditions, dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
 			})
 		})
 
@@ -305,9 +305,9 @@ var _ = Describe("FAR Controller", func() {
 						g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
 					}).Should(Succeed())
 					Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
-					verifyStatusCondition(workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
-					verifyStatusCondition(workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
-					verifyStatusCondition(dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
+					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
+					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
+					verifyStatusCondition(underTestFAR.Status.Conditions, dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
 				})
 			})
 
@@ -339,9 +339,9 @@ var _ = Describe("FAR Controller", func() {
 					}).Should(Succeed())
 
 					Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
-					verifyStatusCondition(workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
-					verifyStatusCondition(workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
-					verifyStatusCondition(dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
+					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
+					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
+					verifyStatusCondition(underTestFAR.Status.Conditions, dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
 				})
 			})
 		})
@@ -450,9 +450,9 @@ func checkPodIsNotFound(podName string, expected bool) {
 }
 
 // verifyStatusCondition checks if the status condition is not set, and if it is set then it has an expected value
-func verifyStatusCondition(nodeName, conditionType string, conditionStatus *metav1.ConditionStatus) {
+func verifyStatusCondition(conditions []metav1.Condition, nodeName, conditionType string, conditionStatus *metav1.ConditionStatus) {
 	Eventually(func(g Gomega) {
-		condition := meta.FindStatusCondition(underTestFAR.Status.Conditions, conditionType)
+		condition := meta.FindStatusCondition(conditions, conditionType)
 		if conditionStatus == nil {
 			g.Expect(condition).To(BeNil(), "expected condition %v to not be set", conditionType)
 		} else {
