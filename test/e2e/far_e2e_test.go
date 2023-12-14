@@ -246,8 +246,8 @@ func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.Para
 			Agent:            agent,
 			SharedParameters: sharedParameters,
 			NodeParameters:   nodeParameters,
-			RetryCount:       100,
-			RetryInterval:    metav1.Duration{Duration: 5 * time.Second},
+			RetryCount:       5,
+			RetryInterval:    metav1.Duration{Duration: 20 * time.Second},
 			Timeout:          metav1.Duration{Duration: 60 * time.Second},
 		},
 	}

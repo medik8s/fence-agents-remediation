@@ -56,7 +56,7 @@ type FenceAgentsRemediationSpec struct {
 	Agent string `json:"agent"`
 
 	// RetryCount is the number of times the fencing agent will be executed
-	//+kubebuilder:default:=100
+	//+kubebuilder:default:=5
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	RetryCount int `json:"retrycount,omitempty"`
 

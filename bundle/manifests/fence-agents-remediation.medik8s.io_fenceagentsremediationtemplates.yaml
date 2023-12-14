@@ -61,7 +61,7 @@ spec:
                           specific
                         type: object
                       retrycount:
-                        default: 100
+                        default: 5
                         description: RetryCount is the number of times the fencing
                           agent will be executed
                         type: integer
