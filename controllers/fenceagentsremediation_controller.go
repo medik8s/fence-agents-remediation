@@ -204,10 +204,8 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	if meta.IsStatusConditionTrue(far.Status.Conditions, utils.FenceAgentActionSucceededType) &&
 		!meta.IsStatusConditionTrue(far.Status.Conditions, commonConditions.SucceededType) {
 		// Fence agent action succeeded
-		// - clean up Executor routine
 		// - try to remove workloads
-
-		r.Executor.Remove(far.GetUID())
+		// - clean up Executor routine
 
 		r.Log.Info("Manual workload deletion", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
 		if err := commonResources.DeletePods(ctx, r.Client, req.Name); err != nil {
@@ -217,6 +215,8 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		if err := utils.UpdateConditions(utils.RemediationFinishedSuccessfully, far, r.Log); err != nil {
 			return emptyResult, err
 		}
+
+		r.Executor.Remove(far.GetUID())
 		r.Log.Info("FenceAgentsRemediation CR has completed to remediate the node", "Node Name", req.Name)
 	}
 
