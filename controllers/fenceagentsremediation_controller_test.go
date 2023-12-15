@@ -100,6 +100,7 @@ var _ = Describe("FAR Controller", func() {
 					invalidValTestFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, invalidShareParam, testNodeParam)
 					invalidShareString, err := buildFenceAgentParams(invalidValTestFAR)
 					Expect(err).NotTo(HaveOccurred())
+					underTestFAR.ObjectMeta.Name = workerNode
 					validShareString, err := buildFenceAgentParams(underTestFAR)
 					Expect(err).NotTo(HaveOccurred())
 					// Eventually buildFenceAgentParams would return the same shareParam
@@ -167,7 +168,7 @@ var _ = Describe("FAR Controller", func() {
 				Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
 
 				By("Not having any test pod")
-				checkPodIsNotFound(testPodName, true)
+				verifyPodDeleted(testPodName)
 
 				By("Verifying correct conditions for successful remediation")
 				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
@@ -198,7 +199,7 @@ var _ = Describe("FAR Controller", func() {
 				Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeFalse())
 
 				By("Still having one test pod")
-				checkPodIsNotFound(testPodName, false)
+				verifyPodExists(testPodName)
 
 				By("Verifying correct conditions for unsuccessful remediation")
 				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
@@ -293,7 +294,7 @@ var _ = Describe("FAR Controller", func() {
 					}, timeoutFinalizer, pollInterval).Should(Succeed())
 
 					By("Still having one test pod")
-					checkPodIsNotFound(testPodName, false)
+					verifyPodExists(testPodName)
 
 					By("Expected number of retries")
 					Eventually(func() int {
@@ -326,7 +327,7 @@ var _ = Describe("FAR Controller", func() {
 					}, timeoutFinalizer, pollInterval).Should(Succeed())
 
 					By("Still having one test pod")
-					checkPodIsNotFound(testPodName, false)
+					verifyPodExists(testPodName)
 
 					By("Context timeout occurred")
 					Eventually(func() bool {
@@ -436,17 +437,32 @@ func cleanupTestedResources(va1, va2 *storagev1.VolumeAttachment, pod *corev1.Po
 	}
 }
 
-func checkPodIsNotFound(podName string, expected bool) {
+// verifyPodDeleted verifies whether the pod no longer exists for successful FAR CR
+func verifyPodDeleted(podName string) {
+	pod := &corev1.Pod{}
 	podKey := client.ObjectKey{
 		Namespace: defaultNamespace,
 		Name:      podName,
 	}
-
-	ConsistentlyWithOffset(1, func() bool {
-		pod := &corev1.Pod{}
+	EventuallyWithOffset(1, func() bool {
 		err := k8sClient.Get(context.Background(), podKey, pod)
 		return apierrors.IsNotFound(err)
-	}, timeoutDeletion, pollInterval).Should(Equal(expected))
+	}, timeoutDeletion, pollInterval).Should(BeTrue())
+	log.Info("Pod does not longer exist", "pod", podName)
+}
+
+// verifyPodExists verifies whether the pod exists and was not deleted
+func verifyPodExists(podName string) {
+	pod := &corev1.Pod{}
+	podKey := client.ObjectKey{
+		Namespace: defaultNamespace,
+		Name:      podName,
+	}
+	ConsistentlyWithOffset(1, func() bool {
+		err := k8sClient.Get(context.Background(), podKey, pod)
+		return apierrors.IsNotFound(err)
+	}, timeoutDeletion, pollInterval).Should(BeFalse())
+	log.Info("Pod exists", "pod", podName)
 }
 
 // verifyStatusCondition checks if the status condition is not set, and if it is set then it has an expected value

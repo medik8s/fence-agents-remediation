@@ -45,6 +45,8 @@ const (
 	pollInterval    = 10 * time.Second
 )
 
+var remediationTimes []time.Duration
+
 var _ = Describe("FAR E2e", func() {
 	var (
 		fenceAgent, nodeIdentifierPrefix string
@@ -55,7 +57,7 @@ var _ = Describe("FAR E2e", func() {
 		// create FAR CR spec based on OCP platformn
 		clusterPlatform, err := e2eUtils.GetClusterInfo(configClient)
 		Expect(err).ToNot(HaveOccurred(), "can't identify the cluster platform")
-		fmt.Printf("\ncluster name: %s and PlatformType: %s \n", string(clusterPlatform.Name), string(clusterPlatform.Status.PlatformStatus.Type))
+		log.Info("Begin e2e test", "Cluster name", string(clusterPlatform.Name), "PlatformType", string(clusterPlatform.Status.PlatformStatus.Type))
 
 		switch clusterPlatform.Status.PlatformStatus.Type {
 		case configv1.AWSPlatformType:
@@ -78,11 +80,11 @@ var _ = Describe("FAR E2e", func() {
 
 	Context("stress cluster", func() {
 		var (
-			nodes, filteredNodes                *corev1.NodeList
-			nodeName                            string
-			pod                                 *corev1.Pod
-			creationTimePod, nodeBootTimeBefore time.Time
-			err                                 error
+			nodes, filteredNodes          *corev1.NodeList
+			nodeName                      string
+			pod                           *corev1.Pod
+			startTime, nodeBootTimeBefore time.Time
+			err                           error
 		)
 		BeforeEach(func() {
 			nodes = &corev1.NodeList{}
@@ -115,31 +117,43 @@ var _ = Describe("FAR E2e", func() {
 			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
 			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
 
-			// create tested pod, and save its creation time
-			// it will be deleted by FAR CR
+			// create tested pod which will be deleted by the far CR
 			pod = e2eUtils.GetPod(nodeName, testContainerName)
 			pod.Name = testPodName
 			pod.Namespace = testNsName
 			Expect(k8sClient.Create(context.Background(), pod)).To(Succeed())
-			log.Info("Tested pod has been created", "pod", testPodName)
-			creationTimePod = metav1.Now().Time
 			DeferCleanup(cleanupTestedResources, pod)
 
 			// set the node as "unhealthy" by disabling kubelet
 			makeNodeUnready(selectedNode)
 
+			startTime = time.Now()
 			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam)
 			DeferCleanup(deleteFAR, far)
 		})
 		When("running FAR to reboot two nodes", func() {
 			It("should successfully remediate the first node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore, creationTimePod, pod)
+				checkRemediation(nodeName, nodeBootTimeBefore, pod)
+				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
 			It("should successfully remediate the second node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore, creationTimePod, pod)
+				checkRemediation(nodeName, nodeBootTimeBefore, pod)
+				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
 		})
 	})
+})
+
+var _ = AfterSuite(func() {
+	if len(remediationTimes) > 0 {
+		averageTimeDuration := 0.0
+		for _, remTime := range remediationTimes {
+			averageTimeDuration += remTime.Seconds()
+			log.Info("Remediation was finished", "remediation time", remTime)
+		}
+		averageTime := int(averageTimeDuration) / len(remediationTimes)
+		log.Info("Average remediation time", "minutes", averageTime/60, "seconds", averageTime%60)
+	}
 })
 
 // buildSharedParameters returns a map key-value of shared parameters based on cluster platform type if it finds the credentials, otherwise an error
@@ -165,7 +179,7 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 	if clusterPlatformType == configv1.AWSPlatformType {
 		accessKey, secretKey, err := e2eUtils.GetSecretData(clientSet, secretAWSName, secretAWSNamespace, secretKeyAWS, secretValAWS)
 		if err != nil {
-			fmt.Printf("can't get AWS credentials\n")
+			log.Info("Can't get AWS credentials")
 			return nil, err
 		}
 
@@ -186,7 +200,7 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 		// then parse ip
 		username, password, err := e2eUtils.GetSecretData(clientSet, secretBMHName, secretBMHNamespace, secretKeyBM, secretValBM)
 		if err != nil {
-			fmt.Printf("can't get BMH credentials\n")
+			log.Info("Can't get BMH credentials")
 			return nil, err
 		}
 		testShareParam = map[v1alpha1.ParameterName]string{
@@ -212,7 +226,7 @@ func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha
 	if clusterPlatformType == configv1.AWSPlatformType {
 		nodeListParam, err = e2eUtils.GetAWSNodeInfoList(machineClient)
 		if err != nil {
-			fmt.Printf("can't get nodes' information - AWS instance ID\n")
+			log.Info("Can't get nodes' information - AWS instance ID is missing")
 			return nil, err
 		}
 		nodeIdentifier = v1alpha1.ParameterName(nodeIdentifierPrefixAWS)
@@ -220,7 +234,7 @@ func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha
 	} else if clusterPlatformType == configv1.BareMetalPlatformType {
 		nodeListParam, err = e2eUtils.GetBMHNodeInfoList(machineClient)
 		if err != nil {
-			fmt.Printf("can't get nodes' information - ports\n")
+			log.Info("Can't get nodes' information - ports are missing")
 			return nil, err
 		}
 		nodeIdentifier = v1alpha1.ParameterName(nodeIdentifierPrefixIPMI)
@@ -402,7 +416,7 @@ func verifyStatusCondition(nodeName, conditionType string, conditionStatus *meta
 }
 
 // checkRemediation verify whether the node was remediated
-func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, oldPodCreationTime time.Time, pod *corev1.Pod) {
+func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, pod *corev1.Pod) {
 	By("Check if FAR NoExecute taint was added")
 	wasFarTaintAdded(nodeName)
 
