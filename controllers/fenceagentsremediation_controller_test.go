@@ -442,7 +442,7 @@ func verifyPodDeleted(podName string) {
 		err := k8sClient.Get(context.Background(), podKey, pod)
 		return apierrors.IsNotFound(err)
 	}, timeoutDeletion, pollInterval).Should(BeTrue())
-	log.Info("Pod does not longer exist", "pod", podName)
+	log.Info("Pod not longer exists", "pod", podName)
 }
 
 // verifyPodExists verifies whether the pod exists and was not deleted
