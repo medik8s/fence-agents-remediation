@@ -22,7 +22,7 @@ const (
 	FenceAgentSucceededConditionMessage             = "FAR taint was added and the fence agent command has been created and executed successfully"
 	FenceAgentFailedConditionMessage                = "Fence agent command has failed"
 	FenceAgentTimedOutConditionMessage              = "Time out occurred while executing the Fence agent command"
-	RemediationFinishedSuccessfullyConditionMessage = "The unhealthy node was fully remediated (it was tainted, fenced using FA and all the node resources have been deleted)"
+	RemediationFinishedSuccessfullyConditionMessage = "The unhealthy node was fully remediated (it was tainted, fenced using the fence agent and all the node resources have been deleted)"
 )
 
 // ConditionsChangeReason represents the reason of updating the some or all the conditions
