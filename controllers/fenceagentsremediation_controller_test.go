@@ -209,7 +209,7 @@ var _ = Describe("FAR Controller", func() {
 			})
 		})
 
-		Context("Fence Agent Failures", func() {
+		Context("Fence agent failures", func() {
 			BeforeEach(func() {
 				plogs.Clear()
 				node = utils.GetNode("", workerNode)
@@ -219,7 +219,7 @@ var _ = Describe("FAR Controller", func() {
 
 			When("CR is deleted in between fence agent retries", func() {
 				BeforeEach(func() {
-					// Set the controlledRun to fail to simulate a case where CR deletion occurs in between fence agent
+					// Fail controlledRun to simulate a case where CR deletion occurs in between consecutive fence agent
 					// command calls.
 					mockError = errors.New("mock error")
 					DeferCleanup(func() { mockError = nil })
@@ -250,10 +250,10 @@ var _ = Describe("FAR Controller", func() {
 				})
 			})
 
-			When("CR is deleted in during fence agent execution", func() {
+			When("CR is deleted during fence agent execution", func() {
 				BeforeEach(func() {
-					// Set the controlledRun to fail to simulate a case where CR deletion occurs in between fence agent
-					// command retries.
+					// Fail controlledRun to simulate a case where CR deletion occurs during a fence agent
+					// command call.
 					forcedDelay = 10 * time.Second
 					DeferCleanup(func() { forcedDelay = 0 })
 
@@ -308,7 +308,7 @@ var _ = Describe("FAR Controller", func() {
 					Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
 					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
 					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
-					verifyStatusCondition(underTestFAR.Status.Conditions, dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
+					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
 				})
 			})
 
@@ -342,7 +342,7 @@ var _ = Describe("FAR Controller", func() {
 					Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
 					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
 					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
-					verifyStatusCondition(underTestFAR.Status.Conditions, dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
+					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
 				})
 			})
 		})
@@ -478,7 +478,7 @@ func verifyStatusCondition(conditions []metav1.Condition, nodeName, conditionTyp
 	}, timeoutDeletion, pollInterval).Should(Succeed())
 }
 
-// cleanupFar removes FAR finalizer and deletes the FAR CR
+// cleanupFar deletes the FAR CR and waits until it is deleted. The function ignores if the CR is already deleted.
 func cleanupFar() func(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) error {
 	return func(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) error {
 		cr := &v1alpha1.FenceAgentsRemediation{}
