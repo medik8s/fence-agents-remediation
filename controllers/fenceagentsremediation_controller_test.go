@@ -155,26 +155,34 @@ var _ = Describe("FAR Controller", func() {
 			})
 
 			It("should have finalizer, taint, while the two VAs and one pod will be deleted", func() {
-				By("Searching for remediation taint")
 				Eventually(func(g Gomega) {
-					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
-					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
-					g.Expect(storedCommand).To(ConsistOf([]string{"fence_ipmilan", "--lanplus", "--password=password", "--username=admin", "--action=reboot", "--ip=192.168.111.1", "--ipport=6233"}))
-					g.Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeTrue(), "remediation taint should exist")
+					g.Expect(storedCommand).To(ConsistOf([]string{
+						"fence_ipmilan",
+						"--lanplus",
+						"--password=password",
+						"--username=admin",
+						"--action=reboot",
+						"--ip=192.168.111.1",
+						"--ipport=6233"}))
 				}, timeoutFinalizer, pollInterval).Should(Succeed())
+
+				verifyRemediationTaintExists(workerNode, &farNoExecuteTaint)
 
 				// If taint was added, then definitely the finalizer was added as well
 				By("Having a finalizer if we have a remediation taint")
+				Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
 				Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
 
 				By("Not having any test pod")
 				verifyPodDeleted(testPodName)
 
 				By("Verifying correct conditions for successful remediation")
-				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
-				verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
-				verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionTrue))
-				verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionTrue))
+				verifyRemediationConditions(
+					underTestFAR,
+					workerNode,
+					conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
+					conditionStatusPointer(metav1.ConditionTrue),  // FenceAgentActionSucceededTypeStatus
+					conditionStatusPointer(metav1.ConditionTrue))  // SucceededTypeStatus
 			})
 		})
 
@@ -194,7 +202,7 @@ var _ = Describe("FAR Controller", func() {
 					return controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)
 				}, timeoutFinalizer, pollInterval).Should(BeFalse(), "finalizer shouldn't be added")
 
-				// If finalizer is missing, then a taint shouldn't be existed
+				// If finalizer is missing, then a taint shouldn't exist
 				By("Not having remediation taint")
 				Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeFalse())
 
@@ -202,10 +210,12 @@ var _ = Describe("FAR Controller", func() {
 				verifyPodExists(testPodName)
 
 				By("Verifying correct conditions for unsuccessful remediation")
-				Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
-				verifyStatusCondition(underTestFAR.Status.Conditions, dummyNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
-				verifyStatusCondition(underTestFAR.Status.Conditions, dummyNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
-				verifyStatusCondition(underTestFAR.Status.Conditions, dummyNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
+				verifyRemediationConditions(
+					underTestFAR,
+					dummyNode,
+					conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
+					conditionStatusPointer(metav1.ConditionFalse), // FenceAgentActionSucceededTypeStatus
+					conditionStatusPointer(metav1.ConditionFalse)) // SucceededTypeStatus
 			})
 		})
 
@@ -229,10 +239,7 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should exit immediately without trying to update the status conditions", func() {
-					Eventually(func(g Gomega) {
-						g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
-						g.Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeTrue(), "remediation taint should exist")
-					}, timeoutFinalizer, pollInterval).Should(Succeed())
+					verifyRemediationTaintExists(workerNode, &farNoExecuteTaint)
 
 					By("Wait some retries")
 					Eventually(func() int {
@@ -262,10 +269,7 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should exit immediately without trying to update the status conditions", func() {
-					Eventually(func(g Gomega) {
-						g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
-						g.Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeTrue(), "remediation taint should exist")
-					}, timeoutFinalizer, pollInterval).Should(Succeed())
+					verifyRemediationTaintExists(workerNode, &farNoExecuteTaint)
 
 					By("Deleting the CR")
 					Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
@@ -288,27 +292,23 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should retry the fence agent command as configured and update the status accordingly", func() {
-					Eventually(func(g Gomega) {
-						g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
-						g.Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeTrue(), "remediation taint should exist")
-					}, timeoutFinalizer, pollInterval).Should(Succeed())
+					verifyRemediationTaintExists(workerNode, &farNoExecuteTaint)
 
 					By("Still having one test pod")
 					verifyPodExists(testPodName)
 
-					By("Expected number of retries")
+					By("Reading the expected number of retries")
 					Eventually(func() int {
 						return plogs.CountOccurences("command failed")
 					}).Should(Equal(3))
 
 					By("Verifying correct conditions for un-successful remediation")
-					Eventually(func(g Gomega) {
-						g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
-					}).Should(Succeed())
-					Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
-					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
-					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
-					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
+					verifyRemediationConditions(
+						underTestFAR,
+						workerNode,
+						conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
+						conditionStatusPointer(metav1.ConditionFalse), // FenceAgentActionSucceededTypeStatus
+						conditionStatusPointer(metav1.ConditionFalse)) // SucceededTypeStatus
 				})
 			})
 
@@ -321,10 +321,7 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should stop Fence Agent execution and update the status accordingly", func() {
-					Eventually(func(g Gomega) {
-						g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
-						g.Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeTrue(), "remediation taint should exist")
-					}, timeoutFinalizer, pollInterval).Should(Succeed())
+					verifyRemediationTaintExists(workerNode, &farNoExecuteTaint)
 
 					By("Still having one test pod")
 					verifyPodExists(testPodName)
@@ -335,14 +332,12 @@ var _ = Describe("FAR Controller", func() {
 					}).Should(BeTrue(), "fence agent should have timed out")
 
 					By("Verifying correct conditions for un-successful remediation")
-					Eventually(func(g Gomega) {
-						g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
-					}).Should(Succeed())
-
-					Expect(underTestFAR.Status.LastUpdateTime).ToNot(BeNil())
-					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
-					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionFalse))
-					verifyStatusCondition(underTestFAR.Status.Conditions, workerNode, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionFalse))
+					verifyRemediationConditions(
+						underTestFAR,
+						workerNode,
+						conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
+						conditionStatusPointer(metav1.ConditionFalse), // FenceAgentActionSucceededTypeStatus
+						conditionStatusPointer(metav1.ConditionFalse)) // SucceededTypeStatus
 				})
 			})
 		})
@@ -431,9 +426,8 @@ func cleanupTestedResources(va1, va2 *storagev1.VolumeAttachment, pod *corev1.Po
 		log.Info("Cleanup: clean pod", "pod name", podTest.Name)
 
 		// Delete the resource immediately
-		deletionOptions := &client.DeleteOptions{GracePeriodSeconds: new(int64)}
-		*deletionOptions.GracePeriodSeconds = 0
-		Expect(k8sClient.Delete(context.Background(), podTest, deletionOptions)).To(Succeed())
+		var force client.GracePeriodSeconds = 0
+		Expect(k8sClient.Delete(context.Background(), podTest, force)).To(Succeed())
 	}
 }
 
@@ -466,9 +460,10 @@ func verifyPodExists(podName string) {
 }
 
 // verifyStatusCondition checks if the status condition is not set, and if it is set then it has an expected value
-func verifyStatusCondition(conditions []metav1.Condition, nodeName, conditionType string, conditionStatus *metav1.ConditionStatus) {
+func verifyStatusCondition(far *v1alpha1.FenceAgentsRemediation, nodeName, conditionType string, conditionStatus *metav1.ConditionStatus) {
 	Eventually(func(g Gomega) {
-		condition := meta.FindStatusCondition(conditions, conditionType)
+		//g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(far), far)).To(Succeed())
+		condition := meta.FindStatusCondition(far.Status.Conditions, conditionType)
 		if conditionStatus == nil {
 			g.Expect(condition).To(BeNil(), "expected condition %v to not be set", conditionType)
 		} else {
@@ -476,6 +471,26 @@ func verifyStatusCondition(conditions []metav1.Condition, nodeName, conditionTyp
 			g.Expect(condition.Status).To(Equal(*conditionStatus), "expected condition %v to have status %v", conditionType, *conditionStatus)
 		}
 	}, timeoutDeletion, pollInterval).Should(Succeed())
+}
+
+func verifyRemediationTaintExists(nodeName string, taint *corev1.Taint) {
+	By("Searching for remediation taint")
+	Eventually(func(g Gomega) {
+		node := &corev1.Node{}
+		g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: nodeName}, node)).To(Succeed())
+		g.Expect(utils.TaintExists(node.Spec.Taints, taint)).To(BeTrue(), "remediation taint should exist")
+	}, timeoutFinalizer, pollInterval).Should(Succeed())
+}
+
+func verifyRemediationConditions(far *v1alpha1.FenceAgentsRemediation, nodeName string, processingTypeConditionStatus, fenceAgentSuccededTypeConditionStatus, succededTypeConditionStatus *metav1.ConditionStatus) {
+	EventuallyWithOffset(1, func(g Gomega) {
+		ut := &v1alpha1.FenceAgentsRemediation{}
+		g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(far), ut)).To(Succeed())
+		g.Expect(ut.Status.LastUpdateTime).ToNot(BeNil())
+		verifyStatusCondition(ut, nodeName, commonConditions.ProcessingType, processingTypeConditionStatus)
+		verifyStatusCondition(ut, nodeName, utils.FenceAgentActionSucceededType, fenceAgentSuccededTypeConditionStatus)
+		verifyStatusCondition(ut, nodeName, commonConditions.SucceededType, succededTypeConditionStatus)
+	})
 }
 
 // cleanupFar deletes the FAR CR and waits until it is deleted. The function ignores if the CR is already deleted.
