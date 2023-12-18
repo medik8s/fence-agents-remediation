@@ -57,12 +57,12 @@ func UpdateConditions(reason ConditionsChangeReason, far *v1alpha1.FenceAgentsRe
 	conditionHasBeenChanged := false
 
 	// RemediationFinishedNodeNotFound and RemediationInterruptedByNHC reasons can happen at any time the Reconcile runs
-	// Except these two reasons, there are another three reasons that can only happen one after another
-	// RemediationStarted will always be the first reason (out of these three)
-	// FenceAgentSucceeded can only happen after RemediationStarted happened
-	// RemediationFinishedSuccessfully can only happen after FenceAgentSucceeded happened
+	// - Except these two reasons, the following reasons can only happen one after another
+	// - RemediationStarted will always be the first reason (out of these three)
+	// - FenceAgentSucceeded, FenceAgentFailed and FenceAgentTimedOut can only happen after RemediationStarted happened
+	// - RemediationFinishedSuccessfully can only happen after FenceAgentSucceeded happened
 	switch reason {
-	case RemediationFinishedNodeNotFound, RemediationInterruptedByNHC:
+	case RemediationFinishedNodeNotFound, RemediationInterruptedByNHC, FenceAgentFailed, FenceAgentTimedOut:
 		processingConditionStatus = metav1.ConditionFalse
 		fenceAgentActionSucceededConditionStatus = metav1.ConditionFalse
 		succeededConditionStatus = metav1.ConditionFalse
@@ -72,6 +72,10 @@ func UpdateConditions(reason ConditionsChangeReason, far *v1alpha1.FenceAgentsRe
 			conditionMessage = RemediationFinishedNodeNotFoundConditionMessage
 		case RemediationInterruptedByNHC:
 			conditionMessage = RemediationInterruptedByNHCConditionMessage
+		case FenceAgentFailed:
+			conditionMessage = FenceAgentFailedConditionMessage
+		case FenceAgentTimedOut:
+			conditionMessage = FenceAgentTimedOutConditionMessage
 		default:
 			err := fmt.Errorf("unknown ConditionsChangeReason:%s", reason)
 			log.Error(err, "couldn't update FAR Status Conditions")
@@ -85,16 +89,6 @@ func UpdateConditions(reason ConditionsChangeReason, far *v1alpha1.FenceAgentsRe
 	case FenceAgentSucceeded:
 		fenceAgentActionSucceededConditionStatus = metav1.ConditionTrue
 		conditionMessage = FenceAgentSucceededConditionMessage
-	case FenceAgentFailed:
-		processingConditionStatus = metav1.ConditionFalse
-		fenceAgentActionSucceededConditionStatus = metav1.ConditionFalse
-		succeededConditionStatus = metav1.ConditionFalse
-		conditionMessage = FenceAgentFailedConditionMessage
-	case FenceAgentTimedOut:
-		processingConditionStatus = metav1.ConditionFalse
-		fenceAgentActionSucceededConditionStatus = metav1.ConditionFalse
-		succeededConditionStatus = metav1.ConditionFalse
-		conditionMessage = FenceAgentTimedOutConditionMessage
 	case RemediationFinishedSuccessfully:
 		processingConditionStatus = metav1.ConditionFalse
 		succeededConditionStatus = metav1.ConditionTrue
