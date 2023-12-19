@@ -22,6 +22,12 @@ import (
 	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 )
 
+const (
+	FenceAgentContextCanceledMessage = "fence agent context canceled. Nothing to do"
+	FenceAgentContextTimedOutMessage = "fence agent context timed out"
+	FenceAgentRetryErrorMessage      = "fence agent retry error"
+)
+
 type routine struct {
 	cancel context.CancelFunc
 }
@@ -86,12 +92,12 @@ func (e *Executer) fenceAgentRoutine(ctx context.Context, uid types.UID, command
 	if retryErr != nil {
 		switch {
 		case errors.Is(retryErr, context.Canceled):
-			e.log.Info("fence agent context canceled. Nothing to do")
+			e.log.Info(FenceAgentContextCanceledMessage)
 			return
 		case wait.Interrupted(retryErr):
-			e.log.Info("fence agent context timed out")
+			e.log.Info(FenceAgentContextTimedOutMessage)
 		default:
-			e.log.Error(retryErr, "fence agent retry error")
+			e.log.Error(retryErr, FenceAgentRetryErrorMessage)
 		}
 	}
 

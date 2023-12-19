@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/pkg/cli"
 	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 )
 
@@ -252,7 +253,7 @@ var _ = Describe("FAR Controller", func() {
 
 					By("Verifying goroutine stopped without trying to update the conditions")
 					Eventually(func() bool {
-						return plogs.Contains("fence agent context canceled. Nothing to do")
+						return plogs.Contains(cli.FenceAgentContextCanceledMessage)
 					}).Should(BeTrue())
 				})
 			})
@@ -277,7 +278,7 @@ var _ = Describe("FAR Controller", func() {
 
 					By("Verifying goroutine stopped without trying to update the conditions")
 					Eventually(func() bool {
-						return plogs.Contains("fence agent context canceled. Nothing to do")
+						return plogs.Contains(cli.FenceAgentContextCanceledMessage)
 					}).Should(BeTrue())
 				})
 			})
