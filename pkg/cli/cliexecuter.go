@@ -95,13 +95,12 @@ func (e *Executer) fenceAgentRoutine(ctx context.Context, uid types.UID, command
 		}
 	}
 
-	retryErr = e.updateStatusWithRetry(ctx, uid, cmdErr)
-	if retryErr != nil {
+	if err := e.updateStatusWithRetry(ctx, uid, cmdErr); err != nil {
 		switch {
-		case wait.Interrupted(retryErr):
+		case wait.Interrupted(err):
 			e.log.Info("status context timed out")
 		default:
-			e.log.Error(retryErr, "status retry error")
+			e.log.Error(err, "status retry error")
 		}
 	}
 }
