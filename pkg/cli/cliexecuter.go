@@ -126,7 +126,7 @@ func (e *Executer) runWithRetry(ctx context.Context, uid types.UID, command []st
 		Factor:   1.0,
 	}
 
-	e.log.Info("fence agent start", "uid", uid, "command", command, "retryCount", retryCount, "retryInterval", retryInterval, "timeout", timeout)
+	e.log.Info("fence agent start", "uid", uid, "fence_agent", command[0], "retryCount", retryCount, "retryInterval", retryInterval, "timeout", timeout)
 
 	var stdout, stderr string
 	retryErr = wait.ExponentialBackoffWithContext(ctx,
@@ -149,7 +149,7 @@ func (e *Executer) runWithRetry(ctx context.Context, uid types.UID, command []st
 			return false, nil
 		})
 
-	e.log.Info("fence agent done", "uid", uid, "command", command, "stdout", stdout, "stderr", stderr, "err", faErr)
+	e.log.Info("fence agent done", "uid", uid, "fence_agent", command[0], "stdout", stdout, "stderr", stderr, "err", faErr)
 	return retryErr, faErr
 }
 
