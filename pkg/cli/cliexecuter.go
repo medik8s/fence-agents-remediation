@@ -107,7 +107,6 @@ func (e *Executer) runWithRetry(ctx context.Context, uid types.UID, command []st
 	// - the FA context is cancelled: the command is cancelled and the status is not updated
 	// - the command succeeds: the command is not retried and the status is updated
 
-	// Linear backoff
 	backoff := wait.Backoff{
 		Steps:    retryCount,
 		Duration: retryInterval,
