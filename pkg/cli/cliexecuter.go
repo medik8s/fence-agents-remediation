@@ -170,11 +170,11 @@ func (e *Executer) updateStatusWithRetry(ctx context.Context, uid types.UID, fen
 			if err := e.updateStatus(ctx, far, fenceAgentErr); err != nil {
 				if wait.Interrupted(err) {
 					e.log.Info("context cancelled while updating the status", "FAR uid", uid)
-					return true, err
+					return false, err
 				}
 				if apiErrors.IsConflict(err) {
 					e.log.Error(err, "conflict while updating the status", "FAR uid", uid)
-					return true, nil
+					return false, nil
 				}
 				e.log.Error(err, "failed to update status", "FAR uid", uid)
 				return false, err
