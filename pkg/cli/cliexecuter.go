@@ -100,7 +100,7 @@ func (e *Executer) fenceAgentRoutine(ctx context.Context, uid types.UID, command
 }
 
 func (e *Executer) runWithRetry(ctx context.Context, uid types.UID, command []string, retryCount int, retryInterval, timeout time.Duration) (retryErr, faErr error) {
-	// Run the command with an exponantial backoff retry to handle the following cases:
+	// Run the command with an exponential backoff retry to handle the following cases:
 	// - the command fails: the command is retried until the retryCount is reached
 	// - the command times out: the command is retried until the retryCount is reached
 	// - the FA context times out: the command is cancelled and the status is updated
@@ -141,7 +141,7 @@ func (e *Executer) runWithRetry(ctx context.Context, uid types.UID, command []st
 }
 
 func (e *Executer) updateStatusWithRetry(ctx context.Context, uid types.UID, fenceAgentErr error) error {
-	// Update FAR status with an exponantial backoff retry to handle only the updateStatus error cases where:
+	// Update FAR status with an exponential backoff retry to handle only the updateStatus error cases where:
 	// - FAR cannot be found, but it does exist
 	// - the status update fails for conflicts
 
@@ -153,16 +153,16 @@ func (e *Executer) updateStatusWithRetry(ctx context.Context, uid types.UID, fen
 			far, err := e.getFenceAgentsRemediationByUID(ctx, uid)
 			if err != nil {
 				if apiErrors.IsNotFound(err) {
-					e.log.Info("could not find FAR by UID", "FAR uid", uid)
+					e.log.Info("no FAR with the given UID", "FAR uid", uid)
 					return false, err
 				}
 
 				if wait.Interrupted(err) {
-					e.log.Info("could not update status", "FAR uid", uid, "reason", err)
+					e.log.Info("context cancelled while getting FAR to update its status", "FAR uid")
 					return false, err
 				}
 
-				e.log.Error(err, "could not update status", "FAR uid", uid)
+				e.log.Error(err, "could not get FAR by uid", "FAR uid", uid)
 				return false, err
 			}
 
