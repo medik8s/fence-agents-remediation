@@ -56,18 +56,6 @@ func NewExecuter(client client.Client) (*Executer, error) {
 	}, nil
 }
 
-// NewExecuter builds an Executer with configurable runnerFunc for testing
-func NewFakeExecuter(client client.Client, fn runnerFunc) (*Executer, error) {
-	logger := ctrl.Log.WithName("fakeExecuter")
-
-	return &Executer{
-		Client:   client,
-		log:      logger,
-		routines: make(map[types.UID]*routine),
-		runner:   fn,
-	}, nil
-}
-
 // AsyncExecute runs the command in a goroutine mapped to the UID
 func (e *Executer) AsyncExecute(ctx context.Context, uid types.UID, command []string, retryCount int, retryInterval, timeout time.Duration) {
 	e.routinesLock.Lock()
