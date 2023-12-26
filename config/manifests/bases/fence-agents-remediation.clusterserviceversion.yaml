@@ -10,6 +10,7 @@ metadata:
     description: Fence Agents Remediation Operator for remediating nodes using upstream
       fence-agents.
     olm.skipRange: '>=0.0.1'
+    operatorframework.io/suggested-namespace: openshift-workload-availability
     repository: https://github.com/medik8s/fence-agents-remediation
     support: Medik8s
   name: fence-agents-remediation.v0.0.0
