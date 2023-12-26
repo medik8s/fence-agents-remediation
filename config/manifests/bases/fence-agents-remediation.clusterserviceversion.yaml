@@ -11,6 +11,7 @@ metadata:
       fence-agents.
     olm.skipRange: '>=0.0.1'
     operatorframework.io/suggested-namespace: openshift-workload-availability
+    operatorframework.io/suggested-namespace-template: '{"kind":"Namespace","apiVersion":"v1","metadata":{"name":"openshift-workload-availability","annotations":{"openshift.io/node-selector":""}}}'
     repository: https://github.com/medik8s/fence-agents-remediation
     support: Medik8s
   name: fence-agents-remediation.v0.0.0
