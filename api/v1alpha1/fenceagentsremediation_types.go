@@ -28,14 +28,6 @@ const (
 	FARFinalizer string = "fence-agents-remediation.medik8s.io/far-finalizer"
 	// Taints
 	FARNoExecuteTaintKey = "medik8s.io/fence-agents-remediation"
-	// FenceAgentActionSucceededType is the condition type used to signal whether the Fence Agent action was succeeded successfully or not
-	FenceAgentActionSucceededType = "FenceAgentActionSucceeded"
-	// condition messages
-	RemediationFinishedNodeNotFoundConditionMessage = "FAR CR name doesn't match a node name"
-	RemediationInterruptedByNHCConditionMessage     = "Node Healthcheck timeout annotation has been set"
-	RemediationStartedConditionMessage              = "FAR CR was found, its name matches one of the cluster nodes, and a finalizer was set to the CR"
-	FenceAgentSucceededConditionMessage             = "FAR taint was added and the fence agent command has been created and executed successfully"
-	RemediationFinishedSuccessfullyConditionMessage = "The unhealthy node was fully remediated (it was tainted, fenced using FA and all the node resources have been deleted)"
 )
 
 // ConditionsChangeReason represents the reason of updating the some or all the conditions
@@ -62,6 +54,25 @@ type FenceAgentsRemediationSpec struct {
 	// Agent is the name of fence agent that will be used
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Agent string `json:"agent"`
+
+	// RetryCount is the number of times the fencing agent will be executed
+	//+kubebuilder:default:=5
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	RetryCount int `json:"retrycount,omitempty"`
+
+	// RetryInterval is the interval between each fencing agent execution
+	//+kubebuilder:default:="5s"
+	//+kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+	//+kubebuilder:validation:Type=string
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	RetryInterval metav1.Duration `json:"retryinterval,omitempty"`
+
+	// Timeout is the timeout for each fencing agent execution
+	//+kubebuilder:default:="60s"
+	//+kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+	//+kubebuilder:validation:Type=string
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	Timeout metav1.Duration `json:"timeout,omitempty"`
 
 	// SharedParameters are passed to the fencing agent regardless of which node is about to be fenced (i.e., they are common for all the nodes)
 	//+operator-sdk:csv:customresourcedefinitions:type=spec

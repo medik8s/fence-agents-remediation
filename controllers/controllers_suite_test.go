@@ -17,9 +17,12 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -35,6 +38,7 @@ import (
 
 	//+kubebuilder:scaffold:imports ## https://github.com/kubernetes-sigs/kubebuilder/issues/1487 ?
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/pkg/cli"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -42,12 +46,57 @@ import (
 
 const defaultNamespace = "default"
 
-var k8sClient client.Client
-var k8sManager manager.Manager
-var testEnv *envtest.Environment
-var ctx context.Context
-var cancel context.CancelFunc
-var mocksExecuter *mockExecuter
+var (
+	k8sClient  client.Client
+	k8sManager manager.Manager
+	testEnv    *envtest.Environment
+	ctx        context.Context
+	cancel     context.CancelFunc
+
+	plogs *peekLogger
+
+	storedCommand []string
+	mockError     error
+	forcedDelay   time.Duration
+)
+
+// peekLogger allows to inspect operator's log for testing purpose.
+type peekLogger struct {
+	logs []string
+}
+
+func (p *peekLogger) Write(b []byte) (n int, err error) {
+	n, err = GinkgoWriter.Write(b)
+	if err != nil {
+		return n, err
+	}
+	p.logs = append(p.logs, string(b))
+	return n, err
+}
+
+func (p *peekLogger) Contains(s string) bool {
+	for _, log := range p.logs {
+		if strings.Contains(log, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// CountOccurences returns number of occurences of string s in logs.
+func (p *peekLogger) CountOccurences(s string) int {
+	count := 0
+	for _, log := range p.logs {
+		if strings.Contains(log, s) {
+			count++
+		}
+	}
+	return count
+}
+
+func (p *peekLogger) Clear() {
+	p.logs = make([]string, 0)
+}
 
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -55,11 +104,13 @@ func TestControllers(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	plogs = &peekLogger{logs: make([]string, 0)}
 	opts := zap.Options{
+		DestWriter:  plogs,
 		Development: true,
 		TimeEncoder: zapcore.RFC3339NanoTimeEncoder,
 	}
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseFlagOptions(&opts)))
+	logf.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -82,7 +133,8 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
-	mocksExecuter = newMockExecuter()
+
+	executor, _ := cli.NewFakeExecuter(k8sClient, controlledRun)
 
 	os.Setenv("DEPLOYMENT_NAMESPACE", defaultNamespace)
 
@@ -90,7 +142,7 @@ var _ = BeforeSuite(func() {
 		Client:   k8sClient,
 		Log:      k8sManager.GetLogger().WithName("test far reconciler"),
 		Scheme:   k8sManager.GetScheme(),
-		Executor: mocksExecuter,
+		Executor: executor,
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -108,3 +160,17 @@ var _ = AfterSuite(func() {
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
 })
+
+func controlledRun(ctx context.Context, command []string) (stdout, stderr string, err error) {
+	storedCommand = command
+	if forcedDelay > 0 {
+		select {
+		case <-ctx.Done():
+			return "", "", fmt.Errorf("context expired")
+		case <-time.After(forcedDelay):
+			log.Info("forced delay expired", "delay", forcedDelay)
+		}
+	}
+
+	return "", "", mockError
+}

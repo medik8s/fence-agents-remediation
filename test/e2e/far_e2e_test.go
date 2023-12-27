@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"time"
 
@@ -22,7 +21,6 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
-	"github.com/medik8s/fence-agents-remediation/controllers"
 	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 	e2eUtils "github.com/medik8s/fence-agents-remediation/test/e2e/utils"
 )
@@ -37,7 +35,6 @@ const (
 	testContainerName        = "test-container"
 	testPodName              = "test-pod"
 
-	forced client.GracePeriodSeconds = 0
 	//TODO: try to minimize timeout
 	// eventually parameters
 	timeoutLogs     = 3 * time.Minute
@@ -262,6 +259,9 @@ func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.Para
 			Agent:            agent,
 			SharedParameters: sharedParameters,
 			NodeParameters:   nodeParameters,
+			RetryCount:       5,
+			RetryInterval:    metav1.Duration{Duration: 20 * time.Second},
+			Timeout:          metav1.Duration{Duration: 60 * time.Second},
 		},
 	}
 	ExpectWithOffset(1, k8sClient.Create(context.Background(), far)).ToNot(HaveOccurred())
@@ -283,7 +283,9 @@ func deleteFAR(far *v1alpha1.FenceAgentsRemediation) {
 func cleanupTestedResources(pod *corev1.Pod) {
 	newPod := &corev1.Pod{}
 	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(pod), newPod); err == nil {
-		Expect(k8sClient.Delete(context.Background(), newPod, forced)).To(Succeed())
+		// set GracePeriodSeconds to 0 to delete the pod immediately
+		var force client.GracePeriodSeconds = 0
+		Expect(k8sClient.Delete(context.Background(), newPod, force)).To(Succeed())
 		log.Info("cleanup: Pod has not been deleted by remediation", "pod name", pod.Name)
 	}
 }
@@ -331,47 +333,9 @@ func makeNodeUnready(node *corev1.Node) {
 	log.Info("node is unready", "node name", node.GetName())
 }
 
-// buildExpectedLogOutput returns a string with a node identifier and a success message for the reboot action
-func buildExpectedLogOutput(nodeName, successMessage string) string {
-	expectedString := fmt.Sprintf("\"Node name\": \"%s\", \"Response\": \"%s", nodeName, successMessage)
-	log.Info("Substring to search in the logs", "expectedString", expectedString)
-	return expectedString
-}
-
-// checkFarLogs gets the FAR pod and checks whether it's logs have logString, and if the pod was in the unhealthyNode
-// then we don't look for the expected logString
-func checkFarLogs(unhealthyNodeName, logString string) {
-	EventuallyWithOffset(1, func() string {
-		pod, err := utils.GetFenceAgentsRemediationPod(k8sClient)
-		if err != nil {
-			log.Error(err, "failed to get FAR pod. Might try again")
-			return ""
-		}
-		if pod.Spec.NodeName == unhealthyNodeName {
-			// When reboot is running on FAR node, then FAR pod will be recreated on a new node
-			// and since the FA command won't be executed again, then the log won't include
-			// any success message, so we won't verfiy the FAR success message on this scenario
-			log.Info("The created FAR CR is for the node FAR pod resides, thus we won't test its logs", "expected string", logString)
-			return logString
-		}
-		logs, err := e2eUtils.GetLogs(clientSet, pod, containerName)
-		if err != nil {
-			if apiErrors.IsNotFound(err) {
-				// If FAR pod was running in nodeObj, then after reboot it was recreated in another node, and with a new name.
-				// Thus the "old" pod's name prior to this eventually won't link to a running pod, since it was already evicted by the reboot
-				log.Error(err, "failed to get logs. FAR pod might have been recreated due to rebooting the node it was resided. Might try again", "pod", pod.Name)
-				return ""
-			}
-			log.Error(err, "failed to get logs. Might try again", "pod", pod.Name)
-			return ""
-		}
-		return logs
-	}, timeoutLogs, pollInterval).Should(ContainSubstring(logString))
-}
-
 // wasNodeRebooted waits until there is a newer boot time than before, a reboot occurred, otherwise it falls with an error
 func wasNodeRebooted(nodeName string, nodeBootTimeBefore time.Time) {
-	log.Info("boot time", "node", nodeName, "old", nodeBootTimeBefore)
+	log.Info("checking if Node was rebooted", "node", nodeName, "previous boot time", nodeBootTimeBefore)
 	var nodeBootTimeAfter time.Time
 	Eventually(func() (time.Time, error) {
 		var errBootAfter error
@@ -417,10 +381,6 @@ func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, pod *corev1
 	By("Check if FAR NoExecute taint was added")
 	wasFarTaintAdded(nodeName)
 
-	By("Check if the response of the FA was a success")
-	expectedLog := buildExpectedLogOutput(nodeName, controllers.SuccessFAResponse)
-	checkFarLogs(nodeName, expectedLog)
-
 	By("Getting new node's boot time")
 	wasNodeRebooted(nodeName, nodeBootTimeBefore)
 
@@ -430,6 +390,6 @@ func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, pod *corev1
 	By("checking if the status conditions match a successful remediation")
 	conditionStatusPointer := func(status metav1.ConditionStatus) *metav1.ConditionStatus { return &status }
 	verifyStatusCondition(nodeName, commonConditions.ProcessingType, conditionStatusPointer(metav1.ConditionFalse))
-	verifyStatusCondition(nodeName, v1alpha1.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionTrue))
+	verifyStatusCondition(nodeName, utils.FenceAgentActionSucceededType, conditionStatusPointer(metav1.ConditionTrue))
 	verifyStatusCondition(nodeName, commonConditions.SucceededType, conditionStatusPointer(metav1.ConditionTrue))
 }
