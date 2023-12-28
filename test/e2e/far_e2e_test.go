@@ -37,11 +37,13 @@ const (
 
 	//TODO: try to minimize timeout
 	// eventually parameters
-	timeoutLogs   = "3m0s"
-	timeoutReboot = "6m0s" // fencing with fence_aws should be completed within 6 minutes
-	timeoutShort  = "5s"   // this timeout is used after all the other steps have been succesfult
-	pollShort     = "250ms"
-	pollInterval  = "1s"
+	timeoutLogs        = "3m0s"
+	timeoutTaint       = "2s"   // Timeout for checking the FAR taint
+	timeoutReboot      = "6m0s" // fencing with fence_aws should be completed within 6 minutes
+	timeoutAfterReboot = "5s"   // Timeout for verifying steps  after the node has been rebooted
+	pollTaint          = "100ms"
+	pollReboot         = "1s"
+	pollAfterReboot    = "250ms"
 )
 
 var remediationTimes []time.Duration
@@ -299,7 +301,7 @@ func wasFarTaintAdded(nodeName string) {
 		node, err = utils.GetNodeWithName(k8sClient, nodeName)
 		g.Expect(err).ToNot(HaveOccurred())
 		return utils.TaintExists(node.Spec.Taints, &farTaint)
-	}, timeoutShort, pollShort).Should(BeTrue())
+	}, timeoutTaint, pollTaint).Should(BeTrue())
 	log.Info("FAR taint was added", "node name", node.Name, "taint key", farTaint.Key, "taint effect", farTaint.Effect)
 }
 
@@ -313,7 +315,7 @@ func waitForNodeHealthyCondition(node *corev1.Node, condStatus corev1.ConditionS
 			}
 		}
 		return corev1.ConditionStatus("failure")
-	}, timeoutReboot, pollInterval).Should(Equal(condStatus))
+	}, timeoutReboot, pollReboot).Should(Equal(condStatus))
 }
 
 // makeNodeUnready stops kubelet and wait for the node condition to be not ready unless the node was already unready
@@ -344,7 +346,7 @@ func wasNodeRebooted(nodeName string, nodeBootTimeBefore time.Time) {
 			log.Error(errBootAfter, "Can't get boot time of the node")
 		}
 		return nodeBootTimeAfter, errBootAfter
-	}, timeoutReboot, pollInterval).Should(
+	}, timeoutReboot, pollReboot).Should(
 		BeTemporally(">", nodeBootTimeBefore), "Timeout for node reboot has passed, even though FAR CR has been created")
 
 	log.Info("successful reboot", "node", nodeName, "offset between last boot", nodeBootTimeAfter.Sub(nodeBootTimeBefore), "new boot time", nodeBootTimeAfter)
@@ -356,7 +358,7 @@ func checkPodDeleted(pod *corev1.Pod) {
 		newPod := &corev1.Pod{}
 		err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(pod), newPod)
 		return apiErrors.IsNotFound(err)
-	}, timeoutShort, pollShort).Should(BeTrue())
+	}, timeoutAfterReboot, pollAfterReboot).Should(BeTrue())
 	log.Info("Pod has already been deleted", "pod name", pod.Name)
 }
 
@@ -373,7 +375,7 @@ func verifyStatusCondition(nodeName, conditionType string, conditionStatus *meta
 			g.Expect(condition).ToNot(BeNil(), "expected condition %v to be set", conditionType)
 			g.Expect(condition.Status).To(Equal(*conditionStatus), "expected condition %v to have status %v", conditionType, *conditionStatus)
 		}
-	}, timeoutShort, pollShort).Should(Succeed())
+	}, timeoutAfterReboot, pollAfterReboot).Should(Succeed())
 }
 
 // checkRemediation verify whether the node was remediated
