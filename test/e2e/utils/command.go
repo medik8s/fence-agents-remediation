@@ -82,7 +82,7 @@ func runCommandInCluster(c *kubernetes.Clientset, nodeName string, ns string, co
 
 func waitForPodOutput(c *kubernetes.Clientset, pod *corev1.Pod, command []string) ([]byte, error) {
 	var out []byte
-	if err := wait.PollImmediate(15*time.Second, time.Minute, func() (done bool, err error) {
+	if err := wait.PollImmediate(1*time.Second, time.Minute, func() (done bool, err error) {
 		out, err = execCommandOnPod(c, pod, command)
 		if err != nil {
 			return false, err

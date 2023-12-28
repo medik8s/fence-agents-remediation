@@ -37,11 +37,11 @@ const (
 
 	//TODO: try to minimize timeout
 	// eventually parameters
-	timeoutLogs     = 3 * time.Minute
-	timeoutReboot   = 6 * time.Minute  // fencing with fence_aws should be completed within 6 minutes
-	timeoutDeletion = 10 * time.Second // this timeout is used after all the other steps have been succesfult
-	pollDeletion    = 250 * time.Millisecond
-	pollInterval    = 10 * time.Second
+	timeoutLogs   = "3m0s"
+	timeoutReboot = "6m0s" // fencing with fence_aws should be completed within 6 minutes
+	timeoutShort  = "5s"   // this timeout is used after all the other steps have been succesfult
+	pollShort     = "250ms"
+	pollInterval  = "1s"
 )
 
 var remediationTimes []time.Duration
@@ -299,7 +299,7 @@ func wasFarTaintAdded(nodeName string) {
 		node, err = utils.GetNodeWithName(k8sClient, nodeName)
 		g.Expect(err).ToNot(HaveOccurred())
 		return utils.TaintExists(node.Spec.Taints, &farTaint)
-	}, 1*time.Second, "200ms").Should(BeTrue())
+	}, timeoutShort, pollShort).Should(BeTrue())
 	log.Info("FAR taint was added", "node name", node.Name, "taint key", farTaint.Key, "taint effect", farTaint.Effect)
 }
 
@@ -356,7 +356,7 @@ func checkPodDeleted(pod *corev1.Pod) {
 		newPod := &corev1.Pod{}
 		err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(pod), newPod)
 		return apiErrors.IsNotFound(err)
-	}, timeoutDeletion, pollDeletion).Should(BeTrue())
+	}, timeoutShort, pollShort).Should(BeTrue())
 	log.Info("Pod has already been deleted", "pod name", pod.Name)
 }
 
@@ -373,7 +373,7 @@ func verifyStatusCondition(nodeName, conditionType string, conditionStatus *meta
 			g.Expect(condition).ToNot(BeNil(), "expected condition %v to be set", conditionType)
 			g.Expect(condition.Status).To(Equal(*conditionStatus), "expected condition %v to have status %v", conditionType, *conditionStatus)
 		}
-	}, timeoutDeletion, pollInterval).Should(Succeed())
+	}, timeoutShort, pollShort).Should(Succeed())
 }
 
 // checkRemediation verify whether the node was remediated
