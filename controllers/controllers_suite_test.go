@@ -134,15 +134,17 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
-	executor, _ := cli.NewFakeExecuter(k8sClient, controlledRun)
+	fakeExecutor, _ := cli.NewFakeExecuter(k8sClient, controlledRun)
 
 	os.Setenv("DEPLOYMENT_NAMESPACE", defaultNamespace)
 
+	agentsList := []string{"fence_ipmilan"}
 	err = (&FenceAgentsRemediationReconciler{
-		Client:   k8sClient,
-		Log:      k8sManager.GetLogger().WithName("test far reconciler"),
-		Scheme:   k8sManager.GetScheme(),
-		Executor: executor,
+		Client:     k8sClient,
+		Log:        k8sManager.GetLogger().WithName("test far reconciler"),
+		Scheme:     k8sManager.GetScheme(),
+		Executor:   fakeExecutor,
+		AgentsList: agentsList,
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
 
