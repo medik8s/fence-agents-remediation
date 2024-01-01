@@ -17,11 +17,13 @@ limitations under the License.
 package main
 
 import (
+	"bufio"
 	"crypto/tls"
 	"flag"
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	"go.uber.org/zap/zapcore"
 
@@ -43,6 +45,10 @@ import (
 	//+kubebuilder:scaffold:imports
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
 	"github.com/medik8s/fence-agents-remediation/version"
+)
+
+const (
+	AGENTS_FILE = "fence_agents_list"
 )
 
 var (
@@ -76,6 +82,12 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	printVersion()
+	agentList, err := checkFenceAgentsFileExists(AGENTS_FILE)
+	if err != nil {
+		setupLog.Error(err, "unable to check whether the fence agent file exists")
+		os.Exit(1)
+	}
+	printSupportedFenceAgents(agentList)
 
 	// Disable HTTP/2 support to avoid issues with CVE HTTP/2 Rapid Reset.
 	// Currently, the metrics server enables/disables HTTP/2 support only if SecureServing is enabled, which is not.
@@ -142,4 +154,44 @@ func printVersion() {
 	setupLog.Info(fmt.Sprintf("Operator Version: %s", version.Version))
 	setupLog.Info(fmt.Sprintf("Git Commit: %s", version.GitCommit))
 	setupLog.Info(fmt.Sprintf("Build Date: %s", version.BuildDate))
+}
+
+func printSupportedFenceAgents(agentList []string) {
+	setupLog.Info(fmt.Sprintf("Fence agents: %d", len(agentList)))
+	setupLog.Info(fmt.Sprintf("Available agents: %s", strings.Join(agentList, " ")))
+}
+
+// checkFenceAgentsFileExists check if the file exists, read it, and then remove redundant prefix
+func checkFenceAgentsFileExists(filePath string) ([]string, error) {
+	if _, err := os.Stat(filePath); err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("fence agents file not found: %v", err)
+		}
+		return nil, fmt.Errorf("failed to check for supported fence agents list: %v", err)
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("error reading file: %v", err)
+	}
+	contentStr := string(content)
+
+	// Split the content into lines
+	scanner := bufio.NewScanner(strings.NewReader(contentStr))
+	var resString []string
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Remove /usr/sbin/ prefix from each line
+		prefix := "/usr/sbin/"
+		line = strings.TrimPrefix(line, prefix)
+
+		resString = append(resString, line)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error scanning file content: %v", err)
+	}
+
+	return resString, nil
 }
