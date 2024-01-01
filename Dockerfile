@@ -41,5 +41,9 @@ RUN dnf install -y dnf-plugins-core \
     && dnf install -y fence-agents-all fence-agents-aws fence-agents-azure-arm fence-agents-gce \
     && dnf clean all -y
 
+# Store the avavliable agents names (fence_*) into readonly fence_agents_list file
+RUN ls /usr/sbin/fence* > fence_agents_list \
+    && chmod 444 fence_agents_list
+
 USER 65532:65532
 ENTRYPOINT ["/manager"]
