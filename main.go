@@ -121,10 +121,11 @@ func main() {
 	}
 
 	if err = (&controllers.FenceAgentsRemediationReconciler{
-		Client:   mgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers").WithName("FenceAgentsRemediation"),
-		Scheme:   mgr.GetScheme(),
-		Executor: executer,
+		Client:     mgr.GetClient(),
+		Log:        ctrl.Log.WithName("controllers").WithName("FenceAgentsRemediation"),
+		Scheme:     mgr.GetScheme(),
+		Executor:   executer,
+		AgentsList: agentList,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "FenceAgentsRemediation")
 		os.Exit(1)

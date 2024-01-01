@@ -19,6 +19,7 @@ const (
 	RemediationFinishedNodeNotFoundConditionMessage = "FAR CR name doesn't match a node name"
 	RemediationInterruptedByNHCConditionMessage     = "Node Healthcheck timeout annotation has been set"
 	RemediationStartedConditionMessage              = "FAR CR was found, its name matches one of the cluster nodes, and a finalizer was set to the CR"
+	FenceAgentNotSupportedConditionMessage          = "Not supported fence agent"
 	FenceAgentSucceededConditionMessage             = "FAR taint was added and the fence agent command has been created and executed successfully"
 	FenceAgentFailedConditionMessage                = "Fence agent command has failed"
 	FenceAgentTimedOutConditionMessage              = "Time out occurred while executing the Fence agent command"
@@ -35,6 +36,8 @@ const (
 	RemediationInterruptedByNHC ConditionsChangeReason = "RemediationInterruptedByNHC"
 	// RemediationStarted - CR was found, its name matches a node, and a finalizer was set
 	RemediationStarted ConditionsChangeReason = "RemediationStarted"
+	// FenceAgentNotSupported -
+	FenceAgentNotSupported ConditionsChangeReason = "FenceAgentNotSupported"
 	// FenceAgentSucceeded - FAR taint was added, fence agent command has been created and executed successfully
 	FenceAgentSucceeded ConditionsChangeReason = "FenceAgentSucceeded"
 	// FenceAgentFailed - Fence agent command has been created but failed to execute
@@ -62,7 +65,7 @@ func UpdateConditions(reason ConditionsChangeReason, far *v1alpha1.FenceAgentsRe
 	// - FenceAgentSucceeded, FenceAgentFailed and FenceAgentTimedOut can only happen after RemediationStarted happened
 	// - RemediationFinishedSuccessfully can only happen after FenceAgentSucceeded happened
 	switch reason {
-	case RemediationFinishedNodeNotFound, RemediationInterruptedByNHC, FenceAgentFailed, FenceAgentTimedOut:
+	case RemediationFinishedNodeNotFound, RemediationInterruptedByNHC, FenceAgentNotSupported, FenceAgentFailed, FenceAgentTimedOut:
 		processingConditionStatus = metav1.ConditionFalse
 		fenceAgentActionSucceededConditionStatus = metav1.ConditionFalse
 		succeededConditionStatus = metav1.ConditionFalse
@@ -72,6 +75,8 @@ func UpdateConditions(reason ConditionsChangeReason, far *v1alpha1.FenceAgentsRe
 			conditionMessage = RemediationFinishedNodeNotFoundConditionMessage
 		case RemediationInterruptedByNHC:
 			conditionMessage = RemediationInterruptedByNHCConditionMessage
+		case FenceAgentNotSupported:
+			conditionMessage = FenceAgentNotSupportedConditionMessage
 		case FenceAgentFailed:
 			conditionMessage = FenceAgentFailedConditionMessage
 		case FenceAgentTimedOut:

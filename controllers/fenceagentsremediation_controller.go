@@ -55,9 +55,10 @@ const (
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
 type FenceAgentsRemediationReconciler struct {
 	client.Client
-	Log      logr.Logger
-	Scheme   *runtime.Scheme
-	Executor *cli.Executer
+	Log        logr.Logger
+	Scheme     *runtime.Scheme
+	Executor   *cli.Executer
+	AgentsList []string
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -156,7 +157,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			processingCondition := meta.FindStatusCondition(far.Status.Conditions, commonConditions.ProcessingType).Status
 			fenceAgentActionSucceededCondition := meta.FindStatusCondition(far.Status.Conditions, utils.FenceAgentActionSucceededType).Status
 			succeededCondition := meta.FindStatusCondition(far.Status.Conditions, commonConditions.SucceededType).Status
-			r.Log.Info("FAR didn't finish remediate the node ", "CR Name", req.Name, "processing condition", processingCondition,
+			r.Log.Info("FAR didn't finish to remediate the node ", "CR Name", req.Name, "processing condition", processingCondition,
 				"fenceAgentActionSucceeded condition", fenceAgentActionSucceededCondition, "succeeded condition", succeededCondition)
 			r.Executor.Remove(far.GetUID())
 		}
@@ -173,6 +174,17 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Info("Finalizer was removed", "CR Name", req.Name)
 		return emptyResult, nil
 	}
+
+	// Validate whetehr the fence agent is supported
+	r.Log.Info("Check if the agent is supported")
+	if err := r.checkAgentSupport(far.Spec.Agent); err != nil {
+		updateErr := utils.UpdateConditions(utils.FenceAgentNotSupported, far, r.Log)
+		if updateErr != nil {
+			err = fmt.Errorf("validion error for fence agent: %w, and status error: %w", updateErr, err)
+		}
+		return emptyResult, err
+	}
+
 	// Add FAR (medik8s) remediation taint
 	r.Log.Info("Try adding FAR (Medik8s) remediation taint", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
 	if err := utils.AppendTaint(r.Client, far.Name); err != nil {
@@ -263,6 +275,16 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 		return fmt.Errorf("failed to wait for updated cache to be updated in status update after %f seconds of timeout - %w", pollingTimeout.Seconds(), pollErr)
 	}
 	return nil
+}
+
+// checkAgentSupport return error if the agent name from the CR is not matching one of the available agents
+func (r *FenceAgentsRemediationReconciler) checkAgentSupport(agent string) error {
+	for _, suppAgent := range r.AgentsList {
+		if agent == suppAgent {
+			return nil
+		}
+	}
+	return fmt.Errorf("agent %s is not supported", agent)
 }
 
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
