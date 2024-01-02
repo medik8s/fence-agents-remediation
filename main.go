@@ -82,7 +82,7 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	printVersion()
-	agentList, err := checkFenceAgentsFileExists(AGENTS_FILE)
+	agentList, err := getFenceAgents(AGENTS_FILE)
 	if err != nil {
 		setupLog.Error(err, "unable to check whether the fence agent file exists")
 		os.Exit(1)
@@ -162,37 +162,30 @@ func printSupportedFenceAgents(agentList []string) {
 	setupLog.Info(fmt.Sprintf("Available agents: %s", strings.Join(agentList, " ")))
 }
 
-// checkFenceAgentsFileExists check if the file exists, read it, and then remove redundant prefix
-func checkFenceAgentsFileExists(filePath string) ([]string, error) {
+// getFenceAgents check if the file exists, read it, and then remove redundant prefix
+func getFenceAgents(filePath string) ([]string, error) {
 	if _, err := os.Stat(filePath); err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("fence agents file not found: %v", err)
+			return nil, fmt.Errorf("fence agents file %s was not found with error %v", AGENTS_FILE, err)
 		}
 		return nil, fmt.Errorf("failed to check for supported fence agents list: %v", err)
 	}
 
-	content, err := os.ReadFile(filePath)
+	fenceAgentFile, err := os.Open(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("error reading file: %v", err)
+		return nil, err
 	}
-	contentStr := string(content)
+	defer fenceAgentFile.Close()
 
-	// Split the content into lines
-	scanner := bufio.NewScanner(strings.NewReader(contentStr))
-	var resString []string
+	var lines []string
+	scanner := bufio.NewScanner(fenceAgentFile)
 	for scanner.Scan() {
-		line := scanner.Text()
-
-		// Remove /usr/sbin/ prefix from each line
-		prefix := "/usr/sbin/"
-		line = strings.TrimPrefix(line, prefix)
-
-		resString = append(resString, line)
+		lines = append(lines, scanner.Text())
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error scanning file content: %v", err)
+		return nil, fmt.Errorf("error scanning the fenceAgentFile content: %v from file %s", err, AGENTS_FILE)
 	}
 
-	return resString, nil
+	return lines, nil
 }

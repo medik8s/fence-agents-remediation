@@ -177,12 +177,14 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 
 	// Validate whetehr the fence agent is supported
 	r.Log.Info("Check if the agent is supported")
-	if err := r.checkAgentSupport(far.Spec.Agent); err != nil {
-		updateErr := utils.UpdateConditions(utils.FenceAgentNotSupported, far, r.Log)
-		if updateErr != nil {
-			err = fmt.Errorf("validion error for fence agent: %w, and status error: %w", updateErr, err)
+	if isSupported := r.isAgentSupported(far.Spec.Agent); !isSupported {
+		unsuppportedErr := fmt.Errorf("fence agent name didn't match one of the available supported agents")
+		if err := utils.UpdateConditions(utils.FenceAgentNotSupported, far, r.Log); err != nil {
+			unsuppportedErr = fmt.Errorf("%w and it failed to update conditons for reason %s and error %w", unsuppportedErr, utils.FenceAgentNotSupported, err)
 		}
-		return emptyResult, err
+		r.Log.Error(unsuppportedErr, "Fence agent is not supported", "CR's Name", req.Name, "Fence Agent", far.Spec.Agent)
+		// Don't return an error for another requeue, since this is not transient error which could be resolved in the next reconcile
+		return emptyResult, nil
 	}
 
 	// Add FAR (medik8s) remediation taint
@@ -277,14 +279,14 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 	return nil
 }
 
-// checkAgentSupport return error if the agent name from the CR is not matching one of the available agents
-func (r *FenceAgentsRemediationReconciler) checkAgentSupport(agent string) error {
+// isAgentSupported return true if the agent name from the CR is matching one of the available agents, and false otherwise
+func (r *FenceAgentsRemediationReconciler) isAgentSupported(agent string) bool {
 	for _, suppAgent := range r.AgentsList {
 		if agent == suppAgent {
-			return nil
+			return true
 		}
 	}
-	return fmt.Errorf("agent %s is not supported", agent)
+	return false
 }
 
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
