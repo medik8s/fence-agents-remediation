@@ -30,16 +30,16 @@ COPY .git/ .git/
 # Build
 RUN ./hack/build.sh
 
-FROM quay.io/centos/centos:stream8
+FROM debian:stable-slim
 
 WORKDIR /
 COPY --from=builder /workspace/manager .
 
 # Add Fence Agents and fence-agents-aws packages
-RUN dnf install -y dnf-plugins-core \
-    && dnf config-manager --set-enabled ha \
-    && dnf install -y fence-agents-all fence-agents-aws fence-agents-azure-arm fence-agents-gce \
-    && dnf clean all -y
+RUN apt-get update -y \
+    && apt-get install -y ipmitool fence-agents --no-install-recommends \
+    && apt-get clean -y \
+    && rm -rf /var/lib/apt/lists/*
 
 USER 65532:65532
 ENTRYPOINT ["/manager"]
