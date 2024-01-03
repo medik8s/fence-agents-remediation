@@ -29,6 +29,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -47,11 +48,12 @@ import (
 const defaultNamespace = "default"
 
 var (
-	k8sClient  client.Client
-	k8sManager manager.Manager
-	testEnv    *envtest.Environment
-	ctx        context.Context
-	cancel     context.CancelFunc
+	k8sClient    client.Client
+	k8sManager   manager.Manager
+	testEnv      *envtest.Environment
+	ctx          context.Context
+	cancel       context.CancelFunc
+	fakeRecorder *record.FakeRecorder
 
 	plogs *peekLogger
 
@@ -138,10 +140,12 @@ var _ = BeforeSuite(func() {
 
 	os.Setenv("DEPLOYMENT_NAMESPACE", defaultNamespace)
 
+	fakeRecorder = record.NewFakeRecorder(20)
 	err = (&FenceAgentsRemediationReconciler{
 		Client:   k8sClient,
 		Log:      k8sManager.GetLogger().WithName("test far reconciler"),
 		Scheme:   k8sManager.GetScheme(),
+		Recorder: fakeRecorder,
 		Executor: executor,
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())

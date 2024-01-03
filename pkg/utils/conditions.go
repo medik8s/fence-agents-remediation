@@ -17,7 +17,7 @@ const (
 	FenceAgentActionSucceededType = "FenceAgentActionSucceeded"
 	// condition messages
 	RemediationFinishedNodeNotFoundConditionMessage = "FAR CR name doesn't match a node name"
-	RemediationInterruptedByNHCConditionMessage     = "Node Healthcheck timeout annotation has been set"
+	RemediationInterruptedByNHCConditionMessage     = "Node Healthcheck timeout annotation has been set. Remediation has stopped"
 	RemediationStartedConditionMessage              = "FAR CR was found, its name matches one of the cluster nodes, and a finalizer was set to the CR"
 	FenceAgentSucceededConditionMessage             = "FAR taint was added and the fence agent command has been created and executed successfully"
 	FenceAgentFailedConditionMessage                = "Fence agent command has failed"

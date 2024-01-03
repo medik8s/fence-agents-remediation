@@ -16,7 +16,7 @@ const node0 = "worker-0"
 var _ = Describe("Utils-taint", func() {
 	nodeKey := client.ObjectKey{Name: node0}
 	controlPlaneRoleTaint := getControlPlaneRoleTaint()
-	farNoExecuteTaint := CreateFARNoExecuteTaint()
+	farNoExecuteTaint := CreateRemediationTaint()
 	Context("Taint functioninality test", func() {
 		// Check functionaility with control-plane node which already has a taint
 		BeforeEach(func() {
@@ -31,7 +31,7 @@ var _ = Describe("Utils-taint", func() {
 				Expect(k8sClient.Get(context.Background(), nodeKey, taintedNode)).To(Succeed())
 				// control-plane-role taint already exist by GetNode
 				By("adding medik8s NoSchedule taint")
-				Expect(AppendTaint(k8sClient, node0)).To(Succeed())
+				Expect(AppendTaint(k8sClient, node0)).Error().NotTo(HaveOccurred())
 				Expect(k8sClient.Get(context.Background(), nodeKey, taintedNode)).To(Succeed())
 				Expect(TaintExists(taintedNode.Spec.Taints, &controlPlaneRoleTaint)).To(BeTrue())
 				Expect(TaintExists(taintedNode.Spec.Taints, &farNoExecuteTaint)).To(BeTrue())

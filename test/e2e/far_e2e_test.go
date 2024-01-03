@@ -294,12 +294,13 @@ func cleanupTestedResources(pod *corev1.Pod) {
 
 // wasFarTaintAdded checks whether the FAR taint was added to the tested node
 func wasFarTaintAdded(nodeName string) {
-	farTaint := utils.CreateFARNoExecuteTaint()
+	farTaint := utils.CreateRemediationTaint()
 	var node *corev1.Node
 	Eventually(func(g Gomega) bool {
 		var err error
 		node, err = utils.GetNodeWithName(k8sClient, nodeName)
 		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(node).ToNot(BeNil())
 		return utils.TaintExists(node.Spec.Taints, &farTaint)
 	}, timeoutTaint, pollTaint).Should(BeTrue())
 	log.Info("FAR taint was added", "node name", node.Name, "taint key", farTaint.Key, "taint effect", farTaint.Effect)

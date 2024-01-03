@@ -45,6 +45,8 @@ import (
 	"github.com/medik8s/fence-agents-remediation/version"
 )
 
+const operatorName = "FenceAgentsRemediation"
+
 var (
 	scheme   = pkgruntime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
@@ -110,11 +112,12 @@ func main() {
 
 	if err = (&controllers.FenceAgentsRemediationReconciler{
 		Client:   mgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers").WithName("FenceAgentsRemediation"),
+		Log:      ctrl.Log.WithName("controllers").WithName(operatorName),
 		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor(operatorName),
 		Executor: executer,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "FenceAgentsRemediation")
+		setupLog.Error(err, "unable to create controller", "controller", operatorName)
 		os.Exit(1)
 	}
 
