@@ -48,9 +48,9 @@ const (
 	vaName2        = "va-test-2"
 
 	// intervals
-	timeoutDeletion  = 2 * time.Second // this timeout is used after all the other steps have finished successfully
-	timeoutFinalizer = 1 * time.Second
-	pollInterval     = 250 * time.Millisecond
+	timeoutPreRemediation  = "1s" // this timeout is used for the other steps that occur before remediation is completed
+	timeoutPostRemediation = "2s" // this timeout is used for the other steps that occur after remediation is completed
+	pollInterval           = "200ms"
 )
 
 var (
@@ -87,8 +87,6 @@ var _ = Describe("FAR Controller", func() {
 			"worker-2": "6235",
 		},
 	}
-
-	// default FenceAgentsRemediation CR
 
 	Context("Functionality", func() {
 		BeforeEach(func() {
@@ -148,6 +146,9 @@ var _ = Describe("FAR Controller", func() {
 
 			Expect(k8sClient.Create(context.Background(), underTestFAR)).To(Succeed())
 			DeferCleanup(cleanupFar(), context.Background(), underTestFAR)
+
+			// Sleep for a second to ensure dummy reconicliation has begun running before the unit tests
+			time.Sleep(1 * time.Second)
 		})
 
 		When("creating valid FAR CR", func() {
@@ -166,15 +167,9 @@ var _ = Describe("FAR Controller", func() {
 						"--action=reboot",
 						"--ip=192.168.111.1",
 						"--ipport=6233"}))
-				}, timeoutFinalizer, pollInterval).Should(Succeed())
+				}, timeoutPreRemediation, pollInterval).Should(Succeed())
 
-				verifyRemediationTaintExists(workerNode, &farRemediationTaint)
-
-				// If taint was added, then definitely the finalizer was added as well
-				By("Having a finalizer if we have a remediation taint")
-				Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
-				Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
-				verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddFinalizer, utils.EventMessageAddFinalizer)
+				underTestFAR = verifyPreRemediationSucceed(underTestFAR, workerNode, &farRemediationTaint)
 
 				By("Not having any test pod")
 				verifyPodDeleted(testPodName)
@@ -205,7 +200,7 @@ var _ = Describe("FAR Controller", func() {
 				Consistently(func(g Gomega) bool {
 					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: underTestFAR.Name, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
 					return controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)
-				}, timeoutFinalizer, pollInterval).Should(BeFalse(), "finalizer shouldn't be added")
+				}, timeoutPreRemediation, pollInterval).Should(BeFalse(), "finalizer shouldn't be added")
 				verifyEvent(corev1.EventTypeWarning, utils.EventReasonCrNodeNotFound, utils.EventMessageCrNodeNotFound)
 				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonAddFinalizer, utils.EventMessageAddFinalizer)
 
@@ -249,15 +244,14 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should exit immediately without trying to update the status conditions", func() {
-					verifyRemediationTaintExists(workerNode, &farRemediationTaint)
+					underTestFAR = verifyPreRemediationSucceed(underTestFAR, workerNode, &farRemediationTaint)
 
 					By("Wait some retries")
 					Eventually(func() int {
 						return plogs.CountOccurences(cli.FenceAgentFailedCommandMessage)
 					}, "10s", "1s").Should(BeNumerically(">", 3))
 
-					By("Deleting the CR")
-					Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
+					By("Deleting far CR")
 					Expect(k8sClient.Delete(context.Background(), underTestFAR)).To(Succeed())
 
 					By("Verifying goroutine stopped without trying to update the conditions")
@@ -280,10 +274,9 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should exit immediately without trying to update the status conditions", func() {
-					verifyRemediationTaintExists(workerNode, &farRemediationTaint)
+					underTestFAR = verifyPreRemediationSucceed(underTestFAR, workerNode, &farRemediationTaint)
 
-					By("Deleting the CR")
-					Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
+					By("Deleting far CR")
 					Expect(k8sClient.Delete(context.Background(), underTestFAR)).To(Succeed())
 
 					By("Verifying goroutine stopped without trying to update the conditions")
@@ -304,7 +297,7 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should retry the fence agent command as configured and update the status accordingly", func() {
-					verifyRemediationTaintExists(workerNode, &farRemediationTaint)
+					underTestFAR = verifyPreRemediationSucceed(underTestFAR, workerNode, &farRemediationTaint)
 
 					By("Still having one test pod")
 					verifyPodExists(testPodName)
@@ -334,7 +327,7 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should stop Fence Agent execution and update the status accordingly", func() {
-					verifyRemediationTaintExists(workerNode, &farRemediationTaint)
+					underTestFAR = verifyPreRemediationSucceed(underTestFAR, workerNode, &farRemediationTaint)
 
 					By("Still having one test pod")
 					verifyPodExists(testPodName)
@@ -455,7 +448,7 @@ func verifyPodDeleted(podName string) {
 	EventuallyWithOffset(1, func() bool {
 		err := k8sClient.Get(context.Background(), podKey, pod)
 		return apierrors.IsNotFound(err)
-	}, timeoutDeletion, pollInterval).Should(BeTrue())
+	}, timeoutPostRemediation, pollInterval).Should(BeTrue())
 	log.Info("Pod not longer exists", "pod", podName)
 }
 
@@ -469,7 +462,7 @@ func verifyPodExists(podName string) {
 	ConsistentlyWithOffset(1, func() bool {
 		err := k8sClient.Get(context.Background(), podKey, pod)
 		return apierrors.IsNotFound(err)
-	}, timeoutDeletion, pollInterval).Should(BeFalse())
+	}, timeoutPostRemediation, pollInterval).Should(BeFalse())
 	log.Info("Pod exists", "pod", podName)
 }
 
@@ -484,28 +477,37 @@ func verifyStatusCondition(far *v1alpha1.FenceAgentsRemediation, nodeName, condi
 			g.Expect(condition).ToNot(BeNil(), "expected condition %v to be set", conditionType)
 			g.Expect(condition.Status).To(Equal(*conditionStatus), "expected condition %v to have status %v", conditionType, *conditionStatus)
 		}
-	}, timeoutDeletion, pollInterval).Should(Succeed())
+	}, timeoutPostRemediation, pollInterval).Should(Succeed())
 }
 
-func verifyRemediationTaintExists(nodeName string, taint *corev1.Taint) {
-	By("Searching for remediation taint")
+// verifyPreRemediationSucceed checks if the remediation CR already has a finazliaer and a remediation taint
+func verifyPreRemediationSucceed(underTestFAR *v1alpha1.FenceAgentsRemediation, nodeName string, taint *corev1.Taint) *v1alpha1.FenceAgentsRemediation {
+	By("Searching for finalizer ")
+	Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
+	Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
+	verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddFinalizer, utils.EventMessageAddFinalizer)
+
+	By("Searching for remediation taint if we have a finalizer")
 	Eventually(func(g Gomega) {
 		node := &corev1.Node{}
 		g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: nodeName}, node)).To(Succeed())
 		g.Expect(utils.TaintExists(node.Spec.Taints, taint)).To(BeTrue(), "remediation taint should exist")
-	}, timeoutFinalizer, pollInterval).Should(Succeed())
+	}, timeoutPreRemediation, pollInterval).Should(Succeed())
+	verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddRemediationTaint, utils.EventMessageAddRemediationTaint)
+
+	return underTestFAR
 }
 
 func verifyEvent(eventType, eventReason, eventMessage string) {
 	By(fmt.Sprintf("Verifying that event %s was created", eventReason))
 	isEventMatch := isEventOccurred(eventType, eventReason, eventMessage)
-	ExpectWithOffset(3, isEventMatch).To(BeTrue())
+	ExpectWithOffset(1, isEventMatch).To(BeTrue())
 }
 
 func verifyNoEvent(eventType, eventReason, eventMessage string) {
 	By(fmt.Sprintf("Verifying that event %s was not created", eventReason))
 	isEventMatch := isEventOccurred(eventType, eventReason, eventMessage)
-	ExpectWithOffset(3, isEventMatch).To(BeFalse())
+	ExpectWithOffset(1, isEventMatch).To(BeFalse())
 }
 
 // isEventOccurred checks whether an event has occoured
@@ -543,6 +545,7 @@ func clearEvents() {
 	for len(fakeRecorder.Events) > 0 {
 		<-fakeRecorder.Events
 	}
+	log.Info("Cleanup: events list is empty")
 }
 
 func verifyRemediationConditions(far *v1alpha1.FenceAgentsRemediation, nodeName string, processingTypeConditionStatus, fenceAgentSuccededTypeConditionStatus, succededTypeConditionStatus *metav1.ConditionStatus) {
@@ -575,7 +578,7 @@ func cleanupFar() func(ctx context.Context, far *v1alpha1.FenceAgentsRemediation
 			return err
 		}
 
-		ConsistentlyWithOffset(3, func() error {
+		ConsistentlyWithOffset(1, func() error {
 			deleteErr := k8sClient.Get(ctx, client.ObjectKeyFromObject(far), cr)
 			if apierrors.IsNotFound(deleteErr) {
 				// when trying to create far CR with invalid name
@@ -583,9 +586,8 @@ func cleanupFar() func(ctx context.Context, far *v1alpha1.FenceAgentsRemediation
 				return nil
 			}
 			return deleteErr
-		}, pollInterval, timeoutDeletion).Should(BeNil(), "CR should be deleted")
+		}, pollInterval, timeoutPostRemediation).Should(BeNil(), "CR should be deleted")
 		clearEvents()
-		log.Info("Cleanup: events list is empty")
 		return nil
 	}
 }
