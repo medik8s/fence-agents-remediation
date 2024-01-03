@@ -24,14 +24,12 @@ var _ = Describe("Utils-nodes", func() {
 		})
 		When("FAR CR's name doesn't match to an existing node name", func() {
 			It("should fail", func() {
-				_, isMatch, _ := IsNodeNameValid(k8sClient, dummyNode)
-				Expect(isMatch).To(BeFalse())
+				Expect(GetNodeWithName(k8sClient, dummyNode)).To(BeNil())
 			})
 		})
 		When("FAR's name does match to an existing node name", func() {
 			It("should succeed", func() {
-				_, isMatch, _ := IsNodeNameValid(k8sClient, node01)
-				Expect(isMatch).To(BeTrue())
+				Expect(GetNodeWithName(k8sClient, node01)).ToNot(BeNil())
 			})
 		})
 	})

@@ -300,6 +300,7 @@ func wasFarTaintAdded(nodeName string) {
 		var err error
 		node, err = utils.GetNodeWithName(k8sClient, nodeName)
 		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(node).ToNot(BeNil())
 		return utils.TaintExists(node.Spec.Taints, &farTaint)
 	}, timeoutTaint, pollTaint).Should(BeTrue())
 	log.Info("FAR taint was added", "node name", node.Name, "taint key", farTaint.Key, "taint effect", farTaint.Effect)

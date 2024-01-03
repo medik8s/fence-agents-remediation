@@ -56,7 +56,7 @@ func CreateFARRemediationTaint() corev1.Taint {
 func AppendTaint(r client.Client, nodeName string) (bool, error) {
 	// find node by name
 	node, err := GetNodeWithName(r, nodeName)
-	if err != nil {
+	if node == nil {
 		return false, err
 	}
 
@@ -83,7 +83,7 @@ func AppendTaint(r client.Client, nodeName string) (bool, error) {
 func RemoveTaint(r client.Client, nodeName string) error {
 	// find node by name
 	node, err := GetNodeWithName(r, nodeName)
-	if err != nil {
+	if node == nil {
 		return err
 	}
 

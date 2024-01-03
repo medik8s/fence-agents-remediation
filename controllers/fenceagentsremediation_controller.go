@@ -121,12 +121,12 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 
 	// Validate FAR CR name to match a nodeName from the cluster
 	r.Log.Info("Check FAR CR's name")
-	node, valid, err := utils.IsNodeNameValid(r.Client, req.Name)
+	node, err := utils.GetNodeWithName(r.Client, req.Name)
 	if err != nil {
 		r.Log.Error(err, "Unexpected error when validating CR's name with nodes' names", "CR's Name", req.Name)
 		return emptyResult, err
 	}
-	if !valid {
+	if node == nil {
 		r.Log.Error(err, "Didn't find a node matching the CR's name", "CR's Name", req.Name)
 		utils.UpdateConditions(utils.RemediationFinishedNodeNotFound, far, r.Log)
 		commonEvents.WarningEvent(r.Recorder, far, utils.EventReasonCrNodeNotFound, utils.EventMessageCrNodeNotFound)
