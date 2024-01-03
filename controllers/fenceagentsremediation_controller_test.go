@@ -169,7 +169,7 @@ var _ = Describe("FAR Controller", func() {
 						"--ipport=6233"}))
 				}, timeoutPreRemediation, pollInterval).Should(Succeed())
 
-				underTestFAR = verifyPreRemediationSucceed(underTestFAR, workerNode, &farRemediationTaint)
+				underTestFAR = verifyPreRemediationSucceed(underTestFAR, workerNode, defaultNamespace, &farRemediationTaint)
 
 				By("Not having any test pod")
 				verifyPodDeleted(testPodName)
@@ -244,14 +244,14 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should exit immediately without trying to update the status conditions", func() {
-					underTestFAR = verifyPreRemediationSucceed(underTestFAR, workerNode, &farRemediationTaint)
+					underTestFAR = verifyPreRemediationSucceed(underTestFAR, workerNode, defaultNamespace, &farRemediationTaint)
 
 					By("Wait some retries")
 					Eventually(func() int {
 						return plogs.CountOccurences(cli.FenceAgentFailedCommandMessage)
 					}, "10s", "1s").Should(BeNumerically(">", 3))
 
-					By("Deleting far CR")
+					By("Deleting FAR CR")
 					Expect(k8sClient.Delete(context.Background(), underTestFAR)).To(Succeed())
 
 					By("Verifying goroutine stopped without trying to update the conditions")
@@ -274,9 +274,9 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should exit immediately without trying to update the status conditions", func() {
-					underTestFAR = verifyPreRemediationSucceed(underTestFAR, workerNode, &farRemediationTaint)
+					underTestFAR = verifyPreRemediationSucceed(underTestFAR, workerNode, defaultNamespace, &farRemediationTaint)
 
-					By("Deleting far CR")
+					By("Deleting FAR CR")
 					Expect(k8sClient.Delete(context.Background(), underTestFAR)).To(Succeed())
 
 					By("Verifying goroutine stopped without trying to update the conditions")
@@ -297,7 +297,7 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should retry the fence agent command as configured and update the status accordingly", func() {
-					underTestFAR = verifyPreRemediationSucceed(underTestFAR, workerNode, &farRemediationTaint)
+					underTestFAR = verifyPreRemediationSucceed(underTestFAR, workerNode, defaultNamespace, &farRemediationTaint)
 
 					By("Still having one test pod")
 					verifyPodExists(testPodName)
@@ -327,7 +327,7 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should stop Fence Agent execution and update the status accordingly", func() {
-					underTestFAR = verifyPreRemediationSucceed(underTestFAR, workerNode, &farRemediationTaint)
+					underTestFAR = verifyPreRemediationSucceed(underTestFAR, workerNode, defaultNamespace, &farRemediationTaint)
 
 					By("Still having one test pod")
 					verifyPodExists(testPodName)
@@ -481,9 +481,9 @@ func verifyStatusCondition(far *v1alpha1.FenceAgentsRemediation, nodeName, condi
 }
 
 // verifyPreRemediationSucceed checks if the remediation CR already has a finazliaer and a remediation taint
-func verifyPreRemediationSucceed(underTestFAR *v1alpha1.FenceAgentsRemediation, nodeName string, taint *corev1.Taint) *v1alpha1.FenceAgentsRemediation {
+func verifyPreRemediationSucceed(underTestFAR *v1alpha1.FenceAgentsRemediation, nodeName, namespace string, taint *corev1.Taint) *v1alpha1.FenceAgentsRemediation {
 	By("Searching for finalizer ")
-	Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
+	Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: nodeName, Namespace: namespace}, underTestFAR)).To(Succeed())
 	Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
 	verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddFinalizer, utils.EventMessageAddFinalizer)
 
