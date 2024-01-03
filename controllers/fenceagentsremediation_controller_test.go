@@ -97,7 +97,7 @@ var _ = Describe("FAR Controller", func() {
 		})
 
 		Context("buildFenceAgentParams", func() {
-			When("far CR include different action than reboot", func() {
+			When("FAR CR include different action than reboot", func() {
 				It("should succeed with a warning", func() {
 					invalidValTestFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, invalidShareParam, testNodeParam)
 					invalidShareString, err := buildFenceAgentParams(invalidValTestFAR)
@@ -109,7 +109,7 @@ var _ = Describe("FAR Controller", func() {
 					Expect(invalidShareString).To(ConsistOf(validShareString))
 				})
 			})
-			When("far CR's name doesn't match a node name", func() {
+			When("FAR CR's name doesn't match a node name", func() {
 				It("should fail", func() {
 					underTestFAR.ObjectMeta.Name = dummyNode
 					_, err := buildFenceAgentParams(underTestFAR)
@@ -117,7 +117,7 @@ var _ = Describe("FAR Controller", func() {
 					Expect(err).To(Equal(errors.New(errorMissingNodeParams)))
 				})
 			})
-			When("far CR's name does match a node name", func() {
+			When("FAR CR's name does match a node name", func() {
 				It("should succeed", func() {
 					underTestFAR.ObjectMeta.Name = workerNode
 					Expect(buildFenceAgentParams(underTestFAR)).Error().NotTo(HaveOccurred())
@@ -150,7 +150,7 @@ var _ = Describe("FAR Controller", func() {
 			DeferCleanup(cleanupFar(), context.Background(), underTestFAR)
 		})
 
-		When("creating valid far CR", func() {
+		When("creating valid FAR CR", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
 				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam)
@@ -188,14 +188,14 @@ var _ = Describe("FAR Controller", func() {
 			})
 		})
 
-		When("creating far CR with invalid name", func() {
+		When("creating FAR CR with invalid name", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
 				underTestFAR = getFenceAgentsRemediation(dummyNode, fenceAgentIPMI, testShareParam, testNodeParam)
 			})
 
 			It("should not have a finalizer nor taint, while the two VAs and one pod will remain", func() {
-				By("Not finding a matching node to far CR's name")
+				By("Not finding a matching node to FAR CR's name")
 				Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: underTestFAR.Name}, node)).To(Not(Succeed()))
 
 				By("Not having finalizer")
@@ -220,7 +220,7 @@ var _ = Describe("FAR Controller", func() {
 					conditionStatusPointer(metav1.ConditionFalse)) // SucceededTypeStatus
 			})
 		})
-		When("creating far CR with invalid fence agent name", func() {
+		When("creating FAR CR with invalid fence agent name", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
 				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentUnknown, testShareParam, testNodeParam)

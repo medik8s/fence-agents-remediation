@@ -55,10 +55,10 @@ const (
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
 type FenceAgentsRemediationReconciler struct {
 	client.Client
-	Log        logr.Logger
-	Scheme     *runtime.Scheme
-	Executor   *cli.Executer
-	AgentsList []string
+	Log             logr.Logger
+	Scheme          *runtime.Scheme
+	Executor        *cli.Executer
+	AgentsWhiteList []string
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -178,11 +178,11 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	// Validate whetehr the fence agent is supported
 	r.Log.Info("Check if the agent is supported")
 	if isSupported := r.isAgentSupported(far.Spec.Agent); !isSupported {
-		unsuppportedErr := fmt.Errorf("fence agent name didn't match one of the available supported agents")
+		unsupportedErr := fmt.Errorf("unsupported fence agents")
 		if err := utils.UpdateConditions(utils.FenceAgentNotSupported, far, r.Log); err != nil {
-			unsuppportedErr = fmt.Errorf("%w and it failed to update conditons for reason %s and error %w", unsuppportedErr, utils.FenceAgentNotSupported, err)
+			unsupportedErr = fmt.Errorf("%w and it failed to update conditons for reason %s and error %w", unsupportedErr, utils.FenceAgentNotSupported, err)
 		}
-		r.Log.Error(unsuppportedErr, "Fence agent is not supported", "CR's Name", req.Name, "Fence Agent", far.Spec.Agent)
+		r.Log.Error(unsupportedErr, "Fence agent is not supported", "CR's Name", req.Name, "Fence Agent", far.Spec.Agent)
 		// Don't return an error for another requeue, since this is not transient error which could be resolved in the next reconcile
 		return emptyResult, nil
 	}
@@ -279,9 +279,9 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 	return nil
 }
 
-// isAgentSupported return true if the agent name from the CR is matching one of the available agents, and false otherwise
+// isAgentSupported returns true if the agent name from the CR matches one of the available agents, and false otherwise
 func (r *FenceAgentsRemediationReconciler) isAgentSupported(agent string) bool {
-	for _, suppAgent := range r.AgentsList {
+	for _, suppAgent := range r.AgentsWhiteList {
 		if agent == suppAgent {
 			return true
 		}

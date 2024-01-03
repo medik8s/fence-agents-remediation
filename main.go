@@ -82,12 +82,12 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	printVersion()
-	agentList, err := getFenceAgents(AGENTS_FILE)
+	agentsList, err := getFenceAgents(AGENTS_FILE)
 	if err != nil {
 		setupLog.Error(err, "unable to check whether the fence agent file exists")
 		os.Exit(1)
 	}
-	printSupportedFenceAgents(agentList)
+	printSupportedFenceAgents(agentsList)
 
 	// Disable HTTP/2 support to avoid issues with CVE HTTP/2 Rapid Reset.
 	// Currently, the metrics server enables/disables HTTP/2 support only if SecureServing is enabled, which is not.
@@ -121,11 +121,11 @@ func main() {
 	}
 
 	if err = (&controllers.FenceAgentsRemediationReconciler{
-		Client:     mgr.GetClient(),
-		Log:        ctrl.Log.WithName("controllers").WithName("FenceAgentsRemediation"),
-		Scheme:     mgr.GetScheme(),
-		Executor:   executer,
-		AgentsList: agentList,
+		Client:          mgr.GetClient(),
+		Log:             ctrl.Log.WithName("controllers").WithName("FenceAgentsRemediation"),
+		Scheme:          mgr.GetScheme(),
+		Executor:        executer,
+		AgentsWhiteList: agentsList,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "FenceAgentsRemediation")
 		os.Exit(1)
@@ -157,9 +157,9 @@ func printVersion() {
 	setupLog.Info(fmt.Sprintf("Build Date: %s", version.BuildDate))
 }
 
-func printSupportedFenceAgents(agentList []string) {
-	setupLog.Info(fmt.Sprintf("Fence agents: %d", len(agentList)))
-	setupLog.Info(fmt.Sprintf("Available agents: %s", strings.Join(agentList, " ")))
+func printSupportedFenceAgents(agentsList []string) {
+	setupLog.Info(fmt.Sprintf("Fence agents: %d", len(agentsList)))
+	setupLog.Info(fmt.Sprintf("Available agents: %s", strings.Join(agentsList, " ")))
 }
 
 // getFenceAgents check if the file exists, read it, and then remove redundant prefix

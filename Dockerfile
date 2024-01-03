@@ -42,7 +42,7 @@ RUN dnf install -y dnf-plugins-core \
     && dnf clean all -y
 
 # Store the avavliable agents names (fence_*) into readonly fence_agents_list file
-RUN ls /usr/sbin/fence_* | grep -oP '(?<=/usr/sbin/)(fence_[^/]*)' > fence_agents_list \
+RUN ls basename /usr/sbin | grep fence_ > fence_agents_list \
     && chmod 444 fence_agents_list
 
 USER 65532:65532

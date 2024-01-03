@@ -140,11 +140,11 @@ var _ = BeforeSuite(func() {
 
 	agentsList := []string{"fence_ipmilan"}
 	err = (&FenceAgentsRemediationReconciler{
-		Client:     k8sClient,
-		Log:        k8sManager.GetLogger().WithName("test far reconciler"),
-		Scheme:     k8sManager.GetScheme(),
-		Executor:   fakeExecutor,
-		AgentsList: agentsList,
+		Client:          k8sClient,
+		Log:             k8sManager.GetLogger().WithName("test far reconciler"),
+		Scheme:          k8sManager.GetScheme(),
+		Executor:        fakeExecutor,
+		AgentsWhiteList: agentsList,
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
 
