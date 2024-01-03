@@ -22,17 +22,17 @@ func GetNodeWithName(r client.Reader, nodeName string) (*corev1.Node, error) {
 }
 
 // IsNodeNameValid returns an error if nodeName doesn't match any node name int the cluster, otherwise a nil
-func IsNodeNameValid(r client.Reader, nodeName string) (bool, error) {
-	_, err := GetNodeWithName(r, nodeName)
+func IsNodeNameValid(r client.Reader, nodeName string) (*corev1.Node, bool, error) {
+	node, err := GetNodeWithName(r, nodeName)
 	if err != nil {
 		if apiErrors.IsNotFound(err) {
 			// In case of notFound API error we don't return error, since it is valid result
-			return false, nil
+			return node, false, nil
 		} else {
-			return false, err
+			return node, false, err
 		}
 	}
-	return true, nil
+	return node, true, nil
 }
 
 // GetNode returns a node object with the name nodeName based on the nodeType input

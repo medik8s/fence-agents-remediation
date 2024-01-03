@@ -121,7 +121,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 
 	// Validate FAR CR name to match a nodeName from the cluster
 	r.Log.Info("Check FAR CR's name")
-	valid, err := utils.IsNodeNameValid(r.Client, req.Name)
+	node, valid, err := utils.IsNodeNameValid(r.Client, req.Name)
 	if err != nil {
 		r.Log.Error(err, "Unexpected error when validating CR's name with nodes' names", "CR's Name", req.Name)
 		return emptyResult, err
@@ -170,6 +170,8 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		if err := utils.RemoveTaint(r.Client, far.Name); err != nil && !apiErrors.IsNotFound(err) {
 			return emptyResult, err
 		}
+		r.Log.Info("FAR remediation taint was removed", "Node Name", req.Name)
+		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveRemediationTaint, utils.EventMessageRemoveRemediationTaint)
 		// remove finalizer
 		controllerutil.RemoveFinalizer(far, v1alpha1.FARFinalizer)
 		if err := r.Client.Update(context.Background(), far); err != nil {
@@ -180,9 +182,12 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return emptyResult, nil
 	}
 	// Add FAR (medik8s) remediation taint
-	r.Log.Info("Try adding FAR (Medik8s) remediation taint", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
-	if err := utils.AppendTaint(r.Client, far.Name); err != nil {
+	taintAdded, err := utils.AppendTaint(r.Client, far.Name)
+	if err != nil {
 		return emptyResult, err
+	} else if taintAdded {
+		r.Log.Info("FAR remediation taint was added", "Node Name", req.Name)
+		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonAddRemediationTaint, utils.EventMessageAddRemediationTaint)
 	}
 
 	if meta.IsStatusConditionTrue(far.Status.Conditions, commonConditions.ProcessingType) &&
@@ -215,6 +220,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		// - clean up Executor routine
 
 		r.Log.Info("Manual workload deletion", "Node Name", req.Name)
+		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
 		if err := commonResources.DeletePods(ctx, r.Client, req.Name); err != nil {
 			r.Log.Error(err, "Manual workload deletion has failed", "CR's Name", req.Name)
 			return emptyResult, err
@@ -223,6 +229,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 
 		r.Executor.Remove(far.GetUID())
 		r.Log.Info("FenceAgentsRemediation CR has completed to remediate the node", "Node Name", req.Name)
+		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonNodeRemediationCompleted, utils.EventMessageNodeRemediationCompleted)
 		commonEvents.RemediationFinished(r.Recorder, far)
 	}
 

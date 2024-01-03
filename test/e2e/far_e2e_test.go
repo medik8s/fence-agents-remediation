@@ -294,7 +294,7 @@ func cleanupTestedResources(pod *corev1.Pod) {
 
 // wasFarTaintAdded checks whether the FAR taint was added to the tested node
 func wasFarTaintAdded(nodeName string) {
-	farTaint := utils.CreateFARNoExecuteTaint()
+	farTaint := utils.CreateFARRemediationTaint()
 	var node *corev1.Node
 	Eventually(func(g Gomega) bool {
 		var err error

@@ -127,7 +127,7 @@ var _ = Describe("FAR Controller", func() {
 	})
 
 	Context("Reconcile", func() {
-		farNoExecuteTaint := utils.CreateFARNoExecuteTaint()
+		farRemediationTaint := utils.CreateFARRemediationTaint()
 		conditionStatusPointer := func(status metav1.ConditionStatus) *metav1.ConditionStatus { return &status }
 
 		BeforeEach(func() {
@@ -168,7 +168,7 @@ var _ = Describe("FAR Controller", func() {
 						"--ipport=6233"}))
 				}, timeoutFinalizer, pollInterval).Should(Succeed())
 
-				verifyRemediationTaintExists(workerNode, &farNoExecuteTaint)
+				verifyRemediationTaintExists(workerNode, &farRemediationTaint)
 
 				// If taint was added, then definitely the finalizer was added as well
 				By("Having a finalizer if we have a remediation taint")
@@ -186,6 +186,8 @@ var _ = Describe("FAR Controller", func() {
 					conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
 					conditionStatusPointer(metav1.ConditionTrue),  // FenceAgentActionSucceededTypeStatus
 					conditionStatusPointer(metav1.ConditionTrue))  // SucceededTypeStatus
+				verifyEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+				verifyEvent(corev1.EventTypeNormal, utils.EventReasonNodeRemediationCompleted, utils.EventMessageNodeRemediationCompleted)
 			})
 		})
 
@@ -209,7 +211,8 @@ var _ = Describe("FAR Controller", func() {
 
 				// If finalizer is missing, then a taint shouldn't exist
 				By("Not having remediation taint")
-				Expect(utils.TaintExists(node.Spec.Taints, &farNoExecuteTaint)).To(BeFalse())
+				Expect(utils.TaintExists(node.Spec.Taints, &farRemediationTaint)).To(BeFalse())
+				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonAddRemediationTaint, utils.EventMessageAddRemediationTaint)
 
 				By("Still having one test pod")
 				verifyPodExists(testPodName)
@@ -221,6 +224,8 @@ var _ = Describe("FAR Controller", func() {
 					conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
 					conditionStatusPointer(metav1.ConditionFalse), // FenceAgentActionSucceededTypeStatus
 					conditionStatusPointer(metav1.ConditionFalse)) // SucceededTypeStatus
+				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonNodeRemediationCompleted, utils.EventReasonNodeRemediationCompleted)
 			})
 		})
 
@@ -244,7 +249,7 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should exit immediately without trying to update the status conditions", func() {
-					verifyRemediationTaintExists(workerNode, &farNoExecuteTaint)
+					verifyRemediationTaintExists(workerNode, &farRemediationTaint)
 
 					By("Wait some retries")
 					Eventually(func() int {
@@ -259,6 +264,7 @@ var _ = Describe("FAR Controller", func() {
 					Eventually(func() bool {
 						return plogs.Contains(cli.FenceAgentContextCanceledMessage)
 					}).Should(BeTrue())
+					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
 				})
 			})
 
@@ -274,7 +280,7 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should exit immediately without trying to update the status conditions", func() {
-					verifyRemediationTaintExists(workerNode, &farNoExecuteTaint)
+					verifyRemediationTaintExists(workerNode, &farRemediationTaint)
 
 					By("Deleting the CR")
 					Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
@@ -284,6 +290,7 @@ var _ = Describe("FAR Controller", func() {
 					Eventually(func() bool {
 						return plogs.Contains(cli.FenceAgentContextCanceledMessage)
 					}).Should(BeTrue())
+					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
 				})
 			})
 
@@ -297,7 +304,7 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should retry the fence agent command as configured and update the status accordingly", func() {
-					verifyRemediationTaintExists(workerNode, &farNoExecuteTaint)
+					verifyRemediationTaintExists(workerNode, &farRemediationTaint)
 
 					By("Still having one test pod")
 					verifyPodExists(testPodName)
@@ -314,6 +321,7 @@ var _ = Describe("FAR Controller", func() {
 						conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
 						conditionStatusPointer(metav1.ConditionFalse), // FenceAgentActionSucceededTypeStatus
 						conditionStatusPointer(metav1.ConditionFalse)) // SucceededTypeStatus
+					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
 				})
 			})
 
@@ -326,7 +334,7 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 				It("should stop Fence Agent execution and update the status accordingly", func() {
-					verifyRemediationTaintExists(workerNode, &farNoExecuteTaint)
+					verifyRemediationTaintExists(workerNode, &farRemediationTaint)
 
 					By("Still having one test pod")
 					verifyPodExists(testPodName)
@@ -343,6 +351,7 @@ var _ = Describe("FAR Controller", func() {
 						conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
 						conditionStatusPointer(metav1.ConditionFalse), // FenceAgentActionSucceededTypeStatus
 						conditionStatusPointer(metav1.ConditionFalse)) // SucceededTypeStatus
+					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
 				})
 			})
 		})

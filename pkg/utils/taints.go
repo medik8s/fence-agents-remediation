@@ -43,26 +43,27 @@ func deleteTaint(taints []corev1.Taint, taintToDelete *corev1.Taint) ([]corev1.T
 	return newTaints, deleted
 }
 
-// CreateFARNoExecuteTaint returns a remediation NoExeucte taint
-func CreateFARNoExecuteTaint() corev1.Taint {
+// CreateFARRemediationTaint returns a remediation NoExeucte taint
+func CreateFARRemediationTaint() corev1.Taint {
 	return corev1.Taint{
 		Key:    v1alpha1.FARNoExecuteTaintKey,
 		Effect: corev1.TaintEffectNoExecute,
 	}
 }
 
-// AppendTaint appends new taint to the taint list when it is not present, and returns error if it fails in the process
-func AppendTaint(r client.Client, nodeName string) error {
+// AppendTaint appends new taint to the taint list when it is not present.
+// It returns bool if a taint was appended, and an error if it fails in the process
+func AppendTaint(r client.Client, nodeName string) (bool, error) {
 	// find node by name
 	node, err := GetNodeWithName(r, nodeName)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	taint := CreateFARNoExecuteTaint()
+	taint := CreateFARRemediationTaint()
 	// check if taint doesn't exist
 	if TaintExists(node.Spec.Taints, &taint) {
-		return nil
+		return false, nil
 	}
 	// add the taint to the taint list
 	now := metav1.Now()
@@ -72,10 +73,10 @@ func AppendTaint(r client.Client, nodeName string) error {
 	// update with new taint list
 	if err := r.Update(context.Background(), node); err != nil {
 		loggerTaint.Error(err, "Failed to append taint on node", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
-		return err
+		return false, err
 	}
 	loggerTaint.Info("Taint was added", "taint effect", taint.Effect, "taint list", node.Spec.Taints)
-	return nil
+	return true, nil
 }
 
 // RemoveTaint removes taint from the taint list when it is existed, and returns error if it fails in the process
@@ -86,7 +87,7 @@ func RemoveTaint(r client.Client, nodeName string) error {
 		return err
 	}
 
-	taint := CreateFARNoExecuteTaint()
+	taint := CreateFARRemediationTaint()
 	// check if taint exist
 	if !TaintExists(node.Spec.Taints, &taint) {
 		return nil
