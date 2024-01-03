@@ -43,8 +43,8 @@ func deleteTaint(taints []corev1.Taint, taintToDelete *corev1.Taint) ([]corev1.T
 	return newTaints, deleted
 }
 
-// CreateFARRemediationTaint returns a remediation NoExeucte taint
-func CreateFARRemediationTaint() corev1.Taint {
+// CreateRemediationTaint returns a remediation NoExeucte taint
+func CreateRemediationTaint() corev1.Taint {
 	return corev1.Taint{
 		Key:    v1alpha1.FARNoExecuteTaintKey,
 		Effect: corev1.TaintEffectNoExecute,
@@ -60,7 +60,7 @@ func AppendTaint(r client.Client, nodeName string) (bool, error) {
 		return false, err
 	}
 
-	taint := CreateFARRemediationTaint()
+	taint := CreateRemediationTaint()
 	// check if taint doesn't exist
 	if TaintExists(node.Spec.Taints, &taint) {
 		return false, nil
@@ -87,7 +87,7 @@ func RemoveTaint(r client.Client, nodeName string) error {
 		return err
 	}
 
-	taint := CreateFARRemediationTaint()
+	taint := CreateRemediationTaint()
 	// check if taint exist
 	if !TaintExists(node.Spec.Taints, &taint) {
 		return nil

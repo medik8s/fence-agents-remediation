@@ -28,6 +28,7 @@ const (
 	FenceAgentContextCanceledMessage = "fence agent context canceled. Nothing to do"
 	FenceAgentContextTimedOutMessage = "fence agent context timed out"
 	FenceAgentRetryErrorMessage      = "fence agent retry error"
+	FenceAgentFailedCommandMessage   = "command failed"
 )
 
 type routine struct {
@@ -135,7 +136,7 @@ func (e *Executer) runWithRetry(ctx context.Context, uid types.UID, command []st
 				return false, faErr
 			}
 
-			e.log.Info("command failed", "uid", uid, "response", stdout, "errMessage", stderr, "err", faErr)
+			e.log.Info(FenceAgentFailedCommandMessage, "uid", uid, "response", stdout, "errMessage", stderr, "err", faErr)
 			return false, nil
 		})
 

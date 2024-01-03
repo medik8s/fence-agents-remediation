@@ -127,7 +127,7 @@ var _ = Describe("FAR Controller", func() {
 	})
 
 	Context("Reconcile", func() {
-		farRemediationTaint := utils.CreateFARRemediationTaint()
+		farRemediationTaint := utils.CreateRemediationTaint()
 		conditionStatusPointer := func(status metav1.ConditionStatus) *metav1.ConditionStatus { return &status }
 
 		BeforeEach(func() {
@@ -253,7 +253,7 @@ var _ = Describe("FAR Controller", func() {
 
 					By("Wait some retries")
 					Eventually(func() int {
-						return plogs.CountOccurences("command failed")
+						return plogs.CountOccurences(cli.FenceAgentFailedCommandMessage)
 					}, "10s", "1s").Should(BeNumerically(">", 3))
 
 					By("Deleting the CR")
@@ -311,7 +311,7 @@ var _ = Describe("FAR Controller", func() {
 
 					By("Reading the expected number of retries")
 					Eventually(func() int {
-						return plogs.CountOccurences("command failed")
+						return plogs.CountOccurences(cli.FenceAgentFailedCommandMessage)
 					}).Should(Equal(3))
 
 					By("Verifying correct conditions for un-successful remediation")
@@ -341,7 +341,7 @@ var _ = Describe("FAR Controller", func() {
 
 					By("Context timeout occurred")
 					Eventually(func() bool {
-						return plogs.Contains("fence agent context timed out")
+						return plogs.Contains(cli.FenceAgentContextTimedOutMessage)
 					}).Should(BeTrue(), "fence agent should have timed out")
 
 					By("Verifying correct conditions for un-successful remediation")

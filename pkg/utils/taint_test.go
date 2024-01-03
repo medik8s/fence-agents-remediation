@@ -16,7 +16,7 @@ const node0 = "worker-0"
 var _ = Describe("Utils-taint", func() {
 	nodeKey := client.ObjectKey{Name: node0}
 	controlPlaneRoleTaint := getControlPlaneRoleTaint()
-	farNoExecuteTaint := CreateFARRemediationTaint()
+	farNoExecuteTaint := CreateRemediationTaint()
 	Context("Taint functioninality test", func() {
 		// Check functionaility with control-plane node which already has a taint
 		BeforeEach(func() {
