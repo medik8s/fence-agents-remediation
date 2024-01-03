@@ -246,10 +246,6 @@ func (e *Executer) updateStatus(ctx context.Context, far *v1alpha1.FenceAgentsRe
 		reason = utils.FenceAgentFailed
 	}
 
-	err = utils.UpdateConditions(reason, far, e.log)
-	if err != nil {
-		e.log.Error(err, "failed to update conditions", "FAR uid", far.UID)
-		return err
-	}
+	utils.UpdateConditions(reason, far, e.log)
 	return e.Status().Update(ctx, far)
 }

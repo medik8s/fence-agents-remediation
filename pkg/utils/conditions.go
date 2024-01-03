@@ -47,12 +47,14 @@ const (
 
 // updateConditions updates the status conditions of a FenceAgentsRemediation object based on the provided ConditionsChangeReason.
 // return an error if an unknown ConditionsChangeReason is provided
-func UpdateConditions(reason ConditionsChangeReason, far *v1alpha1.FenceAgentsRemediation, log logr.Logger) error {
+func UpdateConditions(reason ConditionsChangeReason, far *v1alpha1.FenceAgentsRemediation, log logr.Logger) {
 
 	var (
 		processingConditionStatus, fenceAgentActionSucceededConditionStatus, succeededConditionStatus metav1.ConditionStatus
 		conditionMessage                                                                              string
 	)
+	conditionUpdateMessage := "Couldn't update FAR Status Conditions"
+	unknownError := fmt.Errorf("unknown ConditionsChangeReason")
 	currentConditions := &far.Status.Conditions
 	conditionHasBeenChanged := false
 
@@ -77,9 +79,9 @@ func UpdateConditions(reason ConditionsChangeReason, far *v1alpha1.FenceAgentsRe
 		case FenceAgentTimedOut:
 			conditionMessage = FenceAgentTimedOutConditionMessage
 		default:
-			err := fmt.Errorf("unknown ConditionsChangeReason:%s", reason)
-			log.Error(err, "couldn't update FAR Status Conditions")
-			return err
+			// couldn't be reached...
+			log.Error(unknownError, conditionUpdateMessage, "CR name", far.Name, "Reason", reason)
+			return
 		}
 	case RemediationStarted:
 		processingConditionStatus = metav1.ConditionTrue
@@ -94,9 +96,8 @@ func UpdateConditions(reason ConditionsChangeReason, far *v1alpha1.FenceAgentsRe
 		succeededConditionStatus = metav1.ConditionTrue
 		conditionMessage = RemediationFinishedSuccessfullyConditionMessage
 	default:
-		err := fmt.Errorf("unknown ConditionsChangeReason:%s", reason)
-		log.Error(err, "couldn't update FAR Status Conditions")
-		return err
+		log.Error(unknownError, conditionUpdateMessage, "CR name", far.Name, "Reason", reason)
+		return
 	}
 
 	// if the requested Status.Conditions.Processing is different then the current one, then update Status.Conditions.Processing value
@@ -138,5 +139,5 @@ func UpdateConditions(reason ConditionsChangeReason, far *v1alpha1.FenceAgentsRe
 	}
 	log.Info("Updating Status Condition", "processingConditionStatus", processingConditionStatus, "fenceAgentActionSucceededConditionStatus", fenceAgentActionSucceededConditionStatus, "succeededConditionStatus", succeededConditionStatus, "reason", string(reason), "LastUpdateTime", far.Status.LastUpdateTime)
 
-	return nil
+	return
 }

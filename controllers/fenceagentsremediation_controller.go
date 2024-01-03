@@ -124,7 +124,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	}
 	if !valid {
 		r.Log.Error(err, "Didn't find a node matching the CR's name", "CR's Name", req.Name)
-		err := utils.UpdateConditions(utils.RemediationFinishedNodeNotFound, far, r.Log)
+		utils.UpdateConditions(utils.RemediationFinishedNodeNotFound, far, r.Log)
 		return emptyResult, err
 	}
 
@@ -132,7 +132,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	if isTimedOutByNHC(far) {
 		r.Log.Info("FAR remediation was stopped by Node Healthcheck Operator")
 		r.Executor.Remove(far.GetUID())
-		err := utils.UpdateConditions(utils.RemediationInterruptedByNHC, far, r.Log)
+		utils.UpdateConditions(utils.RemediationInterruptedByNHC, far, r.Log)
 		return emptyResult, err
 	}
 
@@ -144,9 +144,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 		r.Log.Info("Finalizer was added", "CR Name", req.Name)
 
-		if err := utils.UpdateConditions(utils.RemediationStarted, far, r.Log); err != nil {
-			return emptyResult, err
-		}
+		utils.UpdateConditions(utils.RemediationStarted, far, r.Log)
 		return requeueImmediately, nil
 	} else if controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) && !far.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Delete CR only when a finalizer and DeletionTimestamp are set
@@ -212,9 +210,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			r.Log.Error(err, "Manual workload deletion has failed", "CR's Name", req.Name)
 			return emptyResult, err
 		}
-		if err := utils.UpdateConditions(utils.RemediationFinishedSuccessfully, far, r.Log); err != nil {
-			return emptyResult, err
-		}
+		utils.UpdateConditions(utils.RemediationFinishedSuccessfully, far, r.Log)
 
 		r.Executor.Remove(far.GetUID())
 		r.Log.Info("FenceAgentsRemediation CR has completed to remediate the node", "Node Name", req.Name)
