@@ -137,7 +137,7 @@ func UpdateConditions(reason ConditionsChangeReason, far *v1alpha1.FenceAgentsRe
 		now := metav1.Now()
 		far.Status.LastUpdateTime = &now
 	}
-	log.Info("Updating Status Condition", "processingConditionStatus", processingConditionStatus, "fenceAgentActionSucceededConditionStatus", fenceAgentActionSucceededConditionStatus, "succeededConditionStatus", succeededConditionStatus, "reason", string(reason), "LastUpdateTime", far.Status.LastUpdateTime)
+	log.Info("Updating Status Condition", "processingConditionStatus", processingConditionStatus, "fenceAgentActionSucceededConditionStatus", fenceAgentActionSucceededConditionStatus, "succeededConditionStatus", succeededConditionStatus, "reason", string(reason), "LastUpdateTime", far.Status.LastUpdateTime.Time)
 
 	return
 }
