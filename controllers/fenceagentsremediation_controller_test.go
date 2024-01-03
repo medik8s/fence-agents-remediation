@@ -17,6 +17,7 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	commonConditions "github.com/medik8s/common/pkg/conditions"
@@ -173,6 +174,7 @@ var _ = Describe("FAR Controller", func() {
 				By("Having a finalizer if we have a remediation taint")
 				Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
 				Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
+				verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddFinalizer, utils.EventMessageAddFinalizer)
 
 				By("Not having any test pod")
 				verifyPodDeleted(testPodName)
@@ -202,6 +204,8 @@ var _ = Describe("FAR Controller", func() {
 					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: underTestFAR.Name, Namespace: defaultNamespace}, underTestFAR)).To(Succeed())
 					return controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)
 				}, timeoutFinalizer, pollInterval).Should(BeFalse(), "finalizer shouldn't be added")
+				verifyEvent(corev1.EventTypeWarning, utils.EventReasonCrNodeNotFound, utils.EventMessageCrNodeNotFound)
+				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonAddFinalizer, utils.EventMessageAddFinalizer)
 
 				// If finalizer is missing, then a taint shouldn't exist
 				By("Not having remediation taint")
@@ -483,6 +487,55 @@ func verifyRemediationTaintExists(nodeName string, taint *corev1.Taint) {
 	}, timeoutFinalizer, pollInterval).Should(Succeed())
 }
 
+func verifyEvent(eventType, eventReason, eventMessage string) {
+	By(fmt.Sprintf("Verifying that event %s was created", eventReason))
+	isEventMatch := isEventOccurred(eventType, eventReason, eventMessage)
+	ExpectWithOffset(3, isEventMatch).To(BeTrue())
+}
+
+func verifyNoEvent(eventType, eventReason, eventMessage string) {
+	By(fmt.Sprintf("Verifying that event %s was not created", eventReason))
+	isEventMatch := isEventOccurred(eventType, eventReason, eventMessage)
+	ExpectWithOffset(3, isEventMatch).To(BeFalse())
+}
+
+// isEventOccurred checks whether an event has occoured
+func isEventOccurred(eventType, eventReason, eventMessage string) bool {
+	expected := fmt.Sprintf("%s %s [remediation] %s", eventType, eventReason, eventMessage)
+	isEventMatch := false
+
+	unMatchedEvents := make(chan string, len(fakeRecorder.Events))
+	isDone := false
+	for {
+		select {
+		case event := <-fakeRecorder.Events:
+			if isEventMatch = event == expected; isEventMatch {
+				isDone = true
+			} else {
+				unMatchedEvents <- event
+			}
+		default:
+			isDone = true
+		}
+		if isDone {
+			break
+		}
+	}
+
+	close(unMatchedEvents)
+	for unMatchedEvent := range unMatchedEvents {
+		fakeRecorder.Events <- unMatchedEvent
+	}
+	return isEventMatch
+}
+
+// clearEvents loop over the events channel until it is empty from events
+func clearEvents() {
+	for len(fakeRecorder.Events) > 0 {
+		<-fakeRecorder.Events
+	}
+}
+
 func verifyRemediationConditions(far *v1alpha1.FenceAgentsRemediation, nodeName string, processingTypeConditionStatus, fenceAgentSuccededTypeConditionStatus, succededTypeConditionStatus *metav1.ConditionStatus) {
 	EventuallyWithOffset(1, func(g Gomega) {
 		ut := &v1alpha1.FenceAgentsRemediation{}
@@ -513,9 +566,17 @@ func cleanupFar() func(ctx context.Context, far *v1alpha1.FenceAgentsRemediation
 			return err
 		}
 
-		Eventually(func(g Gomega) error {
-			return k8sClient.Get(ctx, client.ObjectKeyFromObject(far), cr)
-		}).Should(Not(BeNil()), "CR should be deleted")
+		ConsistentlyWithOffset(3, func() error {
+			deleteErr := k8sClient.Get(ctx, client.ObjectKeyFromObject(far), cr)
+			if apierrors.IsNotFound(deleteErr) {
+				// when trying to create far CR with invalid name
+				log.Info("Cleanup: Got error 404", "name", cr.Name)
+				return nil
+			}
+			return deleteErr
+		}, pollInterval, timeoutDeletion).Should(BeNil(), "CR should be deleted")
+		clearEvents()
+		log.Info("Cleanup: events list is empty")
 		return nil
 	}
 }

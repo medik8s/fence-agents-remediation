@@ -25,6 +25,7 @@ import (
 	"github.com/go-logr/logr"
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 	commonConditions "github.com/medik8s/common/pkg/conditions"
+	commonEvents "github.com/medik8s/common/pkg/events"
 	commonResources "github.com/medik8s/common/pkg/resources"
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -33,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilErrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -57,6 +59,7 @@ type FenceAgentsRemediationReconciler struct {
 	client.Client
 	Log      logr.Logger
 	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 	Executor *cli.Executer
 }
 
@@ -104,6 +107,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "Failed to get FenceAgentsRemediation CR")
 		return emptyResult, err
 	}
+	commonEvents.RemediationStarted(r.Recorder, far)
 
 	// At the end of each Reconcile we try to update CR's status
 	defer func() {
@@ -125,14 +129,16 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	if !valid {
 		r.Log.Error(err, "Didn't find a node matching the CR's name", "CR's Name", req.Name)
 		utils.UpdateConditions(utils.RemediationFinishedNodeNotFound, far, r.Log)
+		commonEvents.WarningEvent(r.Recorder, far, utils.EventReasonCrNodeNotFound, utils.EventMessageCrNodeNotFound)
 		return emptyResult, err
 	}
 
 	// Check NHC timeout annotation
 	if isTimedOutByNHC(far) {
-		r.Log.Info("FAR remediation was stopped by Node Healthcheck Operator")
+		r.Log.Info(utils.EventMessageRemediationStoppedByNHC)
 		r.Executor.Remove(far.GetUID())
 		utils.UpdateConditions(utils.RemediationInterruptedByNHC, far, r.Log)
+		commonEvents.RemediationStoppedByNHC(r.Recorder, far)
 		return emptyResult, err
 	}
 
@@ -145,6 +151,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Info("Finalizer was added", "CR Name", req.Name)
 
 		utils.UpdateConditions(utils.RemediationStarted, far, r.Log)
+		commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonAddFinalizer, utils.EventMessageAddFinalizer)
 		return requeueImmediately, nil
 	} else if controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) && !far.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Delete CR only when a finalizer and DeletionTimestamp are set
@@ -169,6 +176,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			return emptyResult, fmt.Errorf("failed to remove finalizer from CR - %w", err)
 		}
 		r.Log.Info("Finalizer was removed", "CR Name", req.Name)
+		commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonRemoveFinalizer, utils.EventMessageRemoveFinalizer)
 		return emptyResult, nil
 	}
 	// Add FAR (medik8s) remediation taint
@@ -196,6 +204,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		cmd := append([]string{far.Spec.Agent}, faParams...)
 		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", req.Name, "FAR uid", far.GetUID())
 		r.Executor.AsyncExecute(ctx, far.GetUID(), cmd, far.Spec.RetryCount, far.Spec.RetryInterval.Duration, far.Spec.Timeout.Duration)
+		commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonFenceAgentExecuted, utils.EventMessageFenceAgentExecuted)
 		return emptyResult, nil
 	}
 
@@ -205,7 +214,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		// - try to remove workloads
 		// - clean up Executor routine
 
-		r.Log.Info("Manual workload deletion", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
+		r.Log.Info("Manual workload deletion", "Node Name", req.Name)
 		if err := commonResources.DeletePods(ctx, r.Client, req.Name); err != nil {
 			r.Log.Error(err, "Manual workload deletion has failed", "CR's Name", req.Name)
 			return emptyResult, err
@@ -214,6 +223,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 
 		r.Executor.Remove(far.GetUID())
 		r.Log.Info("FenceAgentsRemediation CR has completed to remediate the node", "Node Name", req.Name)
+		commonEvents.RemediationFinished(r.Recorder, far)
 	}
 
 	return emptyResult, nil

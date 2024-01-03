@@ -10,10 +10,12 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	commonEvents "github.com/medik8s/common/pkg/events"
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,6 +40,7 @@ type Executer struct {
 	routines     map[types.UID]*routine
 	routinesLock sync.Mutex
 	runner       runnerFunc
+	recorder     record.EventRecorder
 }
 
 // runnerFunc is a function that runs the command and returns the stdout, stderr and error
@@ -180,6 +183,7 @@ func (e *Executer) updateStatusWithRetry(ctx context.Context, uid types.UID, fen
 			}
 
 			e.log.Info("status updated", "FAR uid", uid)
+			commonEvents.NormalEvent(e.recorder, far, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 			return true, nil
 		})
 	return err
