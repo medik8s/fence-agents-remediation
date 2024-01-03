@@ -147,7 +147,7 @@ var _ = Describe("FAR Controller", func() {
 			Expect(k8sClient.Create(context.Background(), underTestFAR)).To(Succeed())
 			DeferCleanup(cleanupFar(), context.Background(), underTestFAR)
 
-			// Sleep for a second to ensure dummy reconicliation has begun running before the unit tests
+			// Sleep for a second to ensure dummy reconciliation has begun running before the unit tests
 			time.Sleep(1 * time.Second)
 		})
 
