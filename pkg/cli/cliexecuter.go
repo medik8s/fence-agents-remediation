@@ -49,7 +49,7 @@ type Executer struct {
 type runnerFunc func(ctx context.Context, command []string) (string, string, error)
 
 // NewExecuter builds the Executer
-func NewExecuter(client client.Client) (*Executer, error) {
+func NewExecuter(client client.Client, newRecorder record.EventRecorder) (*Executer, error) {
 	logger := ctrl.Log.WithName("executer")
 
 	return &Executer{
@@ -57,6 +57,7 @@ func NewExecuter(client client.Client) (*Executer, error) {
 		log:      logger,
 		routines: make(map[types.UID]*routine),
 		runner:   run,
+		recorder: newRecorder,
 	}, nil
 }
 
