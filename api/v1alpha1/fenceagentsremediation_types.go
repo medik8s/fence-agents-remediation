@@ -51,8 +51,11 @@ type NodeName string
 
 // FenceAgentsRemediationSpec defines the desired state of FenceAgentsRemediation
 type FenceAgentsRemediationSpec struct {
-	// Agent is the name of fence agent that will be used
+	// Agent is the name of fence agent that will be used.
+	// It should have a fence_ prefix.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	//+kubebuilder:validation:Type=string
+	//+kubebuilder:validation:Pattern=fence_.+
 	Agent string `json:"agent"`
 
 	// RetryCount is the number of times the fencing agent will be executed
