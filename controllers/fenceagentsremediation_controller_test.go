@@ -51,6 +51,10 @@ const (
 	timeoutPreRemediation  = "1s" // this timeout is used for the other steps that occur before remediation is completed
 	timeoutPostRemediation = "2s" // this timeout is used for the other steps that occur after remediation is completed
 	pollInterval           = "200ms"
+
+	// eventSteps
+	eventExist    = "Verifying that event %s was created from"
+	eventNotExist = "Verifying that event %s was not created from"
 )
 
 var (
@@ -181,7 +185,7 @@ var _ = Describe("FAR Controller", func() {
 					conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
 					conditionStatusPointer(metav1.ConditionTrue),  // FenceAgentActionSucceededTypeStatus
 					conditionStatusPointer(metav1.ConditionTrue))  // SucceededTypeStatus
-				verifyEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+				verifyEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 				verifyEvent(corev1.EventTypeNormal, utils.EventReasonNodeRemediationCompleted, utils.EventMessageNodeRemediationCompleted)
 			})
 		})
@@ -219,7 +223,7 @@ var _ = Describe("FAR Controller", func() {
 					conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
 					conditionStatusPointer(metav1.ConditionFalse), // FenceAgentActionSucceededTypeStatus
 					conditionStatusPointer(metav1.ConditionFalse)) // SucceededTypeStatus
-				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonNodeRemediationCompleted, utils.EventReasonNodeRemediationCompleted)
 			})
 		})
@@ -258,7 +262,7 @@ var _ = Describe("FAR Controller", func() {
 					Eventually(func() bool {
 						return plogs.Contains(cli.FenceAgentContextCanceledMessage)
 					}).Should(BeTrue())
-					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 				})
 			})
 
@@ -283,7 +287,7 @@ var _ = Describe("FAR Controller", func() {
 					Eventually(func() bool {
 						return plogs.Contains(cli.FenceAgentContextCanceledMessage)
 					}).Should(BeTrue())
-					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 				})
 			})
 
@@ -314,7 +318,7 @@ var _ = Describe("FAR Controller", func() {
 						conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
 						conditionStatusPointer(metav1.ConditionFalse), // FenceAgentActionSucceededTypeStatus
 						conditionStatusPointer(metav1.ConditionFalse)) // SucceededTypeStatus
-					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 				})
 			})
 
@@ -344,7 +348,7 @@ var _ = Describe("FAR Controller", func() {
 						conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
 						conditionStatusPointer(metav1.ConditionFalse), // FenceAgentActionSucceededTypeStatus
 						conditionStatusPointer(metav1.ConditionFalse)) // SucceededTypeStatus
-					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 				})
 			})
 		})
@@ -499,13 +503,13 @@ func verifyPreRemediationSucceed(underTestFAR *v1alpha1.FenceAgentsRemediation, 
 }
 
 func verifyEvent(eventType, eventReason, eventMessage string) {
-	By(fmt.Sprintf("Verifying that event %s was created", eventReason))
+	By(fmt.Sprintf(eventExist, eventReason))
 	isEventMatch := isEventOccurred(eventType, eventReason, eventMessage)
 	ExpectWithOffset(1, isEventMatch).To(BeTrue())
 }
 
 func verifyNoEvent(eventType, eventReason, eventMessage string) {
-	By(fmt.Sprintf("Verifying that event %s was not created", eventReason))
+	By(fmt.Sprintf(eventNotExist, eventReason))
 	isEventMatch := isEventOccurred(eventType, eventReason, eventMessage)
 	ExpectWithOffset(1, isEventMatch).To(BeFalse())
 }

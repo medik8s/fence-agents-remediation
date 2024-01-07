@@ -136,11 +136,10 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
-	executor, _ := cli.NewFakeExecuter(k8sClient, controlledRun)
-
+	fakeRecorder = record.NewFakeRecorder(30)
+	executor := cli.NewFakeExecuter(k8sClient, controlledRun, fakeRecorder)
 	os.Setenv("DEPLOYMENT_NAMESPACE", defaultNamespace)
 
-	fakeRecorder = record.NewFakeRecorder(20)
 	err = (&FenceAgentsRemediationReconciler{
 		Client:   k8sClient,
 		Log:      k8sManager.GetLogger().WithName("test far reconciler"),

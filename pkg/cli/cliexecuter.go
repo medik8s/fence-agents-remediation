@@ -49,7 +49,7 @@ type Executer struct {
 type runnerFunc func(ctx context.Context, command []string) (string, string, error)
 
 // NewExecuter builds the Executer
-func NewExecuter(client client.Client) (*Executer, error) {
+func NewExecuter(client client.Client, newRecorder record.EventRecorder) (*Executer, error) {
 	logger := ctrl.Log.WithName("executer")
 
 	return &Executer{
@@ -57,6 +57,7 @@ func NewExecuter(client client.Client) (*Executer, error) {
 		log:      logger,
 		routines: make(map[types.UID]*routine),
 		runner:   run,
+		recorder: newRecorder,
 	}, nil
 }
 
@@ -184,7 +185,6 @@ func (e *Executer) updateStatusWithRetry(ctx context.Context, uid types.UID, fen
 			}
 
 			e.log.Info("status updated", "FAR uid", uid)
-			commonEvents.NormalEvent(e.recorder, far, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 			return true, nil
 		})
 	return err
@@ -245,6 +245,7 @@ func (e *Executer) updateStatus(ctx context.Context, far *v1alpha1.FenceAgentsRe
 
 	if err == nil {
 		reason = utils.FenceAgentSucceeded
+		commonEvents.NormalEvent(e.recorder, far, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 	} else if wait.Interrupted(err) {
 		reason = utils.FenceAgentTimedOut
 	} else {
