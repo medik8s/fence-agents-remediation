@@ -29,7 +29,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -54,8 +53,8 @@ const (
 	pollInterval           = "200ms"
 
 	// eventSteps
-	eventExixst    = "Verifying that event %s was created from"
-	eventNotExixst = "Verifying that event %s was not created from"
+	eventExist    = "Verifying that event %s was created from"
+	eventNotExist = "Verifying that event %s was not created from"
 )
 
 var (
@@ -504,41 +503,27 @@ func verifyPreRemediationSucceed(underTestFAR *v1alpha1.FenceAgentsRemediation, 
 }
 
 func verifyEvent(eventType, eventReason, eventMessage string) {
-	var eventRecorder *record.FakeRecorder
-	if eventReason == utils.EventReasonFenceAgentSucceeded {
-		By(fmt.Sprintf(eventExixst+" executer", eventReason))
-		eventRecorder = fakeExecRecorder
-	} else {
-		By(fmt.Sprintf(eventExixst+" reconcile", eventReason))
-		eventRecorder = fakeReconcileRecorder
-	}
-	isEventMatch := isEventOccurred(eventType, eventReason, eventMessage, eventRecorder)
+	By(fmt.Sprintf(eventExist, eventReason))
+	isEventMatch := isEventOccurred(eventType, eventReason, eventMessage)
 	ExpectWithOffset(1, isEventMatch).To(BeTrue())
 }
 
 func verifyNoEvent(eventType, eventReason, eventMessage string) {
-	var eventRecorder *record.FakeRecorder
-	if eventReason == utils.EventReasonFenceAgentSucceeded {
-		By(fmt.Sprintf(eventNotExixst+" executer", eventReason))
-		eventRecorder = fakeExecRecorder
-	} else {
-		By(fmt.Sprintf(eventNotExixst+" reconcile", eventReason))
-		eventRecorder = fakeReconcileRecorder
-	}
-	isEventMatch := isEventOccurred(eventType, eventReason, eventMessage, eventRecorder)
+	By(fmt.Sprintf(eventNotExist, eventReason))
+	isEventMatch := isEventOccurred(eventType, eventReason, eventMessage)
 	ExpectWithOffset(1, isEventMatch).To(BeFalse())
 }
 
 // isEventOccurred checks whether an event has occoured
-func isEventOccurred(eventType, eventReason, eventMessage string, recorder *record.FakeRecorder) bool {
+func isEventOccurred(eventType, eventReason, eventMessage string) bool {
 	expected := fmt.Sprintf("%s %s [remediation] %s", eventType, eventReason, eventMessage)
 	isEventMatch := false
 
-	unMatchedEvents := make(chan string, len(recorder.Events))
+	unMatchedEvents := make(chan string, len(fakeRecorder.Events))
 	isDone := false
 	for {
 		select {
-		case event := <-recorder.Events:
+		case event := <-fakeRecorder.Events:
 			if isEventMatch = event == expected; isEventMatch {
 				isDone = true
 			} else {
@@ -554,18 +539,15 @@ func isEventOccurred(eventType, eventReason, eventMessage string, recorder *reco
 
 	close(unMatchedEvents)
 	for unMatchedEvent := range unMatchedEvents {
-		recorder.Events <- unMatchedEvent
+		fakeRecorder.Events <- unMatchedEvent
 	}
 	return isEventMatch
 }
 
 // clearEvents loop over the events channel until it is empty from events
 func clearEvents() {
-	for len(fakeReconcileRecorder.Events) > 0 {
-		<-fakeReconcileRecorder.Events
-	}
-	for len(fakeExecRecorder.Events) > 0 {
-		<-fakeExecRecorder.Events
+	for len(fakeRecorder.Events) > 0 {
+		<-fakeRecorder.Events
 	}
 	log.Info("Cleanup: events list is empty")
 }

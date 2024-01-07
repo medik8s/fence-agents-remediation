@@ -48,13 +48,12 @@ import (
 const defaultNamespace = "default"
 
 var (
-	k8sClient             client.Client
-	k8sManager            manager.Manager
-	testEnv               *envtest.Environment
-	ctx                   context.Context
-	cancel                context.CancelFunc
-	fakeReconcileRecorder *record.FakeRecorder
-	fakeExecRecorder      *record.FakeRecorder
+	k8sClient    client.Client
+	k8sManager   manager.Manager
+	testEnv      *envtest.Environment
+	ctx          context.Context
+	cancel       context.CancelFunc
+	fakeRecorder *record.FakeRecorder
 
 	plogs *peekLogger
 
@@ -137,17 +136,15 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
-	var executor *cli.Executer
-	executor, fakeExecRecorder, _ = cli.NewFakeExecuter(k8sClient, controlledRun)
-
+	fakeRecorder = record.NewFakeRecorder(30)
+	executor := cli.NewFakeExecuter(k8sClient, controlledRun, fakeRecorder)
 	os.Setenv("DEPLOYMENT_NAMESPACE", defaultNamespace)
 
-	fakeReconcileRecorder = record.NewFakeRecorder(20)
 	err = (&FenceAgentsRemediationReconciler{
 		Client:   k8sClient,
 		Log:      k8sManager.GetLogger().WithName("test far reconciler"),
 		Scheme:   k8sManager.GetScheme(),
-		Recorder: fakeReconcileRecorder,
+		Recorder: fakeRecorder,
 		Executor: executor,
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
