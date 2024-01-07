@@ -29,6 +29,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -51,6 +52,10 @@ const (
 	timeoutPreRemediation  = "1s" // this timeout is used for the other steps that occur before remediation is completed
 	timeoutPostRemediation = "2s" // this timeout is used for the other steps that occur after remediation is completed
 	pollInterval           = "200ms"
+
+	// eventSteps
+	eventExixst    = "Verifying that event %s was created from"
+	eventNotExixst = "Verifying that event %s was not created from"
 )
 
 var (
@@ -181,7 +186,7 @@ var _ = Describe("FAR Controller", func() {
 					conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
 					conditionStatusPointer(metav1.ConditionTrue),  // FenceAgentActionSucceededTypeStatus
 					conditionStatusPointer(metav1.ConditionTrue))  // SucceededTypeStatus
-				verifyEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+				verifyEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 				verifyEvent(corev1.EventTypeNormal, utils.EventReasonNodeRemediationCompleted, utils.EventMessageNodeRemediationCompleted)
 			})
 		})
@@ -219,7 +224,7 @@ var _ = Describe("FAR Controller", func() {
 					conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
 					conditionStatusPointer(metav1.ConditionFalse), // FenceAgentActionSucceededTypeStatus
 					conditionStatusPointer(metav1.ConditionFalse)) // SucceededTypeStatus
-				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonNodeRemediationCompleted, utils.EventReasonNodeRemediationCompleted)
 			})
 		})
@@ -258,7 +263,7 @@ var _ = Describe("FAR Controller", func() {
 					Eventually(func() bool {
 						return plogs.Contains(cli.FenceAgentContextCanceledMessage)
 					}).Should(BeTrue())
-					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 				})
 			})
 
@@ -283,7 +288,7 @@ var _ = Describe("FAR Controller", func() {
 					Eventually(func() bool {
 						return plogs.Contains(cli.FenceAgentContextCanceledMessage)
 					}).Should(BeTrue())
-					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 				})
 			})
 
@@ -314,7 +319,7 @@ var _ = Describe("FAR Controller", func() {
 						conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
 						conditionStatusPointer(metav1.ConditionFalse), // FenceAgentActionSucceededTypeStatus
 						conditionStatusPointer(metav1.ConditionFalse)) // SucceededTypeStatus
-					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 				})
 			})
 
@@ -344,7 +349,7 @@ var _ = Describe("FAR Controller", func() {
 						conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
 						conditionStatusPointer(metav1.ConditionFalse), // FenceAgentActionSucceededTypeStatus
 						conditionStatusPointer(metav1.ConditionFalse)) // SucceededTypeStatus
-					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 				})
 			})
 		})
@@ -499,27 +504,41 @@ func verifyPreRemediationSucceed(underTestFAR *v1alpha1.FenceAgentsRemediation, 
 }
 
 func verifyEvent(eventType, eventReason, eventMessage string) {
-	By(fmt.Sprintf("Verifying that event %s was created", eventReason))
-	isEventMatch := isEventOccurred(eventType, eventReason, eventMessage)
+	var eventRecorder *record.FakeRecorder
+	if eventReason == utils.EventReasonFenceAgentSucceeded {
+		By(fmt.Sprintf(eventExixst+" executer", eventReason))
+		eventRecorder = fakeExecRecorder
+	} else {
+		By(fmt.Sprintf(eventExixst+" reconcile", eventReason))
+		eventRecorder = fakeReconcileRecorder
+	}
+	isEventMatch := isEventOccurred(eventType, eventReason, eventMessage, eventRecorder)
 	ExpectWithOffset(1, isEventMatch).To(BeTrue())
 }
 
 func verifyNoEvent(eventType, eventReason, eventMessage string) {
-	By(fmt.Sprintf("Verifying that event %s was not created", eventReason))
-	isEventMatch := isEventOccurred(eventType, eventReason, eventMessage)
+	var eventRecorder *record.FakeRecorder
+	if eventReason == utils.EventReasonFenceAgentSucceeded {
+		By(fmt.Sprintf(eventNotExixst+" executer", eventReason))
+		eventRecorder = fakeExecRecorder
+	} else {
+		By(fmt.Sprintf(eventNotExixst+" reconcile", eventReason))
+		eventRecorder = fakeReconcileRecorder
+	}
+	isEventMatch := isEventOccurred(eventType, eventReason, eventMessage, eventRecorder)
 	ExpectWithOffset(1, isEventMatch).To(BeFalse())
 }
 
 // isEventOccurred checks whether an event has occoured
-func isEventOccurred(eventType, eventReason, eventMessage string) bool {
+func isEventOccurred(eventType, eventReason, eventMessage string, recorder *record.FakeRecorder) bool {
 	expected := fmt.Sprintf("%s %s [remediation] %s", eventType, eventReason, eventMessage)
 	isEventMatch := false
 
-	unMatchedEvents := make(chan string, len(fakeRecorder.Events))
+	unMatchedEvents := make(chan string, len(recorder.Events))
 	isDone := false
 	for {
 		select {
-		case event := <-fakeRecorder.Events:
+		case event := <-recorder.Events:
 			if isEventMatch = event == expected; isEventMatch {
 				isDone = true
 			} else {
@@ -535,15 +554,18 @@ func isEventOccurred(eventType, eventReason, eventMessage string) bool {
 
 	close(unMatchedEvents)
 	for unMatchedEvent := range unMatchedEvents {
-		fakeRecorder.Events <- unMatchedEvent
+		recorder.Events <- unMatchedEvent
 	}
 	return isEventMatch
 }
 
 // clearEvents loop over the events channel until it is empty from events
 func clearEvents() {
-	for len(fakeRecorder.Events) > 0 {
-		<-fakeRecorder.Events
+	for len(fakeReconcileRecorder.Events) > 0 {
+		<-fakeReconcileRecorder.Events
+	}
+	for len(fakeExecRecorder.Events) > 0 {
+		<-fakeExecRecorder.Events
 	}
 	log.Info("Cleanup: events list is empty")
 }

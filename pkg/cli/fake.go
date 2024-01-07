@@ -8,7 +8,7 @@ import (
 )
 
 // NewExecuter builds an Executer with configurable runnerFunc for testing
-func NewFakeExecuter(client client.Client, fn runnerFunc) (*Executer, error) {
+func NewFakeExecuter(client client.Client, fn runnerFunc) (*Executer, *record.FakeRecorder, error) {
 	logger := ctrl.Log.WithName("fakeExecuter")
 	fakeRecorder := record.NewFakeRecorder(10)
 
@@ -18,5 +18,5 @@ func NewFakeExecuter(client client.Client, fn runnerFunc) (*Executer, error) {
 		routines: make(map[types.UID]*routine),
 		runner:   fn,
 		recorder: fakeRecorder,
-	}, nil
+	}, fakeRecorder, nil
 }
