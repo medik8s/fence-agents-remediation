@@ -185,7 +185,6 @@ func (e *Executer) updateStatusWithRetry(ctx context.Context, uid types.UID, fen
 			}
 
 			e.log.Info("status updated", "FAR uid", uid)
-			commonEvents.NormalEvent(e.recorder, far, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 			return true, nil
 		})
 	return err
@@ -246,6 +245,7 @@ func (e *Executer) updateStatus(ctx context.Context, far *v1alpha1.FenceAgentsRe
 
 	if err == nil {
 		reason = utils.FenceAgentSucceeded
+		commonEvents.NormalEvent(e.recorder, far, utils.EventReasonFenceAgentSucceeded, utils.EventMessageFenceAgentSucceeded)
 	} else if wait.Interrupted(err) {
 		reason = utils.FenceAgentTimedOut
 	} else {
