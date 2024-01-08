@@ -4,6 +4,9 @@ metadata:
   name: worker-1
 spec:
   agent: fence_ipmilan
+  retrycount: 5
+  retryinterval: "5s"
+  timeout: "60s"
   sharedparameters:
     --username: "admin"
     --password: "password"
