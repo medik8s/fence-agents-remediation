@@ -96,7 +96,17 @@ FAR CRs are deleted by NHC after it sees the Node is healthy again.
 
 #### Example CR
 
-The FAR, `FenceAgentsRemediation`, CR is created by the admin and is used to trigger the fence-agent on a specific node. The CR includes an *agent* field for the fence-agent name, *sharedparameters* field with all the shared, not specific to a node, parameters, and *nodeparameters* field to specify the parameters for the fenced node.
+The FAR CR (CustomResource), created by the admin, is used to trigger the fence-agent on a specific node.
+
+The CR includes the following parameters:
+
+* `agent` - fence-agent name
+* `sharedparameters` - cluster wide parameters for executing the fence agent
+* `nodeparameters` - node specific parameters for executing the fence agent
+* `retrycount` - number of times to retry the fence-agent in case of failure. The default is 5.
+* `retryinterval` - interval between retries in seconds. The default is "5s".
+* `timeout` - timeout for the fence-agent in seconds. The default is "60s".
+
 For better understanding please see the below example of FAR CR for node `worker-1` (see it also as the [sample FAR](https://github.com/medik8s/fence-agents-remediation/blob/main/config/samples/fence-agents-remediation_v1alpha1_fenceagentsremediation.yaml)):
 
 ```yaml
@@ -106,6 +116,9 @@ metadata:
   name: worker-1
 spec:
   agent: fence_ipmilan
+  retrycount: 5
+  retryinterval: "5s"
+  timeout: "60s"
   sharedparameters:
     --username: "admin"
     --password: "password"
