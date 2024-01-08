@@ -21,10 +21,15 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
-// log is for logging in this package.
-var fenceagentsremediationtemplatelog = logf.Log.WithName("fenceagentsremediationtemplate-resource")
+var (
+	// webhookTemplateLog is for logging in this package.
+	webhookFARTemplateLog = logf.Log.WithName("fenceagentsremediationtemplate-resource")
+)
 
 func (r *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -35,30 +40,23 @@ func (r *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr ctrl.Manage
 // TODO(user): EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-//+kubebuilder:webhook:path=/validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate,mutating=false,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=create;update,versions=v1alpha1,name=vfenceagentsremediationtemplate.kb.io,admissionReviewVersions=v1
-
+// +kubebuilder:webhook:path=/validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate,mutating=false,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=create;update,versions=v1alpha1,name=vfenceagentsremediationtemplate.kb.io,admissionReviewVersions=v1
 var _ webhook.Validator = &FenceAgentsRemediationTemplate{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *FenceAgentsRemediationTemplate) ValidateCreate() error {
-	fenceagentsremediationtemplatelog.Info("validate create", "name", r.Name)
-
-	// TODO(user): fill in your validation logic upon object creation.
-	return nil
+func (farTemplate *FenceAgentsRemediationTemplate) ValidateCreate() (admission.Warnings, error) {
+	webhookFARTemplateLog.Info("validate create", "name", farTemplate.Name)
+	return validation.ValidateFenceAgentName(farTemplate.Spec.Template.Spec.Agent)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *FenceAgentsRemediationTemplate) ValidateUpdate(old runtime.Object) error {
-	fenceagentsremediationtemplatelog.Info("validate update", "name", r.Name)
-
-	// TODO(user): fill in your validation logic upon object update.
-	return nil
+func (farTemplate *FenceAgentsRemediationTemplate) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
+	webhookFARTemplateLog.Info("validate update", "name", farTemplate.Name)
+	return validation.ValidateFenceAgentName(farTemplate.Spec.Template.Spec.Agent)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *FenceAgentsRemediationTemplate) ValidateDelete() error {
-	fenceagentsremediationtemplatelog.Info("validate delete", "name", r.Name)
-
-	// TODO(user): fill in your validation logic upon object deletion.
-	return nil
+func (farTemplate *FenceAgentsRemediationTemplate) ValidateDelete() (admission.Warnings, error) {
+	webhookFARTemplateLog.Info("validate delete", "name", farTemplate.Name)
+	return nil, nil
 }

@@ -126,6 +126,10 @@ func main() {
 		setupLog.Error(err, "unable to create webhook", "webhook", "FenceAgentsRemediation")
 		os.Exit(1)
 	}
+	if err = (&fenceagentsremediationv1alpha1.FenceAgentsRemediationTemplate{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "FenceAgentsRemediationTemplate")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

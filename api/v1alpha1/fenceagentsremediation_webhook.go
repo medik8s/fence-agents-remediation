@@ -27,8 +27,8 @@ import (
 )
 
 var (
-	// webhookTemplateLog is for logging in this package.
-	webhookTemplateLog = logf.Log.WithName("fenceagentsremediationtemplate-resource")
+	// webhookFARLog is for logging in this package.
+	webhookFARLog = logf.Log.WithName("fenceagentsremediation-resource")
 )
 
 func (r *FenceAgentsRemediation) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -45,18 +45,18 @@ var _ webhook.Validator = &FenceAgentsRemediation{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (far *FenceAgentsRemediation) ValidateCreate() (admission.Warnings, error) {
-	webhookTemplateLog.Info("validate create", "name", far.Name)
+	webhookFARLog.Info("validate create", "name", far.Name)
 	return validation.ValidateFenceAgentName(far.Spec.Agent)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (far *FenceAgentsRemediation) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
-	webhookTemplateLog.Info("validate update", "name", far.Name)
+	webhookFARLog.Info("validate update", "name", far.Name)
 	return validation.ValidateFenceAgentName(far.Spec.Agent)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (far *FenceAgentsRemediation) ValidateDelete() (admission.Warnings, error) {
-	webhookTemplateLog.Info("validate delete", "name", far.Name)
+	webhookFARLog.Info("validate delete", "name", far.Name)
 	return nil, nil
 }

@@ -11,11 +11,6 @@ import (
 
 var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
-	const (
-		validAgentName   = "fence_ipmilan"
-		invalidAgentName = "fence_ip"
-	)
-
 	Context("creating FenceAgentsRemediationTemplate", func() {
 
 		When("agent name match format and binary", func() {

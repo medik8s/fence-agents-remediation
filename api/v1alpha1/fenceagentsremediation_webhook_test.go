@@ -9,12 +9,7 @@ import (
 	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
-var _ = Describe("FenceAgentsRemediation  Validation", func() {
-
-	const (
-		validAgentName   = "fence_ipmilan"
-		invalidAgentName = "fence_ip"
-	)
+var _ = Describe("FenceAgentsRemediation Validation", func() {
 
 	Context("creating FenceAgentsRemediation", func() {
 
