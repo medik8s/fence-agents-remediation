@@ -22,13 +22,16 @@ metadata:
                 "worker-2": "6235"
               }
             },
+            "retrycount": 5,
+            "retryinterval": "5s",
             "sharedparameters": {
               "--action": "reboot",
               "--ip": "192.168.111.1",
               "--lanplus": "",
               "--password": "password",
               "--username": "admin"
-            }
+            },
+            "timeout": "60s"
           }
         },
         {
