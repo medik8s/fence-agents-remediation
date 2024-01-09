@@ -22,8 +22,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
-	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
 var (
@@ -46,13 +44,13 @@ var _ webhook.Validator = &FenceAgentsRemediation{}
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (far *FenceAgentsRemediation) ValidateCreate() (admission.Warnings, error) {
 	webhookFARLog.Info("validate create", "name", far.Name)
-	return validation.ValidateFenceAgentName(far.Spec.Agent)
+	return agentValidator.ValidateAgentName(far.Spec.Agent)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (far *FenceAgentsRemediation) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	webhookFARLog.Info("validate update", "name", far.Name)
-	return validation.ValidateFenceAgentName(far.Spec.Agent)
+	return agentValidator.ValidateAgentName(far.Spec.Agent)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type

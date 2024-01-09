@@ -20,8 +20,10 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io/fs"
 	"net"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,8 +31,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
-
-	//+kubebuilder:scaffold:imports
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -40,6 +40,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	//+kubebuilder:scaffold:imports
+
+	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -97,6 +100,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
+	// initalize webhook agentValidator with a dummy function
+	agentValidator = validation.NewAgentValidator(dummyGetAgent)
+
 	// start webhook server using Manager
 	webhookInstallOptions := &testEnv.WebhookInstallOptions
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
@@ -144,3 +150,11 @@ var _ = AfterSuite(func() {
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
 })
+
+// dummyGetAgent return an empty error message only when the file doesn't match validAgentName
+func dummyGetAgent(agent string) (fs.FileInfo, error) {
+	if strings.Contains(agent, validAgentName) {
+		return nil, nil
+	}
+	return nil, fmt.Errorf("")
+}

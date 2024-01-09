@@ -17,6 +17,9 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"io/fs"
+	"os"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -29,6 +32,8 @@ import (
 var (
 	// webhookTemplateLog is for logging in this package.
 	webhookFARTemplateLog = logf.Log.WithName("fenceagentsremediationtemplate-resource")
+	// verify agent existence with os.Stat function
+	agentValidator = validation.NewAgentValidator(func(agent string) (fs.FileInfo, error) { return os.Stat(agent) })
 )
 
 func (r *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -46,13 +51,13 @@ var _ webhook.Validator = &FenceAgentsRemediationTemplate{}
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (farTemplate *FenceAgentsRemediationTemplate) ValidateCreate() (admission.Warnings, error) {
 	webhookFARTemplateLog.Info("validate create", "name", farTemplate.Name)
-	return validation.ValidateFenceAgentName(farTemplate.Spec.Template.Spec.Agent)
+	return agentValidator.ValidateAgentName(farTemplate.Spec.Template.Spec.Agent)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (farTemplate *FenceAgentsRemediationTemplate) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	webhookFARTemplateLog.Info("validate update", "name", farTemplate.Name)
-	return validation.ValidateFenceAgentName(farTemplate.Spec.Template.Spec.Agent)
+	return agentValidator.ValidateAgentName(farTemplate.Spec.Template.Spec.Agent)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
