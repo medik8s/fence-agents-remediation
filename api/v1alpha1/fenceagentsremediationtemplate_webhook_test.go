@@ -5,8 +5,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
 var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
@@ -26,15 +24,17 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				farTemplate := getTestFARTemplate(invalidAgentName)
 				_, err := farTemplate.ValidateCreate()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring(validation.ErrorNotFoundAgent, invalidAgentName))
+				Expect(err.Error()).To(ContainSubstring("unsupported fence agent: %s", invalidAgentName))
 			})
 		})
 	})
 
 	Context("updating FenceAgentsRemediationTemplate", func() {
-
-		oldFARTemplate := getTestFARTemplate(invalidAgentName)
+		var oldFARTemplate *FenceAgentsRemediationTemplate
 		When("agent name match format and binary", func() {
+			BeforeEach(func() {
+				oldFARTemplate = getTestFARTemplate(invalidAgentName)
+			})
 			It("should be accepted", func() {
 				farTemplate := getTestFARTemplate(validAgentName)
 				_, err := farTemplate.ValidateUpdate(oldFARTemplate)
@@ -43,11 +43,14 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		})
 
 		When("agent name was not found ", func() {
+			BeforeEach(func() {
+				oldFARTemplate = getTestFARTemplate(invalidAgentName)
+			})
 			It("should be rejected", func() {
 				farTemplate := getTestFARTemplate(invalidAgentName)
 				_, err := farTemplate.ValidateUpdate(oldFARTemplate)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring(validation.ErrorNotFoundAgent, invalidAgentName))
+				Expect(err.Error()).To(ContainSubstring("unsupported fence agent: %s", invalidAgentName))
 			})
 		})
 	})

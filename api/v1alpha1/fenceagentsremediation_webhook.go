@@ -17,16 +17,24 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"fmt"
+
+	"github.com/pkg/errors"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
 var (
 	// webhookFARLog is for logging in this package.
 	webhookFARLog = logf.Log.WithName("fenceagentsremediation-resource")
+	// verify agent existence with os.Stat function
+	agentValidator = validation.NewAgentValidator()
 )
 
 func (r *FenceAgentsRemediation) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -44,17 +52,28 @@ var _ webhook.Validator = &FenceAgentsRemediation{}
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (far *FenceAgentsRemediation) ValidateCreate() (admission.Warnings, error) {
 	webhookFARLog.Info("validate create", "name", far.Name)
-	return agentValidator.ValidateAgentName(far.Spec.Agent)
+	return validateAgentName(far.Spec.Agent)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (far *FenceAgentsRemediation) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	webhookFARLog.Info("validate update", "name", far.Name)
-	return agentValidator.ValidateAgentName(far.Spec.Agent)
+	return validateAgentName(far.Spec.Agent)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (far *FenceAgentsRemediation) ValidateDelete() (admission.Warnings, error) {
 	webhookFARLog.Info("validate delete", "name", far.Name)
+	return nil, nil
+}
+
+func validateAgentName(agent string) (admission.Warnings, error) {
+	exists, err := agentValidator.ValidateAgentName(agent)
+	if err != nil {
+		return nil, errors.WithMessagef(err, "Failed to validate fence agent: %s. You might want to try again.", agent)
+	}
+	if !exists {
+		return nil, fmt.Errorf("unsupported fence agent: %s", agent)
+	}
 	return nil, nil
 }

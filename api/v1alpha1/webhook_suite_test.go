@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/fs"
 	"net"
 	"path/filepath"
 	"strings"
@@ -100,8 +99,13 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
-	// initalize webhook agentValidator with a dummy function
-	agentValidator = validation.NewAgentValidator(dummyGetAgent)
+	// initalize webhook agentValidator with a dummy function to check if agents name match the validAgentName
+	agentValidator = validation.NewCustomAgentValidator(func(agent string) (bool, error) {
+		if strings.Contains(agent, validAgentName) {
+			return true, nil
+		}
+		return false, nil
+	})
 
 	// start webhook server using Manager
 	webhookInstallOptions := &testEnv.WebhookInstallOptions
@@ -150,11 +154,3 @@ var _ = AfterSuite(func() {
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
 })
-
-// dummyGetAgent return an empty error message only when the file doesn't match validAgentName
-func dummyGetAgent(agent string) (fs.FileInfo, error) {
-	if strings.Contains(agent, validAgentName) {
-		return nil, nil
-	}
-	return nil, fmt.Errorf("")
-}
