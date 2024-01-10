@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	"go.uber.org/zap/zapcore"
@@ -35,9 +36,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	fenceagentsremediationv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/controllers"
 
 	//+kubebuilder:scaffold:imports
@@ -45,7 +46,12 @@ import (
 	"github.com/medik8s/fence-agents-remediation/version"
 )
 
-const operatorName = "FenceAgentsRemediation"
+const (
+	WebhookCertDir  = "/apiserver.local.config/certificates"
+	WebhookCertName = "apiserver.crt"
+	WebhookKeyName  = "apiserver.key"
+	operatorName    = "FenceAgentsRemediation"
+)
 
 var (
 	scheme   = pkgruntime.NewScheme()
@@ -55,19 +61,25 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(fenceagentsremediationv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
 func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
-	var probeAddr string
+	var (
+		metricsAddr          string
+		enableLeaderElection bool
+		probeAddr            string
+		enableHTTP2          bool
+		webhookOpts          webhook.Options
+	)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&enableHTTP2, "enable-http2", false, "If HTTP/2 should be enabled for the metrics and webhook servers.")
+
 	opts := zap.Options{
 		Development: true,
 		TimeEncoder: zapcore.RFC3339NanoTimeEncoder,
@@ -79,22 +91,11 @@ func main() {
 
 	printVersion()
 
-	// Disable HTTP/2 support to avoid issues with CVE HTTP/2 Rapid Reset.
-	// Currently, the metrics server enables/disables HTTP/2 support only if SecureServing is enabled, which is not.
-	// Adding the disabling logic anyway to avoid future issues.
-	disableHTTP2 := func(c *tls.Config) {
-		setupLog.Info("disabling HTTP/2 support")
-		c.NextProtos = []string{"http/1.1"}
-	}
-
-	metricsOpts := server.Options{
-		BindAddress: metricsAddr,
-		TLSOpts:     []func(*tls.Config){disableHTTP2},
-	}
+	configureWebhookOpts(&webhookOpts, enableHTTP2)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
-		Metrics:                metricsOpts,
+		WebhookServer:          webhook.NewServer(webhookOpts),
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "cb305759.medik8s.io",
@@ -121,6 +122,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err = (&fenceagentsremediationv1alpha1.FenceAgentsRemediation{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "FenceAgentsRemediation")
+		os.Exit(1)
+	}
+	if err = (&fenceagentsremediationv1alpha1.FenceAgentsRemediationTemplate{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "FenceAgentsRemediationTemplate")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -145,4 +154,36 @@ func printVersion() {
 	setupLog.Info(fmt.Sprintf("Operator Version: %s", version.Version))
 	setupLog.Info(fmt.Sprintf("Git Commit: %s", version.GitCommit))
 	setupLog.Info(fmt.Sprintf("Build Date: %s", version.BuildDate))
+}
+
+func configureWebhookOpts(webhookOpts *webhook.Options, enableHTTP2 bool) {
+
+	certs := []string{filepath.Join(WebhookCertDir, WebhookCertName), filepath.Join(WebhookCertDir, WebhookKeyName)}
+	certsInjected := true
+	for _, fname := range certs {
+		if _, err := os.Stat(fname); err != nil {
+			certsInjected = false
+			break
+		}
+	}
+	if certsInjected {
+		webhookOpts.CertDir = WebhookCertDir
+		webhookOpts.CertName = WebhookCertName
+		webhookOpts.KeyName = WebhookKeyName
+		webhookOpts.TLSOpts = []func(*tls.Config){}
+	} else {
+		setupLog.Info("OLM injected certs for webhooks not found")
+	}
+	// disable http/2 for mitigating relevant CVEs
+	if !enableHTTP2 {
+		webhookOpts.TLSOpts = append(webhookOpts.TLSOpts,
+			func(c *tls.Config) {
+				c.NextProtos = []string{"http/1.1"}
+			},
+		)
+		setupLog.Info("HTTP/2 for webhooks disabled")
+	} else {
+		setupLog.Info("HTTP/2 for webhooks enabled")
+	}
+
 }

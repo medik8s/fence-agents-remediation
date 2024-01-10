@@ -40,7 +40,9 @@ spec:
             description: FenceAgentsRemediationSpec defines the desired state of FenceAgentsRemediation
             properties:
               agent:
-                description: Agent is the name of fence agent that will be used
+                description: Agent is the name of fence agent that will be used. It
+                  should have a fence_ prefix.
+                pattern: fence_.+
                 type: string
               nodeparameters:
                 additionalProperties:

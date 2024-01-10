@@ -74,7 +74,8 @@ spec:
         name: fenceagentsremediations
         version: v1alpha1
       specDescriptors:
-      - description: Agent is the name of fence agent that will be used
+      - description: Agent is the name of fence agent that will be used. It should
+          have a fence_ prefix.
         displayName: Agent
         path: agent
       - description: NodeParameters are passed to the fencing agent according to the
@@ -119,7 +120,8 @@ spec:
       - description: Template defines the desired state of FenceAgentsRemediationTemplate
         displayName: Template
         path: template
-      - description: Agent is the name of fence agent that will be used
+      - description: Agent is the name of fence agent that will be used. It should
+          have a fence_ prefix.
         displayName: Agent
         path: template.spec.agent
       - description: NodeParameters are passed to the fencing agent according to the
@@ -397,3 +399,44 @@ spec:
     url: https://github.com/medik8s
   replaces: fence-agents-remediation.v0.0.1
   version: 0.0.1
+  webhookdefinitions:
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: fence-agents-remediation-controller-manager
+    failurePolicy: Fail
+    generateName: vfenceagentsremediation.kb.io
+    rules:
+    - apiGroups:
+      - fence-agents-remediation.medik8s.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - fenceagentsremediations
+    sideEffects: None
+    targetPort: 9443
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediation
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: fence-agents-remediation-controller-manager
+    failurePolicy: Fail
+    generateName: vfenceagentsremediationtemplate.kb.io
+    rules:
+    - apiGroups:
+      - fence-agents-remediation.medik8s.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - fenceagentsremediationtemplates
+    sideEffects: None
+    targetPort: 9443
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate

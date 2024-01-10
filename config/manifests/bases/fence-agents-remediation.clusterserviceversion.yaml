@@ -30,7 +30,8 @@ spec:
         name: fenceagentsremediations
         version: v1alpha1
       specDescriptors:
-      - description: Agent is the name of fence agent that will be used
+      - description: Agent is the name of fence agent that will be used. It should
+          have a fence_ prefix.
         displayName: Agent
         path: agent
       - description: NodeParameters are passed to the fencing agent according to the
@@ -75,7 +76,8 @@ spec:
       - description: Template defines the desired state of FenceAgentsRemediationTemplate
         displayName: Template
         path: template
-      - description: Agent is the name of fence agent that will be used
+      - description: Agent is the name of fence agent that will be used. It should
+          have a fence_ prefix.
         displayName: Agent
         path: template.spec.agent
       - description: NodeParameters are passed to the fencing agent according to the
