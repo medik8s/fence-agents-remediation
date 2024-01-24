@@ -46,8 +46,10 @@ metadata:
     categories: OpenShift Optional
     containerImage: ""
     createdAt: ""
-    description: Fence Agents Remediation Operator can help to increase availability
-      of workloads in an automatic manner using well-known fence agents.
+    description: Fence Agents Remediation Operator uses well-known agents to fence
+      and remediate unhealthy nodes. In this process it can minimize downtime for
+      stateful applications, restores compute capacity if transient failures occur,
+      and increases the availability of workloads.
     olm.skipRange: '>=0.0.1'
     operators.operatorframework.io/builder: operator-sdk-v1.30.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -118,20 +120,21 @@ spec:
         path: template.spec.sharedparameters
       version: v1alpha1
   description: |
-    Fence Agents Remediation (*FAR*) is a Kubernetes operator that can help to increase availability of workloads in an automatic manner using well-known fence agents.
-    Using a management interface or traditional API, FAR runs a fence agent to remediate a node from an unhealthy state by power cycling the node.
-    By doing so it minimizes downtime for stateful applications and restores compute capacity if transient failures occur.
+    Fence Agents Remediation (*FAR*) is a Kubernetes operator that *fence* and remediate unhealthy to healthy nodes.
+    Using a traditional Application Programming Interface (API) FAR runs uses well-known fence agents to remediate a node from an unhealthy state by power cycling the node,
+    and afterwards it delets the node's resources.
+    By doing so, FAR can minimize downtime for stateful applications, restores compute capacity if transient failures occur, and increases the availability of workloads.
 
     FAR is one of the remediator operators by [Medik8s](https://www.medik8s.io/remediation/remediation/),
     such as [Self Node Remediation](https://github.com/medik8s/self-node-remediation) and [Machine Deletion Remediation](https://github.com/medik8s/machine-deletion-remediation),
-    that were designed to run with the Node HealthCheck Operator [(NHC)](https://github.com/medik8s/node-healthcheck-operator) which detects an unhealthy node and create remediation CR.
-    It is recommended to use FAR with NHC for an easier and smoother experience by fully automatin the remediation process, but it can be used as a standalone remediator for the more experienced user.
+    that were designed to run with the Node HealthCheck Operator [(NHC)](https://github.com/medik8s/node-healthcheck-operator) which detects an unhealthy node and creates remediation CR.
+    It is recommended to use FAR with NHC for an easier and smoother experience by fully automate the remediation process, but it can be used as a standalone remediator for the more experienced user.
 
-    FAR is recommended when a node becomes unhealthy, and we want to completely isolate the node from a cluster, since we can not “trust” the unhealthy node,
+    FAR is recommended when a node becomes unhealthy, and we want to completely fence/isolate the node from a cluster, since we can not “trust” the unhealthy node,
     to prevent it from accessing the shared resources like [RWO volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes).
-    Moreover, FAR is robust as it can remediate an unhealthy node using a management interface (e.g., IPMI) while still keeping control plane connectivity,
-    and it is diverse since it includes [numerous fence agents](https://github.com/ClusterLabs/fence-agents) to choose from, and each one of them
-    is designed for different types of clusters, such as bare metal servers, virtual machines, cloud platforms, etc.
+    Moreover, FAR is *robust* as it can remediate an unhealthy node using a traditional API (e.g., IPMI) while still keeping control plane connectivity,
+    and it is *diverse* since it includes [numerous fence agents](https://github.com/ClusterLabs/fence-agents) to choose from.
+    Each one of these agents is designed for different types of clusters, such as bare metal servers, virtual machines, cloud platforms, etc.
   displayName: Fence Agents Remediation Operator
   icon:
   - base64data: base64EncodedIcon
@@ -360,9 +363,9 @@ spec:
   - baremetal
   links:
   - name: Fence Agents Remediation
-    url: https://medik8s.io/fence-agents-remediation/fence-agents-remediation
+    url: https://www.medik8s.io/remediation/fence-agents-remediation/fence-agents-remediation/
   - name: Source Code
-    url: https://github.com/medik8s/fence-agents-remediation
+    url: https://www.github.com/medik8s/fence-agents-remediation
   maintainers:
   - email: medik8s@googlegroups.com
     name: Medik8s Team
