@@ -86,7 +86,7 @@ spec:
     FAR is one of the remediator operators by [Medik8s](https://www.medik8s.io/remediation/remediation/),
     such as [Self Node Remediation](https://github.com/medik8s/self-node-remediation) and [Machine Deletion Remediation](https://github.com/medik8s/machine-deletion-remediation),
     that were designed to run with the Node HealthCheck Operator [(NHC)](https://github.com/medik8s/node-healthcheck-operator) which detects an unhealthy node and creates remediation CR.
-    It is recommended to use FAR with NHC for an easier and smoother experience by fully automate the remediation process, but it can be used as a standalone remediator for the more experienced user.
+    It is recommended to use FAR with NHC for an easier and smoother experience by fully automating the remediation process, but it can be used as a standalone remediator for the more experienced user.
 
     ### Advantages
     - Robustness - FAR has direct feedback from the traditional Application Programming Interface (API) call (e.g., IPMI) about the result of the fence action without using the Kubernetes API.
