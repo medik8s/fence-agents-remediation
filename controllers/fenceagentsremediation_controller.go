@@ -107,7 +107,6 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "Failed to get FenceAgentsRemediation CR")
 		return emptyResult, err
 	}
-	commonEvents.RemediationStarted(r.Recorder, far)
 
 	// At the end of each Reconcile we try to update CR's status
 	defer func() {
@@ -148,8 +147,9 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		if err := r.Client.Update(context.Background(), far); err != nil {
 			return emptyResult, fmt.Errorf("failed to add finalizer to the CR - %w", err)
 		}
-		r.Log.Info("Finalizer was added", "CR Name", req.Name)
+		commonEvents.RemediationStarted(r.Recorder, far)
 
+		r.Log.Info("Finalizer was added", "CR Name", req.Name)
 		utils.UpdateConditions(utils.RemediationStarted, far, r.Log)
 		commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonAddFinalizer, utils.EventMessageAddFinalizer)
 		return requeueImmediately, nil

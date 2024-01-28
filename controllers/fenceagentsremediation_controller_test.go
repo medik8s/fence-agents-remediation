@@ -206,7 +206,7 @@ var _ = Describe("FAR Controller", func() {
 					return controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)
 				}, timeoutPreRemediation, pollInterval).Should(BeFalse(), "finalizer shouldn't be added")
 				verifyEvent(corev1.EventTypeWarning, utils.EventReasonCrNodeNotFound, utils.EventMessageCrNodeNotFound)
-				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonAddFinalizer, utils.EventMessageAddFinalizer)
+				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonRemediationStarted, utils.EventMessageRemediationStarted)
 
 				// If finalizer is missing, then a taint shouldn't exist
 				By("Not having remediation taint")
@@ -489,7 +489,7 @@ func verifyPreRemediationSucceed(underTestFAR *v1alpha1.FenceAgentsRemediation, 
 	By("Searching for finalizer ")
 	Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: nodeName, Namespace: namespace}, underTestFAR)).To(Succeed())
 	Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
-	verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddFinalizer, utils.EventMessageAddFinalizer)
+	verifyEvent(corev1.EventTypeNormal, utils.EventReasonRemediationStarted, utils.EventMessageRemediationStarted)
 
 	By("Searching for remediation taint if we have a finalizer")
 	Eventually(func(g Gomega) {
