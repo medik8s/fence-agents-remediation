@@ -149,7 +149,14 @@ var _ = Describe("FAR Controller", func() {
 			DeferCleanup(k8sClient.Delete, context.Background(), node)
 
 			Expect(k8sClient.Create(context.Background(), underTestFAR)).To(Succeed())
-			DeferCleanup(cleanupFar(), context.Background(), underTestFAR)
+			DeferCleanup(func() {
+				Expect(cleanupFar(context.Background(), underTestFAR)).To(Succeed())
+				deleteErr := k8sClient.Get(ctx, client.ObjectKeyFromObject(underTestFAR), &v1alpha1.FenceAgentsRemediation{})
+				if !apierrors.IsNotFound(deleteErr) {
+					verifyEvent(corev1.EventTypeNormal, utils.EventReasonRemoveFinalizer, utils.EventMessageRemoveFinalizer)
+				}
+				clearEvents()
+			})
 
 			// Sleep for a second to ensure dummy reconciliation has begun running before the unit tests
 			time.Sleep(1 * time.Second)
@@ -206,7 +213,7 @@ var _ = Describe("FAR Controller", func() {
 					return controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)
 				}, timeoutPreRemediation, pollInterval).Should(BeFalse(), "finalizer shouldn't be added")
 				verifyEvent(corev1.EventTypeWarning, utils.EventReasonCrNodeNotFound, utils.EventMessageCrNodeNotFound)
-				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonAddFinalizer, utils.EventMessageAddFinalizer)
+				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonRemediationStarted, utils.EventMessageRemediationStarted)
 
 				// If finalizer is missing, then a taint shouldn't exist
 				By("Not having remediation taint")
@@ -489,7 +496,7 @@ func verifyPreRemediationSucceed(underTestFAR *v1alpha1.FenceAgentsRemediation, 
 	By("Searching for finalizer ")
 	Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: nodeName, Namespace: namespace}, underTestFAR)).To(Succeed())
 	Expect(controllerutil.ContainsFinalizer(underTestFAR, v1alpha1.FARFinalizer)).To(BeTrue())
-	verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddFinalizer, utils.EventMessageAddFinalizer)
+	verifyEvent(corev1.EventTypeNormal, utils.EventReasonRemediationStarted, utils.EventMessageRemediationStarted)
 
 	By("Searching for remediation taint if we have a finalizer")
 	Eventually(func(g Gomega) {
@@ -564,34 +571,31 @@ func verifyRemediationConditions(far *v1alpha1.FenceAgentsRemediation, nodeName 
 }
 
 // cleanupFar deletes the FAR CR and waits until it is deleted. The function ignores if the CR is already deleted.
-func cleanupFar() func(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) error {
-	return func(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) error {
-		cr := &v1alpha1.FenceAgentsRemediation{}
-		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(far), cr); err != nil {
-			if apierrors.IsNotFound(err) {
-				return nil
-			}
-			return err
+func cleanupFar(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) error {
+	cr := &v1alpha1.FenceAgentsRemediation{}
+	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(far), cr); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
 		}
-
-		var force client.GracePeriodSeconds = 0
-		if err := k8sClient.Delete(ctx, cr, force); err != nil {
-			if apierrors.IsNotFound(err) {
-				return nil
-			}
-			return err
-		}
-
-		ConsistentlyWithOffset(1, func() error {
-			deleteErr := k8sClient.Get(ctx, client.ObjectKeyFromObject(far), cr)
-			if apierrors.IsNotFound(deleteErr) {
-				// when trying to create far CR with invalid name
-				log.Info("Cleanup: Got error 404", "name", cr.Name)
-				return nil
-			}
-			return deleteErr
-		}, pollInterval, timeoutPostRemediation).Should(BeNil(), "CR should be deleted")
-		clearEvents()
-		return nil
+		return err
 	}
+
+	var force client.GracePeriodSeconds = 0
+	if err := k8sClient.Delete(ctx, cr, force); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	ConsistentlyWithOffset(1, func() error {
+		deleteErr := k8sClient.Get(ctx, client.ObjectKeyFromObject(far), cr)
+		if apierrors.IsNotFound(deleteErr) {
+			// when trying to create far CR with invalid name
+			log.Info("Cleanup: Got error 404", "name", cr.Name)
+			return nil
+		}
+		return deleteErr
+	}, pollInterval, timeoutPostRemediation).Should(BeNil(), "CR should be deleted")
+	return nil
 }

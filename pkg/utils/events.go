@@ -1,6 +1,10 @@
 package utils
 
 const (
+	// common events reason and message
+	EventReasonRemediationStarted  = "RemediationStarted"
+	EventMessageRemediationStarted = "Remediation started"
+
 	// events reasons
 	EventReasonCrNodeNotFound           = "NodeNotFound"
 	EventReasonRemediationStoppedByNHC  = "RemediationStoppedByNHC"
