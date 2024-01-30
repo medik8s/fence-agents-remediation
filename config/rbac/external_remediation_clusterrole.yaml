@@ -11,6 +11,8 @@ rules:
       - fenceagentsremediationtemplates
     verbs:
       - get
+      - list
+      - watch
   - apiGroups:
       - fence-agents-remediation.medik8s.io
     resources:
