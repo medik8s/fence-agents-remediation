@@ -7,8 +7,9 @@ metadata:
     categories: OpenShift Optional
     containerImage: ""
     createdAt: ""
-    description: Fence Agents Remediation Operator for remediating nodes using upstream
-      fence-agents.
+    description: Fence Agents Remediation Operator uses well-known agents to fence
+      and remediate unhealthy nodes. The remediation includes rebooting the unhealthy
+      node using a fence agent, and then evicting workloads from the unhealthy node.
     olm.skipRange: '>=0.0.1'
     operatorframework.io/suggested-namespace: openshift-workload-availability
     operatorframework.io/suggested-namespace-template: '{"kind":"Namespace","apiVersion":"v1","metadata":{"name":"openshift-workload-availability","annotations":{"openshift.io/node-selector":""}}}'
@@ -98,13 +99,22 @@ spec:
         displayName: Timeout
         path: template.spec.timeout
       version: v1alpha1
-  description: "Fence Agents Remediation Operator (FAR)\n\nThe operator will remediate/fence
-    a node when a FenceAgentsRemediation (far) custom resource exists with the node's
-    name.\nFAR uses an existing set of upstream fencing agents for environments with
-    a \ntraditional API end-point (e.g., IPMI) for power cycling cluster nodes.\n\nThe
-    operator is recommended to be used with Node Healthcheck Operator for easier and
-    smoother experience,\nbut it can also work as a standalonde remediator for the
-    more advanced user.\n"
+  description: |
+    ### Introduction
+    Fence Agents Remediation (FAR) is a Kubernetes operator that uses well-known agents to fence and remediate unhealthy nodes.
+    The remediation includes rebooting the unhealthy node using a fence agent and then evicting workloads from the unhealthy node.
+
+    ### Compatibility
+    FAR is one of the remediator operators by [Medik8s](https://www.medik8s.io/remediation/remediation/),
+    such as [Self Node Remediation](https://github.com/medik8s/self-node-remediation) and [Machine Deletion Remediation](https://github.com/medik8s/machine-deletion-remediation),
+    that were designed to run with the Node HealthCheck Operator [(NHC)](https://github.com/medik8s/node-healthcheck-operator) which detects an unhealthy node and creates remediation CR.
+    It is recommended to use FAR with NHC for an easier and smoother experience by fully automating the remediation process, but it can be used as a standalone remediator for the more experienced user.
+
+    ### Advantages
+    - Robustness - FAR has direct feedback from the traditional Application Programming Interface (API) call (e.g., IPMI) about the result of the fence action without using the Kubernetes API.
+    - Speed - FAR is rapid since it can reboot a node and receive an acknowledgment from the API call while other remediators might need to wait a safe time till they can expect the node to be rebooted.
+    - Diversity - FAR includes several fence agents from a large known set of upstream fencing agents for bare metal servers, virtual machines, cloud platforms, etc.
+    - Adjustability - FAR allows to set up different parameters for running the API call that remediates the node.
   displayName: Fence Agents Remediation Operator
   icon:
   - base64data: base64EncodedIcon
@@ -135,9 +145,9 @@ spec:
   - baremetal
   links:
   - name: Fence Agents Remediation
-    url: https://medik8s.io
+    url: https://www.medik8s.io/remediation/fence-agents-remediation/fence-agents-remediation/
   - name: Source Code
-    url: https://github.com/medik8s/fence-agents-remediation
+    url: https://www.github.com/medik8s/fence-agents-remediation
   maintainers:
   - email: medik8s@googlegroups.com
     name: Medik8s Team
