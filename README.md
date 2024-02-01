@@ -224,12 +224,21 @@ spec:
 
 ### Run code checks and unit tests
 
-`make test`
+Run `make test`
 
 ### Run e2e tests
 
 1. Deploy the operator as explained above
-2. Run `make test-e2e`
+2. (Only for AWS platforms) Run `make ocp-aws-credentials` to add sufficient [CredentialsRequest](https://github.com/medik8s/fence-agents-remediation/blob/main/config/ocp_aws/fence_aws_credentials_request.yaml).
+3. Export the operator installed namespace (e.g., *openshift-operators*) and run `export OPERATOR_NS=INSTALLED_NAMESPACE && make test-e2e`
+
+## Troubleshooting
+
+1. Watch the FenceAgentsRemediation CR [status conditions](#fenceagentsremediation-cr-status) value, message, and reason for better understanding whether the fence agent action succeeded and the remediation completed.
+2. Watch for the emitted [remeidation events](#far-remediation-events) at FenceAgentsRemediation CR or the remediated node for easier identifcation of the remediation process.
+3. Investigate FAR’s pod logs in the container *manager* (`kubectl logs -n INSTALLED_NAMESPACE --selector='app.kubernetes.io/name=fence-agents-remediation-operator' -c manager`).
+4. Use [Medik8s's team must-gather](https://github.com/medik8s/must-gather) (for OCP only) by running `oc adm must-gather --image=quay.io/medik8s/must-gather`.
+  It collects some related debug information for FAR and the rest of the Medik8s team operators.
 
 ## Help
 
