@@ -43,6 +43,49 @@ FAR includes the `FenceAgentsRemediationTemplate` (or `fartemplate`) for creatin
 => The scheduler understands that it can schedule the failed pods on a different node
 4. After the failed node becomes healthy, NHC deletes FenceAgentsRemediation CR, the NoExecute taint in Step 2 is removed, and the node becomes schedulable again
 
+### FenceAgentsRemediation CR Status
+
+The FenceAgentsRemediation CR status includes three [conditions](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-conditions): `Processing`, `FenceAgentActionSucceeded`, and `Succeeded`. Each condition has a status (true/false/unknown), a message, and a reason which indicates the state of the condition until it is met. Using these conditions we can understand better the state of the CR, and if an error occurred.
+For example, see the below FenceAgentsRemediation CR status and the conditions state for a successful remediation.
+
+```yaml
+apiVersion: fence-agents-remediation.medik8s.io/v1alpha1
+kind: FenceAgentsRemediation
+metadata:
+  name: NODE_NAME
+spec: 
+.
+.
+.
+status:
+  conditions:
+    - type: Processing
+      message: >-
+        The unhealthy node was fully remediated (it was tainted, fenced using
+        the fence agent and all the node resources have been deleted)
+      reason: RemediationFinishedSuccessfully
+      status: 'False'
+    - type: FenceAgentActionSucceeded
+      message: >-
+        FAR taint was added and the fence agent command has been created and
+        executed successfully
+      reason: FenceAgentSucceeded
+      status: 'True'   
+    - type: Succeeded
+      message: >-
+        The unhealthy node was fully remediated (it was tainted, fenced using
+        the fence agent and all the node resources have been deleted)
+      reason: RemediationFinishedSuccessfully
+      status: 'True'
+  lastUpdateTime: '2024-01-30T10:49:46Z'
+```
+
+### FAR Remediation Events
+
+The operator emits remediation events on the node and the remediation CR for better understanding of the remediation process.
+Some important remediation events are `FenceAgentSucceeded`, and `RemediationFinished` which signifies that the fence agent command was succeeded and that the remediation was completed.
+All the remediation events of FAR (as well as other Medik8s operators) has a message that begins with *[remediation]*. Therefore, to easily filter these events run `oc get events -A | awk '/\[remediation\]/ || NR==1'` to get any remediation event or `oc get events -A | awk '/\[remediation\]/ && /worker-1/ || NR==1'` for getting any remediation event for node and CR of name *worker-1*.
+
 ## Installation
 
 There are two ways to install the operator:
