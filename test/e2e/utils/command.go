@@ -196,6 +196,11 @@ func GetPod(nodeName, containerName string) *corev1.Pod {
 					Operator: corev1.TolerationOpEqual,
 					Effect:   corev1.TaintEffectNoExecute,
 				},
+				{
+					Key:      corev1.TaintNodeOutOfService,
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoExecute,
+				},
 			},
 		},
 	}
