@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"math/rand"
+	"os"
 	"time"
 
 	commonConditions "github.com/medik8s/common/pkg/conditions"
@@ -44,6 +45,7 @@ const (
 	pollTaint          = "100ms"
 	pollReboot         = "1s"
 	pollAfterReboot    = "250ms"
+	skipOOSREnvVarName = "SKIP_OOST_REMEDIATION_VERIFICATION"
 )
 
 var remediationTimes []time.Duration
@@ -125,6 +127,10 @@ var _ = Describe("FAR E2e", func() {
 			filteredNodes *corev1.NodeList
 		)
 		BeforeEach(func() {
+			if _, isExist := os.LookupEnv(skipOOSREnvVarName); isExist {
+				Skip("Skip this block due to out-of-service taint not supported")
+			}
+
 			selectedNode, filteredNodes = pickRemediatedNode(filteredNodes)
 			nodeName = selectedNode.Name
 			printNodeDetails(selectedNode, nodeIdentifierPrefix, testNodeParam)
