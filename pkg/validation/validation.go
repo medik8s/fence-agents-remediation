@@ -15,9 +15,7 @@ import (
 
 var (
 	loggerValidation = ctrl.Log.WithName("validation")
-	//IsOutOfServiceTaintSupported will be set to true in case OutOfServiceTaint is supported (k8s 1.26 or higher)
-	IsOutOfServiceTaintSupported bool
-	leadingDigits                = regexp.MustCompile(`^(\d+)`)
+	leadingDigits    = regexp.MustCompile(`^(\d+)`)
 )
 
 const (
@@ -25,6 +23,10 @@ const (
 	minK8sMajorVersionOutOfServiceTaint = 1
 	minK8sMinorVersionOutOfServiceTaint = 26
 )
+
+type OutOfServiceTaintValidator struct {
+	isOutOfServiceTaintSupported bool
+}
 
 type AgentExists func(string) (bool, error)
 type validateAgentExistence struct {
@@ -64,27 +66,37 @@ func (vfe *validateAgentExistence) ValidateAgentName(agent string) (bool, error)
 	return vfe.agentExists(agent)
 }
 
-// InitOutOfServiceTaintSupportedFlag checks a cluster's k8s version and
-// set the IsOutOfServiceTaintSupported flag to true if out-of-service is supported on the cluster
-func InitOutOfServiceTaintSupportedFlag(config *rest.Config) error {
+// NewOutOfServiceTaintValidator returns a validator to check if out-of-service taint
+// is supporetd on the cluster
+func NewOutOfServiceTaintValidator(config *rest.Config) (*OutOfServiceTaintValidator, error) {
+	v := &OutOfServiceTaintValidator{}
+
 	if cs, err := kubernetes.NewForConfig(config); err != nil || cs == nil {
 		if cs == nil {
 			err = fmt.Errorf("k8s client set is nil")
 		}
 		loggerValidation.Error(err, "couldn't retrieve k8s client")
-		return err
+		return nil, err
 	} else if k8sVersion, err := cs.Discovery().ServerVersion(); err != nil || k8sVersion == nil {
 		if k8sVersion == nil {
 			err = fmt.Errorf("k8s server version is nil")
 		}
 		loggerValidation.Error(err, "couldn't retrieve k8s server version")
-		return err
+		return nil, err
 	} else {
-		return setOutOfTaintSupportedFlag(k8sVersion)
+		if err = v.setOutOfServiceTaintSupportedFlag(k8sVersion); err != nil {
+			return nil, err
+		}
+		return v, nil
 	}
 }
 
-func setOutOfTaintSupportedFlag(version *version.Info) error {
+// IsOutOfServiceTaintSupported returns if the cluster supports out-of-service taint
+func (v *OutOfServiceTaintValidator) IsOutOfServiceTaintSupported() bool {
+	return v.isOutOfServiceTaintSupported
+}
+
+func (v *OutOfServiceTaintValidator) setOutOfServiceTaintSupportedFlag(version *version.Info) error {
 	var majorVer, minorVer int
 	var err error
 	if majorVer, err = strconv.Atoi(version.Major); err != nil {
@@ -96,7 +108,7 @@ func setOutOfTaintSupportedFlag(version *version.Info) error {
 		return err
 	}
 
-	IsOutOfServiceTaintSupported = majorVer > minK8sMajorVersionOutOfServiceTaint || (majorVer == minK8sMajorVersionOutOfServiceTaint && minorVer >= minK8sMinorVersionOutOfServiceTaint)
-	loggerValidation.Info("out of service taint strategy", "isSupported", IsOutOfServiceTaintSupported, "k8sMajorVersion", majorVer, "k8sMinorVersion", minorVer)
+	v.isOutOfServiceTaintSupported = majorVer > minK8sMajorVersionOutOfServiceTaint || (majorVer == minK8sMajorVersionOutOfServiceTaint && minorVer >= minK8sMinorVersionOutOfServiceTaint)
+	loggerValidation.Info("out of service taint strategy", "isSupported", v.isOutOfServiceTaintSupported, "k8sMajorVersion", majorVer, "k8sMinorVersion", minorVer)
 	return nil
 }
