@@ -51,16 +51,24 @@ func CreateRemediationTaint() corev1.Taint {
 	}
 }
 
+// CreateOutOfServiceTaint returns an OutOfService taint
+func CreateOutOfServiceTaint() corev1.Taint {
+	return corev1.Taint{
+		Key:    corev1.TaintNodeOutOfService,
+		Value:  "nodeshutdown",
+		Effect: corev1.TaintEffectNoExecute,
+	}
+}
+
 // AppendTaint appends new taint to the taint list when it is not present.
 // It returns bool if a taint was appended, and an error if it fails in the process
-func AppendTaint(r client.Client, nodeName string) (bool, error) {
+func AppendTaint(r client.Client, nodeName string, taint corev1.Taint) (bool, error) {
 	// find node by name
 	node, err := GetNodeWithName(r, nodeName)
 	if node == nil {
 		return false, err
 	}
 
-	taint := CreateRemediationTaint()
 	// check if taint doesn't exist
 	if TaintExists(node.Spec.Taints, &taint) {
 		return false, nil
@@ -80,14 +88,13 @@ func AppendTaint(r client.Client, nodeName string) (bool, error) {
 }
 
 // RemoveTaint removes taint from the taint list when it is existed, and returns error if it fails in the process
-func RemoveTaint(r client.Client, nodeName string) error {
+func RemoveTaint(r client.Client, nodeName string, taint corev1.Taint) error {
 	// find node by name
 	node, err := GetNodeWithName(r, nodeName)
 	if node == nil {
 		return err
 	}
 
-	taint := CreateRemediationTaint()
 	// check if taint exist
 	if !TaintExists(node.Spec.Taints, &taint) {
 		return nil

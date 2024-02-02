@@ -166,8 +166,19 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			r.Executor.Remove(far.GetUID())
 		}
 
+		// remove out-of-service taint when using OutOfServiceTaint remediation
+		if far.Spec.RemediationStrategy == v1alpha1.OutOfServiceTaintRemediationStrategy {
+			r.Log.Info("Removing out-of-service taint", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
+			if err := utils.RemoveTaint(r.Client, far.Name, utils.CreateOutOfServiceTaint()); err != nil && !apiErrors.IsNotFound(err) {
+				r.Log.Error(err, "Failed to remove out-of-service taint", "CR's Name", req.Name)
+				return emptyResult, err
+			}
+			r.Log.Info("out-of-service taint was removed", "Node Name", req.Name)
+			commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveOutOfServiceTaint, utils.EventMessageRemoveOutOfServiceTaint)
+		}
+
 		// remove node's taints
-		if err := utils.RemoveTaint(r.Client, far.Name); err != nil && !apiErrors.IsNotFound(err) {
+		if err := utils.RemoveTaint(r.Client, far.Name, utils.CreateRemediationTaint()); err != nil && !apiErrors.IsNotFound(err) {
 			return emptyResult, err
 		}
 		r.Log.Info("FAR remediation taint was removed", "Node Name", req.Name)
@@ -182,7 +193,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return emptyResult, nil
 	}
 	// Add FAR (medik8s) remediation taint
-	taintAdded, err := utils.AppendTaint(r.Client, far.Name)
+	taintAdded, err := utils.AppendTaint(r.Client, far.Name, utils.CreateRemediationTaint())
 	if err != nil {
 		return emptyResult, err
 	} else if taintAdded {
@@ -219,11 +230,29 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		// - try to remove workloads
 		// - clean up Executor routine
 
-		r.Log.Info("Manual workload deletion", "Node Name", req.Name)
-		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
-		if err := commonResources.DeletePods(ctx, r.Client, req.Name); err != nil {
-			r.Log.Error(err, "Manual workload deletion has failed", "CR's Name", req.Name)
-			return emptyResult, err
+		switch far.Spec.RemediationStrategy {
+		case v1alpha1.ResourceDeletionRemediationStrategy:
+			r.Log.Info("Remediation strategy is ResourceDeletion which explicitly deletes resources - manually deleting workload", "Node Name", req.Name)
+			commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+			if err := commonResources.DeletePods(ctx, r.Client, req.Name); err != nil {
+				r.Log.Error(err, "Resource deletion has failed", "CR's Name", req.Name)
+				return emptyResult, err
+			}
+		case v1alpha1.OutOfServiceTaintRemediationStrategy:
+			r.Log.Info("Remediation strategy is OutOfServiceTaint which implicitly deletes resources - adding out-of-service taint", "Node Name", req.Name)
+			taintAdded, err := utils.AppendTaint(r.Client, far.Name, utils.CreateOutOfServiceTaint())
+			if err != nil {
+				r.Log.Error(err, "Failed to add out-of-service taint", "CR's Name", req.Name)
+				return emptyResult, err
+			} else if taintAdded {
+				r.Log.Info("out-of-service taint was added", "Node Name", req.Name)
+				commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonAddOutOfServiceTaint, utils.EventMessageAddOutOfServiceTaint)
+			}
+		default:
+			//this should never happen since we enforce valid values with kubebuilder
+			err := errors.New("unsupported remediation strategy")
+			r.Log.Error(err, "Encountered unsupported remediation strategy. Please check template spec", "strategy", far.Spec.RemediationStrategy)
+			return emptyResult, nil
 		}
 		utils.UpdateConditions(utils.RemediationFinishedSuccessfully, far, r.Log)
 
