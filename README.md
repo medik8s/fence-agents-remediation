@@ -1,21 +1,98 @@
 # Fence Agents Remediation (FAR)
 
-The fence-agents-remediation (*FAR*) is a Kubernetes operator generated using the [operator-sdk](https://github.com/operator-framework/operator-sdk), and it is part of [Medik8s](https://github.com/medik8s) operators. This operator is designed to run an existing set of [upstream fencing agents](https://github.com/ClusterLabs/fence-agents) for environments with a traditional API end-point (e.g., [IPMI](https://en.wikipedia.org/wiki/Intelligent_Platform_Management_Interface)) for power cycling cluster nodes.
+fence-agents-remediation (*FAR*) is a Kubernetes operator that uses [well-known agents](https://github.com/ClusterLabs/fence-agents) to fence and remediate unhealthy nodes. The remediation includes rebooting the unhealthy node using a fence agent, and then evicting workloads from the unhealthy node. The operator is recommended when a node becomes unhealthy, and we want remediate it by completely isolating the node from a cluster and help with recovering its workload. Isolation is needed, since we can’t “trust” the unhealthy node, to prevent it from accessing the shared resources like [RWO volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes), and recovering the workloads helps to accelerate and keep their running time.
 
-The operator watches for new or deleted custom resources (CRs) called `FenceAgentsRemediation` (or `far`) which trigger a fence-agent to remediate a node, based on the CR's name.
-FAR operator was designed to run with the Node HealthCheck Operator [(NHC)](https://github.com/medik8s/node-healthcheck-operator) as external remediator for easier and smoother experience, but it can be used as a standalone remediation for the more advanced user.
-FAR joins Medik8s as another remediator alternative for NHC, apart from [Self Node Remediation](https://github.com/medik8s/self-node-remediation) and [Machine Deletion Remediation](https://github.com/medik8s/machine-deletion-remediation) which are also from the [Medik8s](https://www.medik8s.io/) group.
+FAR is one of the remediator operators by [Medik8s](https://www.medik8s.io/remediation/remediation/), such as [Self Node Remediation](https://github.com/medik8s/self-node-remediation) and [Machine Deletion Remediation](https://github.com/medik8s/machine-deletion-remediation), that were designed to run with the Node HealthCheck Operator [(NHC)](https://github.com/medik8s/node-healthcheck-operator) which detects an unhealthy node and creates remediation Custom Resource ([CR](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/)). It is recommended to use FAR with NHC for an easier and smoother experience by fully automating the remediation process, but it can be used as a standalone remediator for the more experienced user. Moreover, like other Medik8s operators FAR was generated using the [operator-sdk](https://github.com/operator-framework/operator-sdk), and it supports Operator Lifecycle Manager ([OLM](https://olm.operatorframework.io/docs/)).
 
-FAR operator includes plenty of well known [fence-agents](https://github.com/medik8s/fence-agents-remediation/blob/main/Dockerfile#L31) to choose from (see [here](https://github.com/ClusterLabs/fence-agents/tree/main/agents) for the full list), thanks to the upstream [fence-agents repo](https://github.com/ClusterLabs/fence-agents) from *ClusterLabs*.
-Currently FAR has been tested only with one fence-agent [*fence_ipmilan*](https://www.mankier.com/8/fence_ipmilan) - I/O Fencing agent which can be used with machines controlled by IPMI, and using [ipmitool](<http://ipmitool.sf.net/>).
+## About Fence Agents
+
+FAR uses a fence agent to fence a Kubernetes node. Generally, fencing is the process of taking unresponsive/unhealthy computers into a safe state and isolating the computer. Fence agent is a software "driver" which is able to prevent nodes from destroying data on shared storage, and it aimed for isolating corrupted nodes. The isolation with FAR is mostly power-based fencing which enables power-cycling, resetting, or turning off the computer.
+
+FAR uses some of the fence agents from the [upstream repository](https://github.com/ClusterLabs/fence-agents) by the *ClusterLabs* group. For example, `fence_ipmilan` for Intelligent Platform Management Interface ([IPMI](https://en.wikipedia.org/wiki/Intelligent_Platform_Management_Interface)) environments or `fence_aws` for Amazon Web Services ([AWS](https://aws.amazon.com)) platform. These upstream fence agents are Python scripts that are used to isolate a corrupted node from the rest of the cluster in a power-based fencing method. When a node is switched off, it cannot corrupt any data on shared storage. The fence agents use command-line arguments rather than configuration files, and to understand better the parameters you can view the fence agent's metadata (e.g., `fence_ipmilan -o metadata`).
+
+## Advantages
+
+* Robustness - FAR has direct feedback from the agent's management Application Programming Interface (API) call (e.g., IPMI) about the result of the fence action without using the Kubernetes API.
+* Speed - FAR is rapid since it can reboot a node and receive an acknowledgment from the API call while other remediators might need to wait a safe time till they can expect the node to be rebooted.
+* Availability - FAR has high availability by running with two replicas of its pod, and when the leader of these two pods is evicted, then the other one takes control and reduces FAR downtime.
+* Diversity - FAR includes several fence agents from a large known set of upstream fencing agents for bare metal servers, virtual machines, cloud platforms, etc.
+* Adjustability - FAR allows to set up different parameters for running the API call that remediates the node.
+
+## How does FAR work?
+
+The operator watches for new or deleted CRs called `FenceAgentsRemediation` (or `far`) which trigger remediation for the node, based on the CR's name. When the CR name doesn't match a node in the cluster, then the CR won't trigger any remediation by FAR. Remediation includes adding a taint on the node, rebooting the node by fence agent, and at last deleting the remaining workloads.
+
+FAR remediates by simply rebooting the unhealthy node, and moving any remaining workloads to other nodes, so they can continue running and be isolated from the unhealthy node. The reboot is done by executing a fence agent for the unhealthy node while evicting the workloads from this node is achieved by tainting the node and deleting the workloads. FAR unique taint, `medik8s.io/fence-agents-remediation`, has a [NoExecute effect](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/#taint-based-evictions), so  any pods that don't tolerate this taint are evicted immediately, and they won't be scheduled again after the node has been rebooted as long as the taint remains (the taint is removed on FenceAgentsRemediation CR deletion). Deleting the workloads is done to speed up Kubernetes rescheduling of the remaining pods (most likely [stateful pods](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#using-statefulsets)), that are not running anymore.
+
+FAR includes the `FenceAgentsRemediationTemplate` (or `fartemplate`) Custom Resource Definition ([CRD](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#create-a-customresourcedefinition)) for how to create a FenceAgentsRemediation CR. The template has the same fields as far CR (e.g., agent name) and it is used for automatically creating remediation CR by another operator/mechanism (e.g., [NHC](#far-with-nhc)). The other operator is responsible of creating (and eventually deleting) the FenceAgentsRemediation CR with the name of the unhealthy node, even though FAR can be used manually without fartemplate and an additional operator (see [standalone FAR](#standalone-far)).
+
+### Operator Workflow
+
+#### Prerequisites
+
+* FAR and NHC are installed on the cluster.
+* One of the nodes fails (it has become unhealthy), and NHC detects this node as unhealthy and decides to create a remediation CR, FenceAgentsRemediation CR, based on the external remediator template (e.g., fartemplate).
+
+#### Workflow
+
+1. FAR adds NoExecute taint to the failed node
+=> Ensure that any workloads are not executed after rebooting the failed node, and any stateless pods (that can’t tolerate FAR NoExecute taint) will be evicted immediately
+2. FAR reboots the failed node via the Fence Agent
+=> After rebooting, there are no workloads in the failed node
+3. FAR forcefully deletes the pods in the failed node
+=> The scheduler understands that it can schedule the failed pods on a different node
+4. After the failed node becomes healthy, NHC deletes FenceAgentsRemediation CR, the NoExecute taint in Step 2 is removed, and the node becomes schedulable again
+
+### FenceAgentsRemediation CR Status
+
+The FenceAgentsRemediation CR status includes three [conditions](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-conditions): `Processing`, `FenceAgentActionSucceeded`, and `Succeeded`. Each condition has a status (true/false/unknown), a message, and a reason which indicates the state of the condition until it is met. Using these conditions we can understand better the state of the CR, and if an error occurred.
+For example, see the below FenceAgentsRemediation CR status and the conditions state for a successful remediation.
+
+```yaml
+apiVersion: fence-agents-remediation.medik8s.io/v1alpha1
+kind: FenceAgentsRemediation
+metadata:
+  name: NODE_NAME
+spec: 
+.
+.
+.
+status:
+  conditions:
+    - type: Processing
+      message: >-
+        The unhealthy node was fully remediated (it was tainted, fenced using
+        the fence agent and all the node resources have been deleted)
+      reason: RemediationFinishedSuccessfully
+      status: 'False'
+    - type: FenceAgentActionSucceeded
+      message: >-
+        FAR taint was added and the fence agent command has been created and
+        executed successfully
+      reason: FenceAgentSucceeded
+      status: 'True'   
+    - type: Succeeded
+      message: >-
+        The unhealthy node was fully remediated (it was tainted, fenced using
+        the fence agent and all the node resources have been deleted)
+      reason: RemediationFinishedSuccessfully
+      status: 'True'
+  lastUpdateTime: '2024-01-30T10:49:46Z'
+```
+
+### FAR Remediation Events
+
+The operator emits remediation events on the node and the remediation CR for better understanding of the remediation process.
+Some important remediation events are `FenceAgentSucceeded`, and `RemediationFinished` which signifies that the fence agent command was succeeded and that the remediation was completed.
+All the remediation events of FAR (as well as other Medik8s operators) has a message that begins with *[remediation]*. Therefore, to easily filter these events run `oc get events -A | awk '/\[remediation\]/ || NR==1'` to get any remediation event or `oc get events -A | awk '/\[remediation\]/ && /worker-1/ || NR==1'` for getting any remediation event for node and CR of name *worker-1*.
 
 ## Installation
 
-There are two ways to install the operator:
+There are three ways to install the operator:
 
 * Deploy the latest version, which was built from the `main` branch, to a running Kubernetes/OpenShift cluster.
-<!-- TODO: - Deploy the last release version from OperatorHub to a running Kubernetes cluster. -->
-* Build and deploy from sources to a running or to be created Kubernetes/OpenShift cluster.
+* Deploy the latest release version from the Kubernetes community, [OperatorHub.io](https://operatorhub.io/operator/fence-agents-remediation), to a running Kubernetes cluster.
+* Build and deploy from sources to a running Kubernetes/OpenShift cluster.
 
 ### Deploy the latest version
 
@@ -24,51 +101,61 @@ For deployment of FAR using these images you need:
 
 * Install `operator-sdk` binary from their [official website](https://sdk.operatorframework.io/docs/installation/#install-from-github-release).
 
-* A running OpenShift cluster, or a Kubernetes cluster with Operator Lifecycle Manager ([OLM](https://olm.operatorframework.io/docs/)) installed (to install it run `operator-sdk olm install`).
+* A running Kubernetes cluster, or an OpenShift (OCP) cluster with OLM installed. To install it on Kubernetes cluster run `operator-sdk olm install`.
 
-* A valid `$KUBECONFIG` configured to access your cluster.
-<!-- TODO: ATM it can't be installed on the default namespace -->
-Then, run `operator-sdk run bundle quay.io/medik8s/fence-agents-remediation-operator-bundle:latest` to deploy the FAR's latest version on the current namespace.
+* A valid `$KUBECONFIG` is configured to access your cluster.
+
+* Run `operator-sdk run bundle quay.io/medik8s/fence-agents-remediation-operator-bundle:latest` to deploy the FAR's latest version on the current namespace.
+  Another way to achieve that is running `BUNDLE_RUN_NAMESPACE=<INSTALLED_NAMESPACE> make bundle-run` to install FAR on *<INSTALLED_NAMESPACE>* namespace.
+
+> *Note*: Installing FAR on a new namesapce (e.g., ns) requires setting some labels on the namespace prior to installing FAR:
+> ```
+> kubectl label --overwrite ns olm security.openshift.io/scc.podSecurityLabelSync=false
+> kubectl label --overwrite ns olm pod-security.kubernetes.io/enforce=privileged
+> ```
+
+### Deploy from the Kubernetes community
+
+Go to [OperatorHub](https://operatorhub.io/operator/fence-agents-remediation), click on Install, and follow the instructions on how to install the operator on Kubernetes.
 
 ### Build and deploy from sources
 
 * Clone FAR repository.
 
 * Follow OLM's [instructions](https://sdk.operatorframework.io/docs/building-operators/golang/tutorial/#configure-the-operators-image-registry) on how to configure the operator's image registry (build and push the operator container).
-* Run FAR using one the [suggested options from OLM](https://sdk.operatorframework.io/docs/building-operators/golang/tutorial/#run-the-operator) to run it locally, in the cluster, and in the cluster using bundle container (similar to the [above installation](#deploy-the-latest-version)).
+* Run FAR in your cluster using its bundle container (similar to the [above installation](#deploy-the-latest-version), and also see [OLM's instructions](https://sdk.operatorframework.io/docs/building-operators/golang/tutorial/#3-deploy-your-operator-with-olm)).
 
 ## Usage
 
-FAR is recommended for using with NHC to create a complete solution for unhealthy nodes, since NHC detects unhealthy nodes and creates an external remediation CR, e.g., FAR's CR, for unhealthy nodes.
-This automated way is preferable as it gives the responsibility on FAR CRs (creation and deletion) to NHC, even though FAR can also act as standalone remediator, but it with expense from the administrator to create and delete CRs.
+FAR is recommended for use with NHC to automate high availability for unhealthy nodes since NHC detects unhealthy nodes and it can create an external remediation CR, e.g., FenceAgentsRemediation CR, for unhealthy nodes.
+This automated way gives the responsibility on FenceAgentsRemediation CRs (creation and deletion) to NHC, even though FAR can also act as a standalone remediator, but it comes with the expense from the advanced administrator to identify the nodes' health for creating (and eventually) deleting these CRs.
 
-Either way a user must be familiar with fence agent to be used - Knowing its parameters and any other requirements on the cluster (e.g., fence_ipmilan needs machines that support IPMI).
+Either way, a user must be familiar with the fence agent to be used. Know the fence agent parameters, and any other requirements on the cluster (e.g., fence_ipmilan needs machines that support IPMI).
 
 ### FAR with NHC
 
-* Install FAR using one of the above options ([Installation](#installation)).
+* Install [NHC](https://github.com/medik8s/node-healthcheck-operator/blob/main/docs/installation.md), and FAR using one of the above options ([Installation](#installation)).
 
-* Load the yaml manifest of the FAR template (see below).
+* Create the fartemplate CR (see below example).
 
-* Modify NHC CR to use FAR as its remediator -
-This is basically a specific use case of an [external remediation of NHC CR](https://github.com/medik8s/node-healthcheck-operator#external-remediation-resources).
-In order to set it up, please make sure that Node Health Check is running, FAR controller exists and then creates the necessary CRs (*FenceAgentsRemediationTemplate* and then *NodeHealthCheck*).
+* Create a *NodeHealthCheck* CR that uses fartemplate as its external remediator in [RemediationTemplate](https://github.com/medik8s/node-healthcheck-operator/blob/main/docs/configuration.md#remediationtemplate) or [EscalatingRemediations](https://github.com/medik8s/node-healthcheck-operator/blob/main/docs/configuration.md#escalatingremediations).
 
-#### Example CRs
+#### Example FenceAgentsRemediationTemplate CR
 
-The FAR template, `FenceAgentsRemediationTemplate`, CR is created by the administrator and is used as a template by NHC for creating the NHC CR that represent a request for a Node to be recovered.
-For better understanding please see the below example of FAR template object (see it also as the [sample FAR template](https://github.com/medik8s/fence-agents-remediation/blob/main/config/samples/fence-agents-remediation_v1alpha1_fenceagentsremediationtemplate.yaml)):
+The fartemplate CR is created by the administrator, and NHC can use it for creating a remediation CR, e.g. FenceAgentsRemediation.
+For a better understanding please see the below example of a dummy fartemplate object:
 
 ```yaml
 apiVersion: fence-agents-remediation.medik8s.io/v1alpha1
 kind: FenceAgentsRemediationTemplate
 metadata:
   name: fenceagentsremediationtemplate-default
+  namespace: default
 spec:
   template: {}
 ```
 
-> *Note*:  FenceAgentsRemediationTemplate CR must be created in the same namespace that FAR operator has been installed.
+> *Note*: FenceAgentsRemediationTemplate CR must be created in the same namespace that the FAR operator has been installed.
 
 Configuring NodeHealthCheck to use the example `fenceagentsremediationtemplate-default` template above.
 
@@ -85,29 +172,29 @@ spec:
     namespace: default
 ```
 
-NHC creates FAR CR using FAR Template after it detects an unhealthy node (according to NHC unhealthy conditions).
-FAR CRs are deleted by NHC after it sees the Node is healthy again.
+NHC creates FenceAgentsRemediation CR using fartemplate after it detects an unhealthy node (according to NHC's unhealthy conditions).
+FenceAgentsRemediation CRs are deleted by NHC after it detects the node is healthy again.
 
 ### Standalone FAR
 
 * Install FAR using one of the above options ([Installation](#installation)).
 
-* Create FAR CR using the name of the node to be remediated, and the fence-agent parameters.
+* Create FenceAgentsRemediation CR with the name of the node to be remediated, the fence agent name, and its parameters.
 
-#### Example CR
+#### Example FenceAgentsRemediation CR
 
-The FAR CR (CustomResource), created by the admin, is used to trigger the fence-agent on a specific node.
-
+The FAR CR, `FenceAgentsRemediation`, is created by the admin and is used to trigger the fence agent on a specific node.
 The CR includes the following parameters:
 
-* `agent` - fence-agent name
-* `sharedparameters` - cluster wide parameters for executing the fence agent
-* `nodeparameters` - node specific parameters for executing the fence agent
-* `retrycount` - number of times to retry the fence-agent in case of failure. The default is 5.
+* `agent` - fence agent name. File name which is validated (by kubebuilder and Webhook) against a list of supported agents in the FAR pod.
+* `sharedparameters` - cluster wide parameters for executing the fence agent.
+* `nodeparameters` - node specific parameters for executing the fence agent.
+* `retrycount` - number of times to retry the fence agent in case of failure. The default is 5.
 * `retryinterval` - interval between retries in seconds. The default is "5s".
-* `timeout` - timeout for the fence-agent in seconds. The default is "60s".
+* `timeout` - timeout for the fence agent in seconds. The default is "60s".
 
-For better understanding please see the below example of FAR CR for node `worker-1` (see it also as the [sample FAR](https://github.com/medik8s/fence-agents-remediation/blob/main/config/samples/fence-agents-remediation_v1alpha1_fenceagentsremediation.yaml)):
+The FenceAgentsRemediation CR is created by the administrator and is used to trigger the fence agent on a specific node. The CR includes an *agent* field for the fence agent name, *sharedparameters* field with all the shared, not specific to a node, parameters, and a *nodeparameters* field to specify the parameters for the fenced node.
+For better understanding please see the below example of FenceAgentsRemediation CR for node `worker-1` (see it also as the [sample FAR](https://github.com/medik8s/fence-agents-remediation/blob/main/config/samples/fence-agents-remediation_v1alpha1_fenceagentsremediation.yaml)):
 
 ```yaml
 apiVersion: fence-agents-remediation.medik8s.io/v1alpha1
@@ -139,12 +226,22 @@ spec:
 
 ### Run code checks and unit tests
 
-`make test`
+Run `make test`
 
 ### Run e2e tests
 
 1. Deploy the operator as explained above
-2. Run `make test-e2e`
+2. (Only for AWS platforms) Run `make ocp-aws-credentials` to add sufficient [CredentialsRequest](https://github.com/medik8s/fence-agents-remediation/blob/main/config/ocp_aws/fence_aws_credentials_request.yaml).
+3. Export the operator installed namespace (e.g., *openshift-workload-availability*) before running the e2e test:
+ `export OPERATOR_NS=openshift-workload-availability && make test-e2e`
+
+## Troubleshooting
+
+1. Watch the FenceAgentsRemediation CR [status conditions](#fenceagentsremediation-cr-status) value, message, and reason for better understanding whether the fence agent action succeeded and the remediation completed.
+2. Watch for the emitted [remediation events](#far-remediation-events) at FenceAgentsRemediation CR or the remediated node for easier identification of the remediation process.
+3. Investigate FAR’s pod logs in the container *manager* (`kubectl logs -n <INSTALLED_NAMESPACE> --selector='app.kubernetes.io/name=fence-agents-remediation-operator' -c manager`).
+4. Use [Medik8s's team must-gather](https://github.com/medik8s/must-gather) (for OCP only) by running `oc adm must-gather --image=quay.io/medik8s/must-gather`.
+  It collects some related debug information for FAR and the rest of the Medik8s team operators.
 
 ## Help
 
