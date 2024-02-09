@@ -44,13 +44,19 @@ var _ webhook.Validator = &FenceAgentsRemediationTemplate{}
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (farTemplate *FenceAgentsRemediationTemplate) ValidateCreate() (admission.Warnings, error) {
 	webhookFARTemplateLog.Info("validate create", "name", farTemplate.Name)
-	return validateAgentName(farTemplate.Spec.Template.Spec.Agent)
+	if _, err := validateAgentName(farTemplate.Spec.Template.Spec.Agent); err != nil {
+		return nil, err
+	}
+	return validateStrategy(farTemplate.Spec.Template.Spec.RemediationStrategy)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (farTemplate *FenceAgentsRemediationTemplate) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	webhookFARTemplateLog.Info("validate update", "name", farTemplate.Name)
-	return validateAgentName(farTemplate.Spec.Template.Spec.Agent)
+	if _, err := validateAgentName(farTemplate.Spec.Template.Spec.Agent); err != nil {
+		return nil, err
+	}
+	return validateStrategy(farTemplate.Spec.Template.Spec.RemediationStrategy)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type

@@ -48,8 +48,9 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 const (
-	validAgentName   = "fence_ipmilan"
-	invalidAgentName = "fence_ip"
+	validAgentName                  = "fence_ipmilan"
+	invalidAgentName                = "fence_ip"
+	outOfServiceTaintUnsupportedMsg = "OutOfServiceTaint remediation strategy is not supported at kubernetes version lower than 1.26, please use a different remediation strategy"
 )
 
 var (

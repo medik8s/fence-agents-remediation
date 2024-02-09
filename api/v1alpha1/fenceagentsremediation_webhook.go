@@ -35,6 +35,8 @@ var (
 	webhookFARLog = logf.Log.WithName("fenceagentsremediation-resource")
 	// verify agent existence with os.Stat function
 	agentValidator = validation.NewAgentValidator()
+	//isOutOfServiceTaintSupported will be set to true in case out-of-service taint is supported (k8s 1.26 or higher)
+	isOutOfServiceTaintSupported bool
 )
 
 func (r *FenceAgentsRemediation) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -52,19 +54,29 @@ var _ webhook.Validator = &FenceAgentsRemediation{}
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (far *FenceAgentsRemediation) ValidateCreate() (admission.Warnings, error) {
 	webhookFARLog.Info("validate create", "name", far.Name)
-	return validateAgentName(far.Spec.Agent)
+	if _, err := validateAgentName(far.Spec.Agent); err != nil {
+		return nil, err
+	}
+	return validateStrategy(far.Spec.RemediationStrategy)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (far *FenceAgentsRemediation) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	webhookFARLog.Info("validate update", "name", far.Name)
-	return validateAgentName(far.Spec.Agent)
+	if _, err := validateAgentName(far.Spec.Agent); err != nil {
+		return nil, err
+	}
+	return validateStrategy(far.Spec.RemediationStrategy)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (far *FenceAgentsRemediation) ValidateDelete() (admission.Warnings, error) {
 	webhookFARLog.Info("validate delete", "name", far.Name)
 	return nil, nil
+}
+
+func InitOutOfServiceTaintSupportedFlag(outOfServiceTaintSupported bool) {
+	isOutOfServiceTaintSupported = outOfServiceTaintSupported
 }
 
 func validateAgentName(agent string) (admission.Warnings, error) {
@@ -74,6 +86,13 @@ func validateAgentName(agent string) (admission.Warnings, error) {
 	}
 	if !exists {
 		return nil, fmt.Errorf("unsupported fence agent: %s", agent)
+	}
+	return nil, nil
+}
+
+func validateStrategy(farRemStrategy RemediationStrategyType) (admission.Warnings, error) {
+	if farRemStrategy == OutOfServiceTaintRemediationStrategy && !isOutOfServiceTaintSupported {
+		return nil, fmt.Errorf("%s remediation strategy is not supported at kubernetes version lower than 1.26, please use a different remediation strategy", OutOfServiceTaintRemediationStrategy)
 	}
 	return nil, nil
 }

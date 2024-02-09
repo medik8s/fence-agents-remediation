@@ -44,10 +44,14 @@ const (
 	FenceAgentSucceeded ConditionsChangeReason = "FenceAgentSucceeded"
 	// RemediationFinishedSuccessfully - The unhealthy node was fully remediated/fenced (it was tainted, fenced by FA and all of its resources have been deleted)
 	RemediationFinishedSuccessfully ConditionsChangeReason = "RemediationFinishedSuccessfully"
+
+	ResourceDeletionRemediationStrategy  = RemediationStrategyType("ResourceDeletion")
+	OutOfServiceTaintRemediationStrategy = RemediationStrategyType("OutOfServiceTaint")
 )
 
 type ParameterName string
 type NodeName string
+type RemediationStrategyType string
 
 // FenceAgentsRemediationSpec defines the desired state of FenceAgentsRemediation
 type FenceAgentsRemediationSpec struct {
@@ -84,6 +88,11 @@ type FenceAgentsRemediationSpec struct {
 	// NodeParameters are passed to the fencing agent according to the node that is fenced, since they are node specific
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	NodeParameters map[ParameterName]map[NodeName]string `json:"nodeparameters,omitempty"`
+
+	//RemediationStrategy is the remediation method for unhealthy nodes.
+	// +kubebuilder:default:="ResourceDeletion"
+	// +kubebuilder:validation:Enum=ResourceDeletion;OutOfServiceTaint
+	RemediationStrategy RemediationStrategyType `json:"remediationStrategy,omitempty"`
 }
 
 // FenceAgentsRemediationStatus defines the observed state of FenceAgentsRemediation

@@ -58,6 +58,14 @@ spec:
                 description: NodeParameters are passed to the fencing agent according
                   to the node that is fenced, since they are node specific
                 type: object
+              remediationStrategy:
+                default: ResourceDeletion
+                description: RemediationStrategy is the remediation method for unhealthy
+                  nodes.
+                enum:
+                - ResourceDeletion
+                - OutOfServiceTaint
+                type: string
               retrycount:
                 default: 5
                 description: RetryCount is the number of times the fencing agent will
