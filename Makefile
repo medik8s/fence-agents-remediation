@@ -190,8 +190,8 @@ test-no-verify: go-verify manifests generate fmt vet fix-imports envtest ginkgo 
 	$(GINKGO) -r --keep-going --randomize-all --require-suite --vv --coverprofile cover.out ./api/... ./pkg/... ./controllers/...
 
 .PHONY: bundle-run
-export BUNDLE_RUN_NAMESPACE ?= openshift-operators
-bundle-run: operator-sdk ## Run bundle image. Default NS is "openshift-operators", redefine BUNDLE_RUN_NAMESPACE to override it.
+export BUNDLE_RUN_NAMESPACE ?= openshift-workload-availability
+bundle-run: operator-sdk ## Run bundle image. Default NS is "openshift-workload-availability", redefine BUNDLE_RUN_NAMESPACE to override it.
 	$(OPERATOR_SDK) -n $(BUNDLE_RUN_NAMESPACE) run bundle $(BUNDLE_IMG)
 
 .PHONY: bundle-cleanup
