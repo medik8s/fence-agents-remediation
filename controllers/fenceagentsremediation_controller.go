@@ -167,9 +167,18 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		// remove node's taints
-		if err := utils.RemoveTaint(r.Client, far.Name); err != nil && !apiErrors.IsNotFound(err) {
-			return emptyResult, err
+		taint := utils.CreateRemediationTaint()
+		if err := utils.RemoveTaint(r.Client, far.Name, taint); err != nil {
+			if apiErrors.IsConflict(err) {
+				r.Log.Info("Failed to remove taint from node due to node update, retrying... ,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
+				return ctrl.Result{RequeueAfter: time.Second}, nil
+
+			} else if !apiErrors.IsNotFound(err) {
+				r.Log.Error(err, "Failed to remove taint from node,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
+				return emptyResult, err
+			}
 		}
+
 		r.Log.Info("FAR remediation taint was removed", "Node Name", req.Name)
 		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveRemediationTaint, utils.EventMessageRemoveRemediationTaint)
 		// remove finalizer

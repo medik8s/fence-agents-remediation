@@ -438,3 +438,13 @@ ocp-aws-credentials: ## Add CredentialsRequest for OCP on AWS
 test-e2e: ginkgo ## Run end to end (E2E) tests
 	@test -n "${KUBECONFIG}" -o -r ${HOME}/.kube/config || (echo "Failed to find kubeconfig in ~/.kube/config or no KUBECONFIG set"; exit 1)
 	$(GINKGO) -r --keep-going --require-suite --vv  ./test/e2e -coverprofile cover.out
+
+# Revert all version or build date related changes
+.PHONY: bundle-reset
+bundle-reset:
+	VERSION=0.0.1 $(MAKE) manifests bundle
+	# empty creation date
+	sed -r -i "s|createdAt: .*|createdAt: \"\"|;" ${BUNDLE_CSV}
+
+.PHONY: full-gen
+full-gen:  go-verify manifests  generate manifests fmt bundle fix-imports bundle-reset ## generates all automatically generated content

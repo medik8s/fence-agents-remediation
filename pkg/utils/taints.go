@@ -80,14 +80,13 @@ func AppendTaint(r client.Client, nodeName string) (bool, error) {
 }
 
 // RemoveTaint removes taint from the taint list when it is existed, and returns error if it fails in the process
-func RemoveTaint(r client.Client, nodeName string) error {
+func RemoveTaint(r client.Client, nodeName string, taint corev1.Taint) error {
 	// find node by name
 	node, err := GetNodeWithName(r, nodeName)
 	if node == nil {
 		return err
 	}
 
-	taint := CreateRemediationTaint()
 	// check if taint exist
 	if !TaintExists(node.Spec.Taints, &taint) {
 		return nil
@@ -103,7 +102,6 @@ func RemoveTaint(r client.Client, nodeName string) error {
 
 	// update with new taint list
 	if err := r.Update(context.Background(), node); err != nil {
-		loggerTaint.Error(err, "Failed to remove taint from node,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
 		return err
 	}
 	loggerTaint.Info("Taint was removed", "taint effect", taint.Effect, "taint list", node.Spec.Taints)

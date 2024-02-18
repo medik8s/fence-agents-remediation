@@ -37,7 +37,7 @@ var _ = Describe("Utils-taint", func() {
 				Expect(TaintExists(taintedNode.Spec.Taints, &farNoExecuteTaint)).To(BeTrue())
 				By("removing medik8s NoSchedule taint")
 				// We want to see that RemoveTaint only remove the taint it receives
-				Expect(RemoveTaint(k8sClient, node0)).To(Succeed())
+				Expect(RemoveTaint(k8sClient, node0, CreateRemediationTaint())).To(Succeed())
 				Expect(k8sClient.Get(context.Background(), nodeKey, taintedNode)).To(Succeed())
 				Expect(TaintExists(taintedNode.Spec.Taints, &controlPlaneRoleTaint)).To(BeTrue())
 				Expect(TaintExists(taintedNode.Spec.Taints, &farNoExecuteTaint)).To(BeFalse())
