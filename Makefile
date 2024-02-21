@@ -20,7 +20,7 @@ OPERATOR_SDK_VERSION ?= v1.32.0
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.28
 
-# IMAGE_REGISTRY used to indicate the registery/group for the operator, bundle and catalog
+# IMAGE_REGISTRY used to indicate the registery/group for the operator and bundle
 IMAGE_REGISTRY ?= quay.io/medik8s
 export IMAGE_REGISTRY
 
@@ -71,18 +71,15 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 OPERATOR_NAME ?= fence-agents-remediation
 
 # IMAGE_TAG_BASE defines the docker.io namespace and part of the image name for remote images.
-# This variable is used to construct full image tags for bundle and catalog images.
+# This variable is used to construct full image tags for bundle image.
 #
-# For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
-# medik8s.io/fence-agents-remediation-bundle:$VERSION and medik8s.io/fence-agents-remediation-catalog:$VERSION.
+# For example, running 'make bundle-build bundle-push' will build and push the bundle image
+# medik8s.io/fence-agents-remediation-bundle:$VERSION
 IMAGE_TAG_BASE ?= $(IMAGE_REGISTRY)/$(OPERATOR_NAME)
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-operator-bundle:$(IMAGE_TAG)
-
-# The image tag given to the resulting catalog image (e.g. make catalog-build CATALOG_IMG=example.com/operator-catalog:v0.2.0).
-CATALOG_IMG ?= $(IMAGE_TAG_BASE)-operator-catalog:$(IMAGE_TAG)
 
 # Image URL to use all building/pushing image targets
 IMG ?= $(IMAGE_TAG_BASE)-operator:$(IMAGE_TAG)
@@ -386,23 +383,6 @@ endef
 build-tools: ## Download & build all the tools locally if necessary.
 	$(MAKE) kustomize controller-gen envtest goimports sort-imports ginkgo opm operator-sdk
 
-# Set CATALOG_BASE_IMG to an existing catalog image tag to add $BUNDLE_IMGS to that image.
-ifneq ($(origin CATALOG_BASE_IMG), undefined)
-FROM_INDEX_OPT := --from-index $(CATALOG_BASE_IMG)
-endif
-
-# Build a catalog image by adding bundle images to an empty catalog using the operator package manager tool, 'opm'.
-# This recipe invokes 'opm' in 'semver' bundle add mode. For more information on add modes, see:
-# https://github.com/operator-framework/community-operators/blob/7f1438c/docs/packaging-operator.md#updating-your-existing-operator
-.PHONY: catalog-build
-catalog-build: opm ## Build a catalog image.
-	$(OPM) index add --container-tool docker --mode semver --tag $(CATALOG_IMG) --bundles $(BUNDLE_IMG) $(FROM_INDEX_OPT)
-
-# Push the catalog image.
-.PHONY: catalog-push
-catalog-push: ## Push a catalog image.
-	$(MAKE) docker-push IMG=$(CATALOG_IMG)
-
 ##@ Targets used by CI
 
 .PHONY: verify-unchanged
@@ -420,10 +400,10 @@ bundle-build-community: bundle-community ## Run bundle community changes in CSV,
 container-build-community: docker-build bundle-build-community ## Build containers for community
 
 .PHONY: container-push 
-container-push: docker-push bundle-push catalog-build catalog-push ## Push containers (NOTE: catalog can't be build before bundle was pushed)
+container-push: docker-push bundle-push
 
 .PHONY: container-build-and-push-community
-container-build-and-push-community: container-build-community container-push ## Build three images, update CSV for community, and push all the images to Quay (docker, bundle, and catalog).
+container-build-and-push-community: container-build-community container-push ## Build the images, update CSV for community, and push all the images to Quay (docker and bundle).
 
 export OCP_AWS_CREDENTIALS ="config/ocp_aws/fence_aws_credentials_request.yaml"
 .PHONY: ocp-aws-credentials
