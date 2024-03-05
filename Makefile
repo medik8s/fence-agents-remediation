@@ -271,6 +271,9 @@ verify-previous-version: ## Verifies that PREVIOUS_VERSION variable is set
 bundle-reset-date: ## Reset bundle's createdAt
 	sed -r -i "s|createdAt: .*|createdAt: \"\"|;" ${BUNDLE_CSV}
 
+.PHONY: bundle-community-k8s
+bundle-community-k8s: bundle-community ## Generate bundle manifests and metadata customized to Red Hat community release
+
 .PHONY: bundle-community-rh
 bundle-community-rh: bundle-community ## Generate bundle manifests and metadata customized to Red Hat community release
 	echo -e "\n  # Annotations for OCP\n  com.redhat.openshift.versions: \"v${OCP_VERSION}\"" >> bundle/metadata/annotations.yaml
