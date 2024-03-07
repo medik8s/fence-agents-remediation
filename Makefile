@@ -20,6 +20,9 @@ OPERATOR_SDK_VERSION ?= v1.32.0
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.28
 
+# OCP Version: for OKD bundle community
+OCP_VERSION = 4.12
+
 # IMAGE_REGISTRY used to indicate the registery/group for the operator, bundle and catalog
 IMAGE_REGISTRY ?= quay.io/medik8s
 export IMAGE_REGISTRY
@@ -267,6 +270,13 @@ verify-previous-version: ## Verifies that PREVIOUS_VERSION variable is set
 .PHONY: bundle-reset-date
 bundle-reset-date: ## Reset bundle's createdAt
 	sed -r -i "s|createdAt: .*|createdAt: \"\"|;" ${BUNDLE_CSV}
+
+.PHONY: bundle-community-k8s
+bundle-community-k8s: bundle-community ## Generate bundle manifests and metadata customized to Red Hat community release
+
+.PHONY: bundle-community-rh
+bundle-community-rh: bundle-community ## Generate bundle manifests and metadata customized to Red Hat community release
+	echo -e "\n  # Annotations for OCP\n  com.redhat.openshift.versions: \"v${OCP_VERSION}\"" >> bundle/metadata/annotations.yaml
 
 .PHONY: bundle-community
 bundle-community: bundle ## Update displayName field in the bundle's CSV
