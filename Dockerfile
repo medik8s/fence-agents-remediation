@@ -1,6 +1,6 @@
 # Build the manager binary
 FROM quay.io/centos/centos:stream8 AS builder
-RUN dnf install -y golang jq git \
+RUN dnf install -y jq git \
     && dnf clean all -y
 
 WORKDIR /workspace
