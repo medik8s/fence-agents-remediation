@@ -1,6 +1,6 @@
 module github.com/medik8s/fence-agents-remediation
 
-go 1.20
+go 1.21.7
 
 require (
 	github.com/go-logr/logr v1.4.1
