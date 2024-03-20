@@ -126,7 +126,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return emptyResult, err
 	}
 	if node == nil {
-		r.Log.Error(err, "Didn't find a node matching the CR's name", "CR's Name", req.Name)
+		r.Log.Error(err, "Could not find CR's target node", "CR's Name", req.Name, "Expected node name", getNodeName(far))
 		utils.UpdateConditions(utils.RemediationFinishedNodeNotFound, far, r.Log)
 		commonEvents.WarningEvent(r.Recorder, far, utils.EventReasonCrNodeNotFound, utils.EventMessageCrNodeNotFound)
 		return emptyResult, err
