@@ -195,10 +195,11 @@ var _ = Describe("FAR Controller", func() {
 				node = utils.GetNode("", workerNode)
 				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam)
 			})
-
-			It("should have finalizer, taint, while the two VAs and one pod will be deleted", testFunc)
-
-			When("remediation is created from escalation remediation supporting same kind template", func() {
+			When("node name is stored in remediation name", func() {
+				It("should have finalizer, taint, while the two VAs and one pod will be deleted", testFunc)
+			})
+			//remediation is created from escalation remediation supporting same kind template
+			When("node name is stored in remediation's annotation", func() {
 				BeforeEach(func() {
 					underTestFAR.Name = fmt.Sprintf("%s-%s", workerNode, "pseudo-random-test-sufix")
 					underTestFAR.Annotations = map[string]string{"remediation.medik8s.io/node-name": workerNode}
