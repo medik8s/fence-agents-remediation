@@ -47,6 +47,7 @@ func (r *FenceAgentsRemediation) SetupWebhookWithManager(mgr ctrl.Manager) error
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
 // +kubebuilder:webhook:path=/validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediation,mutating=false,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations,verbs=create;update,versions=v1alpha1,name=vfenceagentsremediation.kb.io,admissionReviewVersions=v1
+
 var _ webhook.Validator = &FenceAgentsRemediation{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type

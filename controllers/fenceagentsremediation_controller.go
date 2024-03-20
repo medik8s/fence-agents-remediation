@@ -120,13 +120,13 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 
 	// Validate FAR CR name to match a nodeName from the cluster
 	r.Log.Info("Check FAR CR's name")
-	node, err := utils.GetNodeWithName(r.Client, req.Name)
+	node, err := utils.GetNodeWithName(r.Client, getNodeName(far))
 	if err != nil {
 		r.Log.Error(err, "Unexpected error when validating CR's name with nodes' names", "CR's Name", req.Name)
 		return emptyResult, err
 	}
 	if node == nil {
-		r.Log.Error(err, "Didn't find a node matching the CR's name", "CR's Name", req.Name)
+		r.Log.Error(err, "Could not find CR's target node", "CR's Name", req.Name, "Expected node name", getNodeName(far))
 		utils.UpdateConditions(utils.RemediationFinishedNodeNotFound, far, r.Log)
 		commonEvents.WarningEvent(r.Recorder, far, utils.EventReasonCrNodeNotFound, utils.EventMessageCrNodeNotFound)
 		return emptyResult, err
@@ -168,7 +168,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 
 		// remove node's taints
 		taint := utils.CreateRemediationTaint()
-		if err := utils.RemoveTaint(r.Client, far.Name, taint); err != nil {
+		if err := utils.RemoveTaint(r.Client, node.Name, taint); err != nil {
 			if apiErrors.IsConflict(err) {
 				r.Log.Info("Failed to remove taint from node due to node update, retrying... ,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
 				return ctrl.Result{RequeueAfter: time.Second}, nil
@@ -179,7 +179,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			}
 		}
 
-		r.Log.Info("FAR remediation taint was removed", "Node Name", req.Name)
+		r.Log.Info("FAR remediation taint was removed", "Node Name", node.Name)
 		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveRemediationTaint, utils.EventMessageRemoveRemediationTaint)
 		// remove finalizer
 		controllerutil.RemoveFinalizer(far, v1alpha1.FARFinalizer)
@@ -191,11 +191,11 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return emptyResult, nil
 	}
 	// Add FAR (medik8s) remediation taint
-	taintAdded, err := utils.AppendTaint(r.Client, far.Name)
+	taintAdded, err := utils.AppendTaint(r.Client, node.Name)
 	if err != nil {
 		return emptyResult, err
 	} else if taintAdded {
-		r.Log.Info("FAR remediation taint was added", "Node Name", req.Name)
+		r.Log.Info("FAR remediation taint was added", "Node Name", node.Name)
 		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonAddRemediationTaint, utils.EventMessageAddRemediationTaint)
 	}
 
@@ -204,19 +204,19 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		// The remeditation has already been processed, thus we can begin with executing the FA for the node
 
 		if r.Executor.Exists(far.GetUID()) {
-			r.Log.Info("A Fence Agent is already running", "Fence Agent", far.Spec.Agent, "Node Name", req.Name, "FAR uid", far.GetUID())
+			r.Log.Info("A Fence Agent is already running", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID())
 			return emptyResult, nil
 		}
 
-		r.Log.Info("Build fence agent command line", "Fence Agent", far.Spec.Agent, "Node Name", req.Name)
+		r.Log.Info("Build fence agent command line", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
 		faParams, err := buildFenceAgentParams(far)
 		if err != nil {
-			r.Log.Error(err, "Invalid shared or node parameters from CR", "Name", req.Name)
+			r.Log.Error(err, "Invalid shared or node parameters from CR", "Node Name", node.Name, "CR Name", req.Name)
 			return emptyResult, nil
 		}
 
 		cmd := append([]string{far.Spec.Agent}, faParams...)
-		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", req.Name, "FAR uid", far.GetUID())
+		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID())
 		r.Executor.AsyncExecute(ctx, far.GetUID(), cmd, far.Spec.RetryCount, far.Spec.RetryInterval.Duration, far.Spec.Timeout.Duration)
 		commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonFenceAgentExecuted, utils.EventMessageFenceAgentExecuted)
 		return emptyResult, nil
@@ -228,16 +228,16 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		// - try to remove workloads
 		// - clean up Executor routine
 
-		r.Log.Info("Manual workload deletion", "Node Name", req.Name)
+		r.Log.Info("Manual workload deletion", "Node Name", node.Name)
 		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
-		if err := commonResources.DeletePods(ctx, r.Client, req.Name); err != nil {
+		if err := commonResources.DeletePods(ctx, r.Client, node.Name); err != nil {
 			r.Log.Error(err, "Manual workload deletion has failed", "CR's Name", req.Name)
 			return emptyResult, err
 		}
 		utils.UpdateConditions(utils.RemediationFinishedSuccessfully, far, r.Log)
 
 		r.Executor.Remove(far.GetUID())
-		r.Log.Info("FenceAgentsRemediation CR has completed to remediate the node", "Node Name", req.Name)
+		r.Log.Info("FenceAgentsRemediation CR has completed to remediate the node", "Node Name", node.Name)
 		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonNodeRemediationCompleted, utils.EventMessageNodeRemediationCompleted)
 		commonEvents.RemediationFinished(r.Recorder, far)
 	}
@@ -287,6 +287,18 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 	return nil
 }
 
+// getNodeName checks for the node name in far's commonAnnotations.NodeNameAnnotation if it does not exist it assumes the node name equals to far CR's name and return it.
+func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
+	ann := far.GetAnnotations()
+	if ann == nil {
+		return far.GetName()
+	}
+	if nodeName, isNodeNameAnnotationExist := ann[commonAnnotations.NodeNameAnnotation]; isNodeNameAnnotationExist {
+		return nodeName
+	}
+	return far.GetName()
+}
+
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParameter name or it has an action which is different than reboot, then return an error
 func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, error) {
@@ -314,7 +326,7 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, erro
 	fenceAgentParams = appendParamToSlice(fenceAgentParams, parameterActionName, parameterActionValue)
 
 	// append node parameters
-	nodeName := v1alpha1.NodeName(far.Name)
+	nodeName := v1alpha1.NodeName(getNodeName(far))
 	for paramName, nodeMap := range far.Spec.NodeParameters {
 		if nodeVal, isFound := nodeMap[nodeName]; isFound {
 			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
