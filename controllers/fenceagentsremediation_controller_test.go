@@ -164,7 +164,7 @@ var _ = Describe("FAR Controller", func() {
 
 		When("creating valid FAR CR", func() {
 
-			testFunc := func() {
+			testSuccessfulRemediation := func() {
 				Eventually(func(g Gomega) {
 					g.Expect(storedCommand).To(ConsistOf([]string{
 						"fence_ipmilan",
@@ -196,7 +196,7 @@ var _ = Describe("FAR Controller", func() {
 				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam)
 			})
 			When("node name is stored in remediation name", func() {
-				It("should have finalizer, taint, while the two VAs and one pod will be deleted", testFunc)
+				It("should have finalizer, taint, while the two VAs and one pod will be deleted", testSuccessfulRemediation)
 			})
 			//remediation is created from escalation remediation supporting same kind template
 			When("node name is stored in remediation's annotation", func() {
@@ -204,7 +204,7 @@ var _ = Describe("FAR Controller", func() {
 					underTestFAR.Name = fmt.Sprintf("%s-%s", workerNode, "pseudo-random-test-sufix")
 					underTestFAR.Annotations = map[string]string{"remediation.medik8s.io/node-name": workerNode}
 				})
-				It("should have finalizer, taint, while the two VAs and one pod will be deleted", testFunc)
+				It("should have finalizer, taint, while the two VAs and one pod will be deleted", testSuccessfulRemediation)
 			})
 
 		})
