@@ -287,14 +287,16 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 	return nil
 }
 
+// getNodeName checks for the node name in far's commonAnnotations.NodeNameAnnotation if it does not exist it assumes the node name equals to far CR's name and return it.
 func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
-	if far.GetAnnotations() == nil {
+	ann := far.GetAnnotations()
+	if ann == nil {
 		return far.GetName()
-	} else if nodeName, isNodeNameAnnotationExist := far.GetAnnotations()[commonAnnotations.NodeNameAnnotation]; isNodeNameAnnotationExist {
+	}
+	if nodeName, isNodeNameAnnotationExist := ann[commonAnnotations.NodeNameAnnotation]; isNodeNameAnnotationExist {
 		return nodeName
 	}
 	return far.GetName()
-
 }
 
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
