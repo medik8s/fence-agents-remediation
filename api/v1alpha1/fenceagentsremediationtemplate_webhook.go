@@ -49,7 +49,7 @@ func (farTemplate *FenceAgentsRemediationTemplate) Default() {
 	if farTemplate.GetAnnotations() == nil {
 		farTemplate.Annotations = make(map[string]string)
 	}
-	if _, isSameKindSupported := farTemplate.GetAnnotations()[commonAnnotations.MultipleTemplatesSupportedAnnotation]; !isSameKindSupported {
+	if _, isSameKindAnnotationSet := farTemplate.GetAnnotations()[commonAnnotations.MultipleTemplatesSupportedAnnotation]; !isSameKindAnnotationSet {
 		farTemplate.Annotations[commonAnnotations.MultipleTemplatesSupportedAnnotation] = "true"
 	}
 }
