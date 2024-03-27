@@ -159,7 +159,7 @@ spec:
     - Speed - FAR is rapid since it can reboot a node and receive an acknowledgment from the API call while other remediators might need to wait a safe time till they can expect the node to be rebooted.
     - Diversity - FAR includes several fence agents from a large known set of upstream fencing agents for bare metal servers, virtual machines, cloud platforms, etc.
     - Adjustability - FAR allows to set up different parameters for running the API call that remediates the node.
-  displayName: Fence Agents Remediation Operator - Community Edition
+  displayName: Fence Agents Remediation Operator
   icon:
   - base64data: base64EncodedIcon
     mediatype: image/png
