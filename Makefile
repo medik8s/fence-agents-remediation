@@ -266,6 +266,9 @@ add-replaces-field: ## Add replaces field to the CSV
 		if [ $(PREVIOUS_VERSION) == $(DEFAULT_VERSION) ]; then \
 			echo "Error: PREVIOUS_VERSION must be set for versioned builds"; \
 			exit 1; \
+		elif [ $(shell ./hack/semver_cmp.sh $(VERSION) $(PREVIOUS_VERSION)) != 1 ]; then \
+			echo "Error: VERSION ($(VERSION)) must be greater than PREVIOUS_VERSION ($(PREVIOUS_VERSION))"; \
+			exit 1; \
 		else \
 		  	# preferring sed here, in order to have "replaces" near "version" \
 			sed -r -i "/  version: $(VERSION)/ a\  replaces: $(OPERATOR_NAME).v$(PREVIOUS_VERSION)" ${BUNDLE_CSV}; \
