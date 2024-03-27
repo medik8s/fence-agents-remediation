@@ -3,22 +3,25 @@ on:
   push:
     branches:
       - main
-    tags:
-      - 'v*'
 
 permissions:
   contents: write
   pull-requests: read
 
 jobs:
-  push-images:
-    name: Build and push images to quay.io/medik8s
+  push_to_registry:
+    name: Build and push unversioned images to quay.io/medik8s
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
 
       - name: Log in to Quay.io
         uses: docker/login-action@v2
@@ -27,14 +30,8 @@ jobs:
           password: ${{ secrets.QUAY_PASSWORD }}
           registry: quay.io
 
-      - name: Build and push CSV 0.0.1 + latest images for PR merges to main
-        if: ${{ github.ref_type != 'tag' }}
+      - name: Build and push CSV version v0.0.1 with latest images
         run: export IMAGE_REGISTRY=quay.io/medik8s && make container-build-and-push-community
-
-      - name: Build and push versioned CSV and images for tags
-        if: ${{ github.ref_type == 'tag' }}
-        # remove leading 'v' from tag!
-        run: export VERSION=$(echo $GITHUB_REF_NAME | sed 's/v//') && make container-build-and-push-community
 
       - name: Create release with manifests
         if: ${{ github.ref_type == 'tag' }}
