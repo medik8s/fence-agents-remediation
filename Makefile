@@ -253,19 +253,27 @@ export ICON_BASE64 ?= ${DEFAULT_ICON_BASE64}
 export BUNDLE_CSV ?="./bundle/manifests/$(OPERATOR_NAME).clusterserviceversion.yaml"
 
 .PHONY: bundle-update
-bundle-update: verify-previous-version ## Update CSV fields and validate the bundle directory
+bundle-update: ## Update CSV fields and validate the bundle directory
 	sed -r -i "s|containerImage: .*|containerImage: $(IMG)|;" ${BUNDLE_CSV}
 	sed -r -i "s|createdAt: .*|createdAt: `date '+%Y-%m-%d %T'`|;" ${BUNDLE_CSV}
-	sed -r -i "s|replaces: .*|replaces: $(OPERATOR_NAME).v${PREVIOUS_VERSION}|;" ${BUNDLE_CSV}
 	sed -r -i "s|base64data:.*|base64data: ${ICON_BASE64}|;" ${BUNDLE_CSV}
 	$(MAKE) bundle-validate
 
-.PHONY: verify-previous-version
-verify-previous-version: ## Verifies that PREVIOUS_VERSION variable is set
-	@if [ $(VERSION) != $(DEFAULT_VERSION) ] && [ $(PREVIOUS_VERSION) = $(DEFAULT_VERSION) ]; then \
-  			echo "Error: PREVIOUS_VERSION must be set for the selected VERSION"; \
-    		exit 1; \
-    fi
+.PHONY: add-replaces-field
+add-replaces-field: ## Add replaces field to the CSV
+	# add replaces field when building versioned bundle
+	@if [ $(VERSION) != $(DEFAULT_VERSION) ]; then \
+		if [ $(PREVIOUS_VERSION) == $(DEFAULT_VERSION) ]; then \
+			echo "Error: PREVIOUS_VERSION must be set for versioned builds"; \
+			exit 1; \
+		elif [ $(shell ./hack/semver_cmp.sh $(VERSION) $(PREVIOUS_VERSION)) != 1 ]; then \
+			echo "Error: VERSION ($(VERSION)) must be greater than PREVIOUS_VERSION ($(PREVIOUS_VERSION))"; \
+			exit 1; \
+		else \
+		  	# preferring sed here, in order to have "replaces" near "version" \
+			sed -r -i "/  version: $(VERSION)/ a\  replaces: $(OPERATOR_NAME).v$(PREVIOUS_VERSION)" ${BUNDLE_CSV}; \
+		fi \
+	fi
 
 .PHONY: bundle-reset-date
 bundle-reset-date: ## Reset bundle's createdAt
@@ -275,8 +283,9 @@ bundle-reset-date: ## Reset bundle's createdAt
 bundle-community-k8s: bundle-community ## Generate bundle manifests and metadata customized to Red Hat community release
 
 .PHONY: bundle-community-rh
-bundle-community-rh: bundle-community ## Generate bundle manifests and metadata customized to Red Hat community release
+bundle-community-rh: bundle-community  ## Generate bundle manifests and metadata customized to Red Hat community release
 	echo -e "\n  # Annotations for OCP\n  com.redhat.openshift.versions: \"v${OCP_VERSION}\"" >> bundle/metadata/annotations.yaml
+	$(MAKE) add-replaces-field
 
 .PHONY: bundle-community
 bundle-community: bundle ## Update displayName field in the bundle's CSV
