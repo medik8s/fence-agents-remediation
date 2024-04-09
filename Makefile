@@ -428,6 +428,10 @@ catalog-push: ## Push a catalog image.
 verify-unchanged: ## Verify there are no un-committed changes
 	./hack/verify-unchanged.sh
 
+.PHONY: test-scorecard
+test-scorecard: operator-sdk ## Run Scorecard testing for the bundle directory on OPERATOR_NAMESPACE
+	$(OPERATOR_SDK) scorecard ./bundle -n $(OPERATOR_NAMESPACE)
+
 .PHONY: container-build 
 container-build: docker-build bundle-build ## Build containers
 
