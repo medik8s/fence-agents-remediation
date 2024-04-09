@@ -179,7 +179,8 @@ fix-imports: sort-imports
 	$(SORT_IMPORTS) -w .
 
 .PHONY: test
-test: test-no-verify verify-unchanged ## Generate and format code, run tests, generate manifests and bundle, and verify no uncommitted changes
+test: test-no-verify ## Generate and format code, run tests, generate manifests and bundle, and verify no uncommitted changes
+	$(MAKE) bundle-reset verify-unchanged
 
 .PHONY: test-no-verify
 # -r: If set, ginkgo finds and runs test suites under the current directory recursively.
@@ -188,7 +189,7 @@ test: test-no-verify verify-unchanged ## Generate and format code, run tests, ge
 # By default, ginkgo only randomizes the top level Describe, Context and When containers
 # --require-suite: If set, Ginkgo fails if there are ginkgo tests in a directory but no invocation of RunSpecs.
 # --vv: If set, emits with maximal verbosity - includes skipped and pending tests.
-test-no-verify: go-verify manifests generate fmt vet fix-imports bundle envtest ginkgo # Generate and format code, and run tests
+test-no-verify: go-verify manifests generate fmt vet fix-imports envtest ginkgo # Generate and format code, and run tests
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR)/$(ENVTEST_VERSION) -p path)" \
 	$(GINKGO) -r --keep-going --randomize-all --require-suite --vv --coverprofile cover.out ./api/... ./pkg/... ./controllers/...
 
