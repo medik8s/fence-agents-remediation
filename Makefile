@@ -466,8 +466,6 @@ test-e2e: ginkgo ## Run end to end (E2E) tests
 .PHONY: bundle-reset
 bundle-reset:
 	VERSION=0.0.1 $(MAKE) manifests bundle
-	# empty creation date
-	sed -r -i "s|createdAt: .*|createdAt: \"\"|;" ${BUNDLE_CSV}
 
 .PHONY: full-gen
-full-gen:  go-verify manifests  generate manifests fmt bundle fix-imports bundle-reset ## generates all automatically generated content
+full-gen: go-verify manifests  generate manifests fmt bundle fix-imports bundle-reset ## generates all automatically generated content
