@@ -423,7 +423,7 @@ add_channel_entry_for_the_bundle:
 
 .PHONY: catalog-build
 catalog-build: opm ## Build a file-based catalog image.
-	# Remove the catalog directory and Dockerfile if they exist
+	# Remove the catalog directory and Dockerfile
 	-rm -r ${CATALOG_DIR} ${CATALOG_DOCKERFILE}
 	@mkdir -p ${CATALOG_DIR}
 	$(OPM) generate dockerfile ${CATALOG_DIR}
