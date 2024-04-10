@@ -127,7 +127,7 @@ func (e *Executer) runWithRetry(ctx context.Context, uid types.UID, command []st
 			ctxWithTimeout, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 			stdout, stderr, faErr = e.runner(ctxWithTimeout, command)
-			if faErr == nil {
+			if faErr == nil && stderr == "" {
 				e.log.Info("command completed", "uid", uid, "response", stdout, "errMessage", stderr, "err", faErr)
 				return true, nil
 			}
