@@ -179,7 +179,8 @@ fix-imports: sort-imports
 	$(SORT_IMPORTS) -w .
 
 .PHONY: test
-test: test-no-verify verify-unchanged ## Generate and format code, run tests, generate manifests and bundle, and verify no uncommitted changes
+test: test-no-verify ## Generate and format code, run tests, generate manifests and bundle, and verify no uncommitted changes
+	$(MAKE) bundle-reset verify-unchanged
 
 .PHONY: test-no-verify
 # -r: If set, ginkgo finds and runs test suites under the current directory recursively.
