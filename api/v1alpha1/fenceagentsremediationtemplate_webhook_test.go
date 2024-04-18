@@ -5,6 +5,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
 var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
@@ -14,17 +16,43 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		When("agent name match format and binary", func() {
 			It("should be accepted", func() {
 				farTemplate := getTestFARTemplate(validAgentName)
-				_, err := farTemplate.ValidateCreate()
-				Expect(err).ToNot(HaveOccurred())
+				Expect(farTemplate.ValidateCreate()).Error().NotTo(HaveOccurred())
 			})
 		})
 
 		When("agent name was not found ", func() {
 			It("should be rejected", func() {
 				farTemplate := getTestFARTemplate(invalidAgentName)
-				_, err := farTemplate.ValidateCreate()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unsupported fence agent: %s", invalidAgentName))
+				Expect(farTemplate.ValidateCreate()).Error().To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
+			})
+		})
+
+		Context("with OutOfServiceTaint strategy", func() {
+			var outOfServiceStrategy *FenceAgentsRemediationTemplate
+
+			BeforeEach(func() {
+				orgValue := validation.IsOutOfServiceTaintSupported
+				DeferCleanup(func() { validation.IsOutOfServiceTaintSupported = orgValue })
+
+				outOfServiceStrategy = getFARTemplate(validAgentName, OutOfServiceTaintRemediationStrategy)
+			})
+
+			When("out of service taint is supported", func() {
+				BeforeEach(func() {
+					validation.IsOutOfServiceTaintSupported = true
+				})
+				It("should be allowed", func() {
+					Expect(outOfServiceStrategy.ValidateCreate()).Error().NotTo(HaveOccurred())
+				})
+			})
+
+			When("out of service taint is not supported", func() {
+				BeforeEach(func() {
+					validation.IsOutOfServiceTaintSupported = false
+				})
+				It("should be denied", func() {
+					Expect(outOfServiceStrategy.ValidateCreate()).Error().To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
+				})
 			})
 		})
 	})
@@ -37,8 +65,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			})
 			It("should be accepted", func() {
 				farTemplate := getTestFARTemplate(validAgentName)
-				_, err := farTemplate.ValidateUpdate(oldFARTemplate)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(farTemplate.ValidateUpdate(oldFARTemplate)).Error().NotTo(HaveOccurred())
 			})
 		})
 
@@ -48,15 +75,48 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			})
 			It("should be rejected", func() {
 				farTemplate := getTestFARTemplate(invalidAgentName)
-				_, err := farTemplate.ValidateUpdate(oldFARTemplate)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unsupported fence agent: %s", invalidAgentName))
+				Expect(farTemplate.ValidateUpdate(oldFARTemplate)).Error().To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
+			})
+		})
+
+		Context("with OutOfServiceTaint strategy", func() {
+			var outOfServiceStrategy *FenceAgentsRemediationTemplate
+			var resourceDeletionStrategy *FenceAgentsRemediationTemplate
+
+			BeforeEach(func() {
+				orgValue := validation.IsOutOfServiceTaintSupported
+				DeferCleanup(func() { validation.IsOutOfServiceTaintSupported = orgValue })
+
+				outOfServiceStrategy = getFARTemplate(validAgentName, OutOfServiceTaintRemediationStrategy)
+				resourceDeletionStrategy = getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+			})
+
+			When("out of service taint is supported", func() {
+				BeforeEach(func() {
+					validation.IsOutOfServiceTaintSupported = true
+				})
+				It("should be allowed", func() {
+					Expect(outOfServiceStrategy.ValidateUpdate(resourceDeletionStrategy)).Error().NotTo(HaveOccurred())
+				})
+			})
+
+			When("out of service taint is not supported", func() {
+				BeforeEach(func() {
+					validation.IsOutOfServiceTaintSupported = false
+				})
+				It("should be denied", func() {
+					Expect(outOfServiceStrategy.ValidateUpdate(resourceDeletionStrategy)).Error().To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
+				})
 			})
 		})
 	})
 })
 
 func getTestFARTemplate(agentName string) *FenceAgentsRemediationTemplate {
+	return getFARTemplate(agentName, ResourceDeletionRemediationStrategy)
+}
+
+func getFARTemplate(agentName string, strategy RemediationStrategyType) *FenceAgentsRemediationTemplate {
 	return &FenceAgentsRemediationTemplate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-" + agentName + "-template",
@@ -64,7 +124,8 @@ func getTestFARTemplate(agentName string) *FenceAgentsRemediationTemplate {
 		Spec: FenceAgentsRemediationTemplateSpec{
 			Template: FenceAgentsRemediationTemplateResource{
 				Spec: FenceAgentsRemediationSpec{
-					Agent: agentName,
+					Agent:               agentName,
+					RemediationStrategy: strategy,
 				},
 			},
 		},

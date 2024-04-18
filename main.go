@@ -43,6 +43,7 @@ import (
 
 	//+kubebuilder:scaffold:imports
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
+	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 	"github.com/medik8s/fence-agents-remediation/version"
 )
 
@@ -103,6 +104,10 @@ func main() {
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
+	}
+
+	if err := validation.InitOutOfServiceTaintSupportedFlag(mgr.GetConfig()); err != nil {
+		setupLog.Error(err, "unable to verify Kubernetes version for indicating the out-of-service taint support. out-of-service taint isn't supported")
 	}
 
 	executer, err := cli.NewExecuter(mgr.GetClient(), mgr.GetEventRecorderFor(operatorName+"-executer"))
