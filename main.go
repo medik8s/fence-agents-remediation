@@ -106,9 +106,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := validation.InitOutOfServiceTaintSupportedFlag(mgr.GetConfig()); err != nil {
+	outOfServiceTaintValidator, err := validation.NewOutOfServiceTaintValidator(mgr.GetConfig())
+	if err != nil {
 		setupLog.Error(err, "unable to verify Kubernetes version for indicating the out-of-service taint support. out-of-service taint isn't supported")
 	}
+	isOutOfServiceTaintSupported := outOfServiceTaintValidator.IsOutOfServiceTaintSupported()
+	if isOutOfServiceTaintSupported {
+		setupLog.Info("out-of-service taint is supported on this cluster")
+	}
+	fenceagentsremediationv1alpha1.InitOutOfServiceTaintSupportedFlag(isOutOfServiceTaintSupported)
 
 	executer, err := cli.NewExecuter(mgr.GetClient(), mgr.GetEventRecorderFor(operatorName+"-executer"))
 	if err != nil {

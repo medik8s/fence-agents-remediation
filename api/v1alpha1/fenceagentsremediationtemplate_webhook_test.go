@@ -5,8 +5,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
 var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
@@ -31,15 +29,15 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			var outOfServiceStrategy *FenceAgentsRemediationTemplate
 
 			BeforeEach(func() {
-				orgValue := validation.IsOutOfServiceTaintSupported
-				DeferCleanup(func() { validation.IsOutOfServiceTaintSupported = orgValue })
+				orgValue := isOutOfServiceTaintSupported
+				DeferCleanup(func() { isOutOfServiceTaintSupported = orgValue })
 
 				outOfServiceStrategy = getFARTemplate(validAgentName, OutOfServiceTaintRemediationStrategy)
 			})
 
 			When("out of service taint is supported", func() {
 				BeforeEach(func() {
-					validation.IsOutOfServiceTaintSupported = true
+					isOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
 					Expect(outOfServiceStrategy.ValidateCreate()).Error().NotTo(HaveOccurred())
@@ -48,7 +46,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 			When("out of service taint is not supported", func() {
 				BeforeEach(func() {
-					validation.IsOutOfServiceTaintSupported = false
+					isOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
 					Expect(outOfServiceStrategy.ValidateCreate()).Error().To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
@@ -84,8 +82,8 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			var resourceDeletionStrategy *FenceAgentsRemediationTemplate
 
 			BeforeEach(func() {
-				orgValue := validation.IsOutOfServiceTaintSupported
-				DeferCleanup(func() { validation.IsOutOfServiceTaintSupported = orgValue })
+				orgValue := isOutOfServiceTaintSupported
+				DeferCleanup(func() { isOutOfServiceTaintSupported = orgValue })
 
 				outOfServiceStrategy = getFARTemplate(validAgentName, OutOfServiceTaintRemediationStrategy)
 				resourceDeletionStrategy = getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
@@ -93,7 +91,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 			When("out of service taint is supported", func() {
 				BeforeEach(func() {
-					validation.IsOutOfServiceTaintSupported = true
+					isOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
 					Expect(outOfServiceStrategy.ValidateUpdate(resourceDeletionStrategy)).Error().NotTo(HaveOccurred())
@@ -102,7 +100,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 			When("out of service taint is not supported", func() {
 				BeforeEach(func() {
-					validation.IsOutOfServiceTaintSupported = false
+					isOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
 					Expect(outOfServiceStrategy.ValidateUpdate(resourceDeletionStrategy)).Error().To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))

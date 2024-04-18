@@ -30,8 +30,8 @@ func Test_setOutOfTaintSupportedFlag(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			IsOutOfServiceTaintSupported = false
-			if err := setOutOfTaintSupportedFlag(tt.args.version); (err != nil) != tt.wantErr || IsOutOfServiceTaintSupported != tt.isOutOfTaintFlagEnabled {
+			v := &OutOfServiceTaintValidator{}
+			if err := v.setOutOfServiceTaintSupportedFlag(tt.args.version); (err != nil) != tt.wantErr || v.IsOutOfServiceTaintSupported() != tt.isOutOfTaintFlagEnabled {
 				t.Errorf("setOutOfTaintFlags() error = %v, wantErr %v, expected out of taint flag %v", err, tt.wantErr, tt.isOutOfTaintFlagEnabled)
 			}
 		})

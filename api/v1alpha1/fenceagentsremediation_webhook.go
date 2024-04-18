@@ -35,6 +35,8 @@ var (
 	webhookFARLog = logf.Log.WithName("fenceagentsremediation-resource")
 	// verify agent existence with os.Stat function
 	agentValidator = validation.NewAgentValidator()
+	// isOutOfServiceTaintSupported will be set to true in case out-of-service taint is supported (k8s 1.26 or higher)
+	isOutOfServiceTaintSupported bool
 )
 
 func (r *FenceAgentsRemediation) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -75,6 +77,10 @@ func validateFAR(farSpec *FenceAgentsRemediationSpec) (admission.Warnings, error
 	return validateStrategy(farSpec.RemediationStrategy)
 }
 
+func InitOutOfServiceTaintSupportedFlag(outOfServiceTaintSupported bool) {
+	isOutOfServiceTaintSupported = outOfServiceTaintSupported
+}
+
 func validateAgentName(agent string) (admission.Warnings, error) {
 	exists, err := agentValidator.ValidateAgentName(agent)
 	if err != nil {
@@ -87,7 +93,7 @@ func validateAgentName(agent string) (admission.Warnings, error) {
 }
 
 func validateStrategy(farRemStrategy RemediationStrategyType) (admission.Warnings, error) {
-	if farRemStrategy == OutOfServiceTaintRemediationStrategy && !validation.IsOutOfServiceTaintSupported {
+	if farRemStrategy == OutOfServiceTaintRemediationStrategy && !isOutOfServiceTaintSupported {
 		return nil, fmt.Errorf("%s remediation strategy is not supported at kubernetes version lower than 1.26, please use a different remediation strategy", OutOfServiceTaintRemediationStrategy)
 	}
 	return nil, nil
