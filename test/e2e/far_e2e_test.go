@@ -53,6 +53,12 @@ var _ = Describe("FAR E2e", func() {
 		fenceAgent, nodeIdentifierPrefix string
 		testShareParam                   map[v1alpha1.ParameterName]string
 		testNodeParam                    map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
+		selectedNode                     *corev1.Node
+		nodeName                         string
+		pod                              *corev1.Pod
+		startTime, nodeBootTimeBefore    time.Time
+		err                              error
+		remediationStrategy              v1alpha1.RemediationStrategyType
 	)
 	BeforeEach(func() {
 		// create FAR CR spec based on OCP platformn
@@ -78,71 +84,81 @@ var _ = Describe("FAR E2e", func() {
 		testNodeParam, err = buildNodeParameters(clusterPlatform.Status.PlatformStatus.Type)
 		Expect(err).ToNot(HaveOccurred(), "can't get node information")
 	})
-
-	Context("stress cluster", func() {
-		var (
-			nodes, filteredNodes          *corev1.NodeList
-			nodeName                      string
-			pod                           *corev1.Pod
-			startTime, nodeBootTimeBefore time.Time
-			err                           error
-		)
+	Context("stress cluster with ResourceDeletion remediation strategy", func() {
+		var availableWorkerNodes *corev1.NodeList
 		BeforeEach(func() {
-			nodes = &corev1.NodeList{}
-			selector := labels.NewSelector()
-			requirement, _ := labels.NewRequirement(medik8sLabels.WorkerRole, selection.Exists, []string{})
-			selector = selector.Add(*requirement)
-			Expect(k8sClient.List(context.Background(), nodes, &client.ListOptions{LabelSelector: selector})).ToNot(HaveOccurred())
-			if len(nodes.Items) < 1 {
-				Fail("No worker nodes found in the cluster")
+			if availableWorkerNodes == nil {
+				availableWorkerNodes = getAvailableWorkerNodes()
 			}
-			if filteredNodes != nil {
-				nodes = filteredNodes
-			}
-			selectedNode := randomizeWorkerNode(nodes)
+			selectedNode = pickRemediatedNode(availableWorkerNodes)
 			nodeName = selectedNode.Name
-			nodeNameParam := v1alpha1.NodeName(nodeName)
-			parameterName := v1alpha1.ParameterName(nodeIdentifierPrefix)
-			testNodeID := testNodeParam[parameterName][nodeNameParam]
-			log.Info("Testing Node", "Node name", nodeName, "Node ID", testNodeID)
-
-			// filter the last remediated node from the list of available nodes
-			filteredNodes = &corev1.NodeList{}
-			for _, node := range nodes.Items {
-				if node.Name != nodeName {
-					filteredNodes.Items = append(filteredNodes.Items, node)
-				}
-			}
+			printNodeDetails(selectedNode, nodeIdentifierPrefix, testNodeParam)
 
 			// save the node's boot time prior to the fence agent call
 			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
 			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
 
 			// create tested pod which will be deleted by the far CR
-			pod = e2eUtils.GetPod(nodeName, testContainerName)
-			pod.Name = testPodName
-			pod.Namespace = testNsName
-			Expect(k8sClient.Create(context.Background(), pod)).To(Succeed())
+			pod = createTestedPod(nodeName, testContainerName)
 			DeferCleanup(cleanupTestedResources, pod)
 
 			// set the node as "unhealthy" by disabling kubelet
 			makeNodeUnready(selectedNode)
 
 			startTime = time.Now()
-			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam)
+			remediationStrategy = v1alpha1.ResourceDeletionRemediationStrategy
+			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam, remediationStrategy)
 			DeferCleanup(deleteFAR, far)
 		})
 		When("running FAR to reboot two nodes", func() {
 			It("should successfully remediate the first node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore, pod)
+				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
 				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
 			It("should successfully remediate the second node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore, pod)
+				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
 				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
 		})
 	})
+	Context("stress cluster with OutOfServiceTaint remediation strategy", func() {
+		var availableWorkerNodes *corev1.NodeList
+		BeforeEach(func() {
+			if availableWorkerNodes == nil {
+				availableWorkerNodes = getAvailableWorkerNodes()
+			}
+			selectedNode = pickRemediatedNode(availableWorkerNodes)
+			nodeName = selectedNode.Name
+			printNodeDetails(selectedNode, nodeIdentifierPrefix, testNodeParam)
+
+			// save the node's boot time prior to the fence agent call
+			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
+			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
+
+			// create tested pod which will be deleted by the far CR
+			pod = createTestedPod(nodeName, testContainerName)
+			DeferCleanup(cleanupTestedResources, pod)
+
+			// set the node as "unhealthy" by disabling kubelet
+			makeNodeUnready(selectedNode)
+
+			startTime = time.Now()
+			remediationStrategy = v1alpha1.OutOfServiceTaintRemediationStrategy
+			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam, remediationStrategy)
+			DeferCleanup(deleteFAR, far)
+		})
+		When("running FAR to reboot two nodes", func() {
+			It("should successfully remediate the first node", func() {
+				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
+				remediationTimes = append(remediationTimes, time.Since(startTime))
+			})
+			It("should successfully remediate the second node", func() {
+				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
+				remediationTimes = append(remediationTimes, time.Since(startTime))
+			})
+		})
+	})
+
 })
 
 var _ = AfterSuite(func() {
@@ -244,26 +260,72 @@ func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha
 	return testNodeParam, nil
 }
 
-// randomizeWorkerNode returns a worker node that his name is different than the previous one
-// (on the first call it will allways return new node)
-func randomizeWorkerNode(nodes *corev1.NodeList) *corev1.Node {
+// getAvailableNodes a list of available worker nodes in the cluster
+func getAvailableWorkerNodes() *corev1.NodeList {
+	availableNodes := &corev1.NodeList{}
+	selector := labels.NewSelector()
+	requirement, _ := labels.NewRequirement(medik8sLabels.WorkerRole, selection.Exists, []string{})
+	selector = selector.Add(*requirement)
+	Expect(k8sClient.List(context.Background(), availableNodes, &client.ListOptions{LabelSelector: selector})).ToNot(HaveOccurred())
+	if len(availableNodes.Items) < 1 {
+		Fail("No worker nodes found in the cluster")
+	}
+	return availableNodes
+}
+
+// pickRemediatedNode randomly returns a next remediated node from the current available nodes,
+// and then the node is removed from the list of available nodes
+func pickRemediatedNode(availableNodes *corev1.NodeList) *corev1.Node {
+	if len(availableNodes.Items) < 1 {
+		Fail("No available node found for remediation")
+	}
 	// Generate a random seed based on the current time
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// Randomly select a worker node
-	return &nodes.Items[r.Intn(len(nodes.Items))]
+	selectedNodeIndex := r.Intn(len(availableNodes.Items))
+	selectedNode := availableNodes.Items[selectedNodeIndex]
+	// Delete the selected node from the list of available nodes
+	availableNodes.Items = append(availableNodes.Items[:selectedNodeIndex], availableNodes.Items[selectedNodeIndex+1:]...)
+	return &selectedNode
+}
+
+// createTestedPod creates tested pod which will be deleted by the far CR
+func createTestedPod(nodeName, containerName string) *corev1.Pod {
+	pod := e2eUtils.GetPod(nodeName, testContainerName)
+	pod.Name = testPodName
+	pod.Namespace = testNsName
+	pod.Spec.Tolerations = []corev1.Toleration{
+		{
+			Key:      v1alpha1.FARNoExecuteTaintKey,
+			Operator: corev1.TolerationOpEqual,
+			Effect:   corev1.TaintEffectNoExecute,
+		},
+	}
+	Expect(k8sClient.Create(context.Background(), pod)).To(Succeed())
+
+	return pod
+}
+
+// printNodeDetail prints the node details
+func printNodeDetails(selectedNode *corev1.Node, nodeIdentifierPrefix string, testNodeParam map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) {
+	nodeNameParam := v1alpha1.NodeName(selectedNode.Name)
+	parameterName := v1alpha1.ParameterName(nodeIdentifierPrefix)
+	testNodeID := testNodeParam[parameterName][nodeNameParam]
+	log.Info("Testing Node", "Node name", selectedNode.Name, "Node ID", testNodeID)
 }
 
 // createFAR assigns the input to FenceAgentsRemediation object, creates CR, and returns the CR object
-func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.ParameterName]string, nodeParameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) *v1alpha1.FenceAgentsRemediation {
+func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.ParameterName]string, nodeParameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, strategy v1alpha1.RemediationStrategyType) *v1alpha1.FenceAgentsRemediation {
 	far := &v1alpha1.FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: operatorNsName},
 		Spec: v1alpha1.FenceAgentsRemediationSpec{
-			Agent:            agent,
-			SharedParameters: sharedParameters,
-			NodeParameters:   nodeParameters,
-			RetryCount:       5,
-			RetryInterval:    metav1.Duration{Duration: 20 * time.Second},
-			Timeout:          metav1.Duration{Duration: 60 * time.Second},
+			Agent:               agent,
+			SharedParameters:    sharedParameters,
+			NodeParameters:      nodeParameters,
+			RemediationStrategy: strategy,
+			RetryCount:          5,
+			RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
+			Timeout:             metav1.Duration{Duration: 60 * time.Second},
 		},
 	}
 	ExpectWithOffset(1, k8sClient.Create(context.Background(), far)).ToNot(HaveOccurred())
@@ -292,18 +354,17 @@ func cleanupTestedResources(pod *corev1.Pod) {
 	}
 }
 
-// wasFarTaintAdded checks whether the FAR taint was added to the tested node
-func wasFarTaintAdded(nodeName string) {
-	farTaint := utils.CreateRemediationTaint()
+// wasTaintAdded checks whether the specified taint was added to the tested node
+func wasTaintAdded(taint corev1.Taint, nodeName string) {
 	var node *corev1.Node
 	Eventually(func(g Gomega) bool {
 		var err error
 		node, err = utils.GetNodeWithName(k8sClient, nodeName)
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(node).ToNot(BeNil())
-		return utils.TaintExists(node.Spec.Taints, &farTaint)
+		return utils.TaintExists(node.Spec.Taints, &taint)
 	}, timeoutTaint, pollTaint).Should(BeTrue())
-	log.Info("FAR taint was added", "node name", node.Name, "taint key", farTaint.Key, "taint effect", farTaint.Effect)
+	log.Info("Taint was added", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
 }
 
 // waitForNodeHealthyCondition waits until the node's ready condition matches the given status, and it fails after timeout
@@ -380,12 +441,18 @@ func verifyStatusCondition(nodeName, conditionType string, conditionStatus *meta
 }
 
 // checkRemediation verify whether the node was remediated
-func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, pod *corev1.Pod) {
+func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, pod *corev1.Pod, strategy v1alpha1.RemediationStrategyType) {
+
 	By("Check if FAR NoExecute taint was added")
-	wasFarTaintAdded(nodeName)
+	wasTaintAdded(utils.CreateRemediationTaint(), nodeName)
 
 	By("Getting new node's boot time")
 	wasNodeRebooted(nodeName, nodeBootTimeBefore)
+
+	if strategy == v1alpha1.OutOfServiceTaintRemediationStrategy {
+		By("Check if out-of-service taint was added")
+		wasTaintAdded(utils.CreateOutOfServiceTaint(), nodeName)
+	}
 
 	By("checking if old pod has been deleted")
 	checkPodDeleted(pod)
