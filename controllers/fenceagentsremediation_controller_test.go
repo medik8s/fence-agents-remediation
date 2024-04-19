@@ -95,13 +95,13 @@ var _ = Describe("FAR Controller", func() {
 	Context("Functionality", func() {
 		BeforeEach(func() {
 			plogs.Clear()
-			underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam)
+			underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 		})
 
 		Context("buildFenceAgentParams", func() {
 			When("FAR include different action than reboot", func() {
 				It("should succeed with a warning", func() {
-					invalidValTestFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, invalidShareParam, testNodeParam)
+					invalidValTestFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, invalidShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 					invalidShareString, err := buildFenceAgentParams(invalidValTestFAR)
 					Expect(err).NotTo(HaveOccurred())
 					underTestFAR.ObjectMeta.Name = workerNode
@@ -128,7 +128,7 @@ var _ = Describe("FAR Controller", func() {
 		})
 	})
 
-	Context("Reconcile", func() {
+	Context("Reconcile with ResourceDeletion strategy", func() {
 		farRemediationTaint := utils.CreateRemediationTaint()
 		conditionStatusPointer := func(status metav1.ConditionStatus) *metav1.ConditionStatus { return &status }
 
@@ -193,7 +193,7 @@ var _ = Describe("FAR Controller", func() {
 			}
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
-				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam)
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 			})
 			When("node name is stored in remediation name", func() {
 				It("should have finalizer, taint, while the two VAs and one pod will be deleted", testSuccessfulRemediation)
@@ -212,7 +212,7 @@ var _ = Describe("FAR Controller", func() {
 		When("creating invalid FAR CR Name", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
-				underTestFAR = getFenceAgentsRemediation(dummyNode, fenceAgentIPMI, testShareParam, testNodeParam)
+				underTestFAR = getFenceAgentsRemediation(dummyNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 			})
 
 			It("should not have a finalizer nor taint, while the two VAs and one pod will remain", func() {
@@ -252,7 +252,7 @@ var _ = Describe("FAR Controller", func() {
 				plogs.Clear()
 				node = utils.GetNode("", workerNode)
 
-				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam)
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 			})
 
 			When("CR is deleted in between fence agent retries", func() {
@@ -372,10 +372,89 @@ var _ = Describe("FAR Controller", func() {
 			})
 		})
 	})
+
+	Context("Reconcile with OutOfServiceTaint strategy", func() {
+		farRemediationTaint := utils.CreateRemediationTaint()
+		outOfServiceTaint := utils.CreateOutOfServiceTaint()
+		conditionStatusPointer := func(status metav1.ConditionStatus) *metav1.ConditionStatus { return &status }
+
+		BeforeEach(func() {
+			farPod := createRunningPod("far-manager-test", farPodName, "")
+			DeferCleanup(k8sClient.Delete, context.Background(), farPod)
+		})
+
+		JustBeforeEach(func() {
+			// Create node, and FAR CR, and at the end clean them up with DeferCleanup
+			Expect(k8sClient.Create(context.Background(), node)).To(Succeed())
+			DeferCleanup(k8sClient.Delete, context.Background(), node)
+
+			Expect(k8sClient.Create(context.Background(), underTestFAR)).To(Succeed())
+			DeferCleanup(func() {
+				Expect(cleanupFar(context.Background(), underTestFAR)).To(Succeed())
+				deleteErr := k8sClient.Get(ctx, client.ObjectKeyFromObject(underTestFAR), &v1alpha1.FenceAgentsRemediation{})
+				if !apierrors.IsNotFound(deleteErr) {
+					verifyEvent(corev1.EventTypeNormal, utils.EventReasonRemoveFinalizer, utils.EventMessageRemoveFinalizer)
+				}
+				clearEvents()
+			})
+
+			// Sleep for a second to ensure dummy reconciliation has begun running before the unit tests
+			time.Sleep(1 * time.Second)
+		})
+
+		When("creating valid FAR CR", func() {
+			BeforeEach(func() {
+				node = utils.GetNode("", workerNode)
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.OutOfServiceTaintRemediationStrategy)
+			})
+
+			It("should have finalizer, both remediation taint and out-of-service taint, and at the end they will be deleted", func() {
+				Eventually(func(g Gomega) {
+					g.Expect(storedCommand).To(ConsistOf([]string{
+						"fence_ipmilan",
+						"--lanplus",
+						"--password=password",
+						"--username=admin",
+						"--action=reboot",
+						"--ip=192.168.111.1",
+						"--ipport=6233"}))
+				}, timeoutPreRemediation, pollInterval).Should(Succeed())
+
+				underTestFAR = verifyPreRemediationSucceed(underTestFAR, defaultNamespace, &farRemediationTaint)
+
+				By("Searching for out-of-service taint")
+				Eventually(func(g Gomega) {
+					node := &corev1.Node{}
+					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
+					g.Expect(utils.TaintExists(node.Spec.Taints, &outOfServiceTaint)).To(BeTrue(), "out-of-service taint should exist")
+				}, timeoutPostRemediation, pollInterval).Should(Succeed())
+
+				By("Verifying correct conditions for successful remediation")
+				verifyRemediationConditions(
+					underTestFAR,
+					workerNode,
+					conditionStatusPointer(metav1.ConditionFalse), // ProcessingTypeStatus
+					conditionStatusPointer(metav1.ConditionTrue),  // FenceAgentActionSucceededTypeStatus
+					conditionStatusPointer(metav1.ConditionTrue))  // SucceededTypeStatus
+				verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddOutOfServiceTaint, utils.EventMessageAddOutOfServiceTaint)
+				verifyEvent(corev1.EventTypeNormal, utils.EventReasonNodeRemediationCompleted, utils.EventMessageNodeRemediationCompleted)
+
+				By("Deleting FAR CR")
+				Expect(k8sClient.Delete(context.Background(), underTestFAR)).To(Succeed())
+
+				Eventually(func(g Gomega) {
+					node := &corev1.Node{}
+					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
+					g.Expect(utils.TaintExists(node.Spec.Taints, &outOfServiceTaint)).To(BeFalse(), "out-of-service taint should be removed")
+				}, timeoutPostRemediation, pollInterval).Should(Succeed())
+				verifyEvent(corev1.EventTypeNormal, utils.EventReasonRemoveOutOfServiceTaint, utils.EventMessageRemoveOutOfServiceTaint)
+			})
+		})
+	})
 })
 
 // getFenceAgentsRemediation assigns the input to the FenceAgentsRemediation
-func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[v1alpha1.ParameterName]string, nodeparameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string) *v1alpha1.FenceAgentsRemediation {
+func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[v1alpha1.ParameterName]string, nodeparameters map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, strategy v1alpha1.RemediationStrategyType) *v1alpha1.FenceAgentsRemediation {
 	return &v1alpha1.FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: defaultNamespace},
 		Spec: v1alpha1.FenceAgentsRemediationSpec{
@@ -383,9 +462,10 @@ func getFenceAgentsRemediation(nodeName, agent string, sharedparameters map[v1al
 			SharedParameters: sharedparameters,
 			NodeParameters:   nodeparameters,
 			// Set the retry count to the minimum for the majority of the tests
-			RetryCount:    1,
-			RetryInterval: metav1.Duration{Duration: 5 * time.Second},
-			Timeout:       metav1.Duration{Duration: 60 * time.Second},
+			RetryCount:          1,
+			RetryInterval:       metav1.Duration{Duration: 5 * time.Second},
+			Timeout:             metav1.Duration{Duration: 60 * time.Second},
+			RemediationStrategy: strategy,
 		},
 	}
 }

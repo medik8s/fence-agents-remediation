@@ -166,6 +166,23 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			r.Executor.Remove(far.GetUID())
 		}
 
+		// remove out-of-service taint when using OutOfServiceTaint remediation
+		if far.Spec.RemediationStrategy == v1alpha1.OutOfServiceTaintRemediationStrategy {
+			r.Log.Info("Removing out-of-service taint", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
+			taint := utils.CreateOutOfServiceTaint()
+			if err := utils.RemoveTaint(r.Client, node.Name, taint); err != nil {
+				if apiErrors.IsConflict(err) {
+					r.Log.Error(err, "Failed to remove taint from node due to node update, retrying... ,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
+					return ctrl.Result{RequeueAfter: time.Second}, nil
+				} else if !apiErrors.IsNotFound(err) {
+					r.Log.Error(err, "Failed to remove taint from node,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
+					return emptyResult, err
+				}
+			}
+			r.Log.Info("out-of-service taint was removed", "Node Name", req.Name)
+			commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveOutOfServiceTaint, utils.EventMessageRemoveOutOfServiceTaint)
+		}
+
 		// remove node's taints
 		taint := utils.CreateRemediationTaint()
 		if err := utils.RemoveTaint(r.Client, node.Name, taint); err != nil {
@@ -191,7 +208,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return emptyResult, nil
 	}
 	// Add FAR (medik8s) remediation taint
-	taintAdded, err := utils.AppendTaint(r.Client, node.Name)
+	taintAdded, err := utils.AppendTaint(r.Client, node.Name, utils.CreateRemediationTaint())
 	if err != nil {
 		return emptyResult, err
 	} else if taintAdded {
@@ -228,11 +245,32 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		// - try to remove workloads
 		// - clean up Executor routine
 
-		r.Log.Info("Manual workload deletion", "Node Name", node.Name)
-		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
-		if err := commonResources.DeletePods(ctx, r.Client, node.Name); err != nil {
-			r.Log.Error(err, "Manual workload deletion has failed", "CR's Name", req.Name)
-			return emptyResult, err
+		switch far.Spec.RemediationStrategy {
+		case v1alpha1.ResourceDeletionRemediationStrategy, "":
+			// Basically RemediationStrategy should be set to ResourceDeletion strategy as the default strategy.
+			// However it will be empty when the CS was created when ResourceDeletion strategy was the only strategy.
+			// In this case, the empty strategy should be treated as if ResourceDeletion strategy selected.
+			r.Log.Info("Remediation strategy is ResourceDeletion which explicitly deletes resources - manually deleting workload", "Node Name", req.Name)
+			commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
+			if err := commonResources.DeletePods(ctx, r.Client, node.Name); err != nil {
+				r.Log.Error(err, "Resource deletion has failed", "CR's Name", node.Name)
+				return emptyResult, err
+			}
+		case v1alpha1.OutOfServiceTaintRemediationStrategy:
+			r.Log.Info("Remediation strategy is OutOfServiceTaint which implicitly deletes resources - adding out-of-service taint", "Node Name", req.Name)
+			taintAdded, err := utils.AppendTaint(r.Client, node.Name, utils.CreateOutOfServiceTaint())
+			if err != nil {
+				r.Log.Error(err, "Failed to add out-of-service taint", "CR's Name", node.Name)
+				return emptyResult, err
+			} else if taintAdded {
+				r.Log.Info("out-of-service taint was added", "Node Name", node.Name)
+				commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonAddOutOfServiceTaint, utils.EventMessageAddOutOfServiceTaint)
+			}
+		default:
+			//this should never happen since we enforce valid values with kubebuilder
+			err := errors.New("unsupported remediation strategy")
+			r.Log.Error(err, "Encountered unsupported remediation strategy. Please check template spec", "strategy", far.Spec.RemediationStrategy)
+			return emptyResult, nil
 		}
 		utils.UpdateConditions(utils.RemediationFinishedSuccessfully, far, r.Log)
 
