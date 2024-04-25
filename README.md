@@ -235,6 +235,10 @@ Run `make test`
 3. Export the operator installed namespace (e.g., *openshift-workload-availability*) before running the e2e test:
  `export OPERATOR_NS=openshift-workload-availability && make test-e2e`
 
+### Run Scorecard tests
+
+  Run `make test-scorecard` on a running Kubernetes cluster to statically validate the operator bundle directory using [Scorecard](https://sdk.operatorframework.io/docs/testing-operators/scorecard/).
+
 ## Troubleshooting
 
 1. Watch the FenceAgentsRemediation CR [status conditions](#fenceagentsremediation-cr-status) value, message, and reason for better understanding whether the fence agent action succeeded and the remediation completed.
