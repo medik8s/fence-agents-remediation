@@ -72,6 +72,7 @@ endif
 BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 
 OPERATOR_NAME ?= fence-agents-remediation
+OPERATOR_NAMESPACE ?= openshift-workload-availability
 
 # IMAGE_TAG_BASE defines the docker.io namespace and part of the image name for remote images.
 # This variable is used to construct full image tags for bundle and catalog images.
@@ -194,17 +195,22 @@ test-no-verify: go-verify manifests generate fmt vet fix-imports envtest ginkgo 
 	$(GINKGO) -r --keep-going --randomize-all --require-suite --vv --coverprofile cover.out ./api/... ./pkg/... ./controllers/...
 
 .PHONY: bundle-run
-export BUNDLE_RUN_NAMESPACE ?= openshift-workload-availability
-bundle-run: operator-sdk create-ns ## Run bundle image. Default NS is "openshift-workload-availability", redefine BUNDLE_RUN_NAMESPACE to override it.
-	$(OPERATOR_SDK) -n $(BUNDLE_RUN_NAMESPACE) run bundle $(BUNDLE_IMG)
+bundle-run: operator-sdk create-ns ## Run bundle image. Default NS is "openshift-workload-availability", redefine OPERATOR_NAMESPACE to override it.
+	$(OPERATOR_SDK) -n $(OPERATOR_NAMESPACE) run bundle $(BUNDLE_IMG)
+
+.PHONY: bundle-run-update
+bundle-run-update: operator-sdk ## Update bundle image.
+# An older bundle image CSV should exist in the cluster, and in the same namespace,
+# Default NS is "openshift-workload-availability", redefine OPERATOR_NAMESPACE to override it.
+	$(OPERATOR_SDK) -n $(OPERATOR_NAMESPACE) run bundle-upgrade $(BUNDLE_IMG)
 
 .PHONY: bundle-cleanup
 bundle-cleanup: operator-sdk ## Remove bundle installed via bundle-run
-	$(OPERATOR_SDK) -n $(BUNDLE_RUN_NAMESPACE) cleanup $(OPERATOR_NAME)
+	$(OPERATOR_SDK) -n $(OPERATOR_NAMESPACE) cleanup $(OPERATOR_NAME)
 
 .PHONY: create-ns
 create-ns: ## Create namespace
-	$(KUBECTL) get ns $(BUNDLE_RUN_NAMESPACE) 2>&1> /dev/null || $(KUBECTL) create ns $(BUNDLE_RUN_NAMESPACE)
+	$(KUBECTL) get ns $(OPERATOR_NAMESPACE) 2>&1> /dev/null || $(KUBECTL) create ns $(OPERATOR_NAMESPACE)
 
 ##@ Build
 
