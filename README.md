@@ -152,10 +152,18 @@ metadata:
   name: fenceagentsremediationtemplate-default
   namespace: default
 spec:
-  template: {}
+  template:
+    spec:
+        remediationStrategy: <remediation_strategy>
 ```
 
 > *Note*: FenceAgentsRemediationTemplate CR must be created in the same namespace that the FAR operator has been installed.
+ 
+The `.spec.template.spec.remediation_strategy` field can either be `ResourceDeletion` or `OutOfServiceTaint`:
+
+- `ResourceDeletion`: This remediation strategy removes the pods on the node, rather than the removal of the node object. This strategy recovers workloads faster.
+- `OutOfServiceTaint`: This remediation strategy implicitly causes the removal of the pods and associated volume attachments on the node, rather than the removal of the node object. It achieves this by placing the `OutOfServiceTaint` taint on the node. The `OutOfServiceTaint` strategy also represents a non-graceful node shutdown. A non-graceful node shutdown occurs when a node is shutdown and not detected, instead of triggering an in-operating system shutdown.
+
 
 Configuring NodeHealthCheck to use the example `fenceagentsremediationtemplate-default` template above.
 
