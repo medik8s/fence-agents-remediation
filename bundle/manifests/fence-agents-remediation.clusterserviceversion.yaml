@@ -11,6 +11,7 @@ metadata:
             "name": "worker-1"
           },
           "spec": {
+            "remediation_strategy": "OutOfServiceTaint",
             "agent": "fence_ipmilan",
             "nodeparameters": {
               "--ipport": {
