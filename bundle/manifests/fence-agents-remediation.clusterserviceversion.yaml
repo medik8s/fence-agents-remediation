@@ -11,7 +11,6 @@ metadata:
             "name": "worker-1"
           },
           "spec": {
-            "remediation_strategy": "OutOfServiceTaint",
             "agent": "fence_ipmilan",
             "nodeparameters": {
               "--ipport": {
@@ -23,6 +22,7 @@ metadata:
                 "worker-2": "6235"
               }
             },
+            "remediationStrategy": "ResourceDeletion",
             "retrycount": 5,
             "retryinterval": "5s",
             "sharedparameters": {
