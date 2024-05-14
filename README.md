@@ -152,18 +152,10 @@ metadata:
   name: fenceagentsremediationtemplate-default
   namespace: default
 spec:
-  template:
-    spec:
-        remediationStrategy: <remediation_strategy>
+  template: {}
 ```
 
 > *Note*: FenceAgentsRemediationTemplate CR must be created in the same namespace that the FAR operator has been installed.
- 
-The `.spec.template.spec.remediation_strategy` field can either be `ResourceDeletion` or `OutOfServiceTaint`:
-
-- `ResourceDeletion`: This remediation strategy removes the pods on the node, rather than the removal of the node object. This strategy recovers workloads faster.
-- `OutOfServiceTaint`: This remediation strategy implicitly causes the removal of the pods and associated volume attachments on the node, rather than the removal of the node object. It achieves this by placing the `OutOfServiceTaint` taint on the node. The `OutOfServiceTaint` strategy also represents a non-graceful node shutdown. A non-graceful node shutdown occurs when a node is shutdown and not detected, instead of triggering an in-operating system shutdown.
-
 
 Configuring NodeHealthCheck to use the example `fenceagentsremediationtemplate-default` template above.
 
@@ -200,6 +192,9 @@ The CR includes the following parameters:
 * `retrycount` - number of times to retry the fence agent in case of failure. The default is 5.
 * `retryinterval` - interval between retries in seconds. The default is "5s".
 * `timeout` - timeout for the fence agent in seconds. The default is "60s".
+* `remediationStrategy` - either `ResourceDeletion` or `OutOfServiceTaint`:
+    * `ResourceDeletion`: This remediation strategy removes the pods on the node.
+    * `OutOfServiceTaint`: This remediation strategy implicitly causes the removal of the pods and associated volume attachments on the node. It achieves this by placing the [`OutOfServiceTaint` taint](https://kubernetes.io/docs/reference/labels-annotations-taints/#node-kubernetes-io-out-of-service) on the node.
 
 The FenceAgentsRemediation CR is created by the administrator and is used to trigger the fence agent on a specific node. The CR includes an *agent* field for the fence agent name, *sharedparameters* field with all the shared, not specific to a node, parameters, and a *nodeparameters* field to specify the parameters for the fenced node.
 For better understanding please see the below example of FenceAgentsRemediation CR for node `worker-1` (see it also as the [sample FAR](https://github.com/medik8s/fence-agents-remediation/blob/main/config/samples/fence-agents-remediation_v1alpha1_fenceagentsremediation.yaml)):
@@ -228,6 +223,7 @@ spec:
       worker-0: "6233"
       worker-1: "6234"
       worker-2: "6235"
+  remediationStrategy: OutOfServiceTaint
 ```
 
 ## Tests
