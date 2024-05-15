@@ -96,6 +96,7 @@ type FenceAgentsRemediationSpec struct {
 	// that enables automatic deletion of pv-attached pods on failed nodes, "out-of-service" taint is only supported on clusters with k8s version 1.26+ or OCP/OKD version 4.13+.
 	// +kubebuilder:default:="ResourceDeletion"
 	// +kubebuilder:validation:Enum=ResourceDeletion;OutOfServiceTaint
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	RemediationStrategy RemediationStrategyType `json:"remediationStrategy,omitempty"`
 }
 
