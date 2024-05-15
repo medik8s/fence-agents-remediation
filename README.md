@@ -223,7 +223,7 @@ spec:
       worker-0: "6233"
       worker-1: "6234"
       worker-2: "6235"
-  remediationStrategy: OutOfServiceTaint
+  remediationStrategy: ResourceDeletion
 ```
 
 ## Tests
