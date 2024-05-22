@@ -22,6 +22,7 @@ metadata:
                 "worker-2": "6235"
               }
             },
+            "remediationStrategy": "ResourceDeletion",
             "retrycount": 5,
             "retryinterval": "5s",
             "sharedparameters": {
@@ -83,6 +84,16 @@ spec:
           node that is fenced, since they are node specific
         displayName: Node Parameters
         path: nodeparameters
+      - description: RemediationStrategy is the remediation method for unhealthy nodes.
+          Currently, it could be either "OutOfServiceTaint" or "ResourceDeletion".
+          ResourceDeletion will iterate over all pods related to the unhealthy node
+          and delete them. OutOfServiceTaint will add the out-of-service taint which
+          is a new well-known taint "node.kubernetes.io/out-of-service" that enables
+          automatic deletion of pv-attached pods on failed nodes, "out-of-service"
+          taint is only supported on clusters with k8s version 1.26+ or OCP/OKD version
+          4.13+.
+        displayName: Remediation Strategy
+        path: remediationStrategy
       - description: RetryCount is the number of times the fencing agent will be executed
         displayName: Retry Count
         path: retrycount
@@ -129,6 +140,16 @@ spec:
           node that is fenced, since they are node specific
         displayName: Node Parameters
         path: template.spec.nodeparameters
+      - description: RemediationStrategy is the remediation method for unhealthy nodes.
+          Currently, it could be either "OutOfServiceTaint" or "ResourceDeletion".
+          ResourceDeletion will iterate over all pods related to the unhealthy node
+          and delete them. OutOfServiceTaint will add the out-of-service taint which
+          is a new well-known taint "node.kubernetes.io/out-of-service" that enables
+          automatic deletion of pv-attached pods on failed nodes, "out-of-service"
+          taint is only supported on clusters with k8s version 1.26+ or OCP/OKD version
+          4.13+.
+        displayName: Remediation Strategy
+        path: template.spec.remediationStrategy
       - description: RetryCount is the number of times the fencing agent will be executed
         displayName: Retry Count
         path: template.spec.retrycount
