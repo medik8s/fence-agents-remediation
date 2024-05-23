@@ -64,6 +64,7 @@ jobs:
         # https://github.com/marketplace/actions/github-release-create-update-and-upload-assets
         uses: meeDamian/github-release@2.0
         with:
+          tag: v${{ inputs.version }}
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
           body: |
