@@ -23,6 +23,10 @@ ENVTEST_K8S_VERSION = 1.28
 # OCP Version: for OKD bundle community
 OCP_VERSION = 4.12
 
+# update for major version updates to YQ_VERSION! see https://github.com/mikefarah/yq
+YQ_API_VERSION = v4
+YQ_VERSION = v4.44.2
+
 # IMAGE_REGISTRY used to indicate the registery/group for the operator, bundle and catalog
 IMAGE_REGISTRY ?= quay.io/medik8s
 export IMAGE_REGISTRY
@@ -257,13 +261,13 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 ## Some addition to bundle creation in the bundle
 DEFAULT_ICON_BASE64 := $(shell base64 --wrap=0 ./config/assets/medik8s_blue_icon.png)
 export ICON_BASE64 ?= ${DEFAULT_ICON_BASE64}
-export BUNDLE_CSV ?="./bundle/manifests/$(OPERATOR_NAME).clusterserviceversion.yaml"
+export CSV ?="./bundle/manifests/$(OPERATOR_NAME).clusterserviceversion.yaml"
 
 .PHONY: bundle-update
 bundle-update: ## Update CSV fields and validate the bundle directory
-	sed -r -i "s|containerImage: .*|containerImage: $(IMG)|;" ${BUNDLE_CSV}
-	sed -r -i "s|createdAt: .*|createdAt: `date '+%Y-%m-%d %T'`|;" ${BUNDLE_CSV}
-	sed -r -i "s|base64data:.*|base64data: ${ICON_BASE64}|;" ${BUNDLE_CSV}
+	sed -r -i "s|containerImage: .*|containerImage: $(IMG)|;" ${CSV}
+	sed -r -i "s|createdAt: .*|createdAt: `date '+%Y-%m-%d %T'`|;" ${CSV}
+	sed -r -i "s|base64data:.*|base64data: ${ICON_BASE64}|;" ${CSV}
 	$(MAKE) bundle-validate
 
 .PHONY: add-replaces-field
@@ -278,25 +282,38 @@ add-replaces-field: ## Add replaces field to the CSV
 			exit 1; \
 		else \
 		  	# preferring sed here, in order to have "replaces" near "version" \
-			sed -r -i "/  version: $(VERSION)/ a\  replaces: $(OPERATOR_NAME).v$(PREVIOUS_VERSION)" ${BUNDLE_CSV}; \
+			sed -r -i "/  version: $(VERSION)/ a\  replaces: $(OPERATOR_NAME).v$(PREVIOUS_VERSION)" ${CSV}; \
 		fi \
 	fi
 
 .PHONY: bundle-reset-date
 bundle-reset-date: ## Reset bundle's createdAt
-	sed -r -i "s|createdAt: .*|createdAt: \"\"|;" ${BUNDLE_CSV}
+	sed -r -i "s|createdAt: .*|createdAt: \"\"|;" ${CSV}
 
 .PHONY: bundle-community-k8s
 bundle-community-k8s: bundle-community ## Generate bundle manifests and metadata customized to Red Hat community release
 
-.PHONY: bundle-community-rh
-bundle-community-rh: bundle-community  ## Generate bundle manifests and metadata customized to Red Hat community release
-	echo -e "\n  # Annotations for OCP\n  com.redhat.openshift.versions: \"v${OCP_VERSION}\"" >> bundle/metadata/annotations.yaml
+.PHONY: bundle-community-okd
+bundle-community-okd: bundle-community  ## Generate bundle manifests and metadata customized to Red Hat community release
 	$(MAKE) add-replaces-field
+	$(MAKE) add-ocp-annotations
+	echo -e "\n  # Annotations for OCP\n  com.redhat.openshift.versions: \"v${OCP_VERSION}\"" >> bundle/metadata/annotations.yaml
+
+.PHONY: add-ocp-annotations
+add-ocp-annotations: yq ## Add OCP annotations
+	$(YQ) -i '.metadata.annotations."operators.openshift.io/valid-subscription" = "[\"OpenShift Kubernetes Engine\", \"OpenShift Container Platform\", \"OpenShift Platform Plus\"]"' ${CSV}
+	# new infrastructure annotations see https://docs.engineering.redhat.com/display/CFC/Best_Practices#Best_Practices-(New)RequiredInfrastructureAnnotations
+	$(YQ) -i '.metadata.annotations."features.operators.openshift.io/disconnected" = "true"' ${CSV}
+	$(YQ) -i '.metadata.annotations."features.operators.openshift.io/fips-compliant" = "false"' ${CSV}
+	$(YQ) -i '.metadata.annotations."features.operators.openshift.io/proxy-aware" = "false"' ${CSV}
+	$(YQ) -i '.metadata.annotations."features.operators.openshift.io/tls-profiles" = "false"' ${CSV}
+	$(YQ) -i '.metadata.annotations."features.operators.openshift.io/token-auth-aws" = "false"' ${CSV}
+	$(YQ) -i '.metadata.annotations."features.operators.openshift.io/token-auth-azure" = "false"' ${CSV}
+	$(YQ) -i '.metadata.annotations."features.operators.openshift.io/token-auth-gcp" = "false"' ${CSV}
 
 .PHONY: bundle-community
 bundle-community: bundle ## Update displayName field in the bundle's CSV
-	sed -r -i "s|displayName: Fence Agents Remediation Operator|displayName: Fence Agents Remediation Operator - Community Edition|;" ${BUNDLE_CSV}
+	sed -r -i "s|displayName: Fence Agents Remediation Operator|displayName: Fence Agents Remediation Operator - Community Edition|;" ${CSV}
 	$(MAKE) bundle-update
 
 ##@ Build Dependencies
@@ -315,6 +332,7 @@ GOIMPORTS_DIR ?= $(LOCALBIN)/goimports
 SORT_IMPORTS_DIR ?= $(LOCALBIN)/sort-imports
 OPM_DIR = $(LOCALBIN)/opm
 OPERATOR_SDK_DIR ?= $(LOCALBIN)/operator-sdk
+YQ_DIR ?= $(LOCALBIN)/yq
 
 ## Specific Tool Binaries
 KUSTOMIZE = $(KUSTOMIZE_DIR)/$(KUSTOMIZE_VERSION)/kustomize
@@ -325,6 +343,7 @@ GOIMPORTS = $(GOIMPORTS_DIR)/$(GOIMPORTS_VERSION)/goimports
 SORT_IMPORTS = $(SORT_IMPORTS_DIR)/$(SORT_IMPORTS_VERSION)/sort-imports
 OPM = $(OPM_DIR)/$(OPM_VERSION)/opm
 OPERATOR_SDK = $(OPERATOR_SDK_DIR)/$(OPERATOR_SDK_VERSION)/operator-sdk
+YQ = $(YQ_DIR)/$(YQ_API_VERSION)-$(YQ_VERSION)/yq
 
 .PHONY: kustomize
 kustomize: ## Download kustomize locally if necessary.
@@ -395,6 +414,10 @@ opm: ## Download opm locally if necessary.
 .PHONY: operator-sdk
 operator-sdk: ## Download operator-sdk locally if necessary.
 	$(call url-install-tool, $(OPERATOR_SDK), $(OPERATOR_SDK_DIR),github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$${OS}_$${ARCH})
+
+.PHONY: yq
+yq: ## Download yq locally if necessary.
+	$(call go-install-tool,$(YQ),$(YQ_DIR), github.com/mikefarah/yq/$(YQ_API_VERSION)@$(YQ_VERSION))
 
 # url-install-tool will delete old package $2, then download $3 to $1.
 define url-install-tool
