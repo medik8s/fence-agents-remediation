@@ -1,7 +1,7 @@
 ## Tool Versions
 
 # See https://github.com/kubernetes-sigs/kustomize for the last version
-KUSTOMIZE_VERSION ?= v4@v4.5.7
+KUSTOMIZE_VERSION ?= v5@v5.4.2
 # https://github.com/kubernetes-sigs/controller-tools/releases for the last version
 CONTROLLER_GEN_VERSION ?= v0.14.0
 # See for the last version
