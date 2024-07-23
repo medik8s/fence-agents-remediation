@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM quay.io/centos/centos:stream8 AS builder
+FROM quay.io/centos/centos:stream9 AS builder
 RUN dnf install -y jq git \
     && dnf clean all -y
 
@@ -39,14 +39,14 @@ COPY .git/ .git/
 # Build
 RUN ./hack/build.sh
 
-FROM quay.io/centos/centos:stream8
+FROM quay.io/centos/centos:stream9
 
 WORKDIR /
 COPY --from=builder /workspace/manager .
 
 # Add Fence Agents and fence-agents-aws packages
 RUN dnf install -y dnf-plugins-core \
-    && dnf config-manager --set-enabled ha \
+    && dnf config-manager --set-enabled highavailability \
     && dnf install -y fence-agents-all fence-agents-aws fence-agents-azure-arm fence-agents-gce \
     && dnf clean all -y
 
