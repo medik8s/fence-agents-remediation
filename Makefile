@@ -8,7 +8,7 @@ CONTROLLER_GEN_VERSION ?= v0.15.0
 # Why to use the git commit sha? https://github.com/kubernetes-sigs/controller-runtime/issues/1670
 ENVTEST_VERSION ?= v0.0.0-20240717190548-1ed345090869
 # See https://github.com/onsi/ginkgo/releases for the last version
-GINKGO_VERSION ?= v2.14.0
+GINKGO_VERSION ?= v2.19.0
 # See https://pkg.go.dev/golang.org/x/tools/cmd/goimports?tab=versions for the last version
 GOIMPORTS_VERSION ?= v0.17.0
 # See https://github.com/slintes/sort-imports/releases for the last version
