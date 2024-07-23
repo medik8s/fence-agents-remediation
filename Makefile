@@ -3,10 +3,10 @@
 # See https://github.com/kubernetes-sigs/kustomize for the last version
 KUSTOMIZE_VERSION ?= v5@v5.4.2
 # https://github.com/kubernetes-sigs/controller-tools/releases for the last version
-CONTROLLER_GEN_VERSION ?= v0.14.0
+CONTROLLER_GEN_VERSION ?= v0.15.0
 # See for the last version
 # Why to use the git commit sha? https://github.com/kubernetes-sigs/controller-runtime/issues/1670
-ENVTEST_VERSION ?= v0.0.0-20240112123317-48d9a7b44e54
+ENVTEST_VERSION ?= v0.0.0-20240717190548-1ed345090869
 # See https://github.com/onsi/ginkgo/releases for the last version
 GINKGO_VERSION ?= v2.14.0
 # See https://pkg.go.dev/golang.org/x/tools/cmd/goimports?tab=versions for the last version
