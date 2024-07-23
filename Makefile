@@ -10,11 +10,11 @@ ENVTEST_VERSION ?= v0.0.0-20240717190548-1ed345090869
 # See https://github.com/onsi/ginkgo/releases for the last version
 GINKGO_VERSION ?= v2.19.0
 # See https://pkg.go.dev/golang.org/x/tools/cmd/goimports?tab=versions for the last version
-GOIMPORTS_VERSION ?= v0.17.0
+GOIMPORTS_VERSION ?= v0.23.0
 # See https://github.com/slintes/sort-imports/releases for the last version
-SORT_IMPORTS_VERSION = v0.2.1
+SORT_IMPORTS_VERSION = v0.3.0
 # See https://github.com/operator-framework/operator-registry/releases for the last version
-OPM_VERSION ?= v1.35.0
+OPM_VERSION ?= v1.45.0
 # See https://github.com/operator-framework/operator-sdk/releases for the last version
 OPERATOR_SDK_VERSION ?= v1.32.0
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
