@@ -25,7 +25,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	storagev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,8 +43,6 @@ const (
 	fenceAgentIPMI = "fence_ipmilan"
 	farPodName     = "far-pod"
 	testPodName    = "far-pod-test-1"
-	vaName1        = "va-test-1"
-	vaName2        = "va-test-2"
 
 	// intervals
 	timeoutPreRemediation  = "1s" // this timeout is used for the other steps that occur before remediation is completed
@@ -134,10 +131,8 @@ var _ = Describe("FAR Controller", func() {
 
 		BeforeEach(func() {
 			// Create two VAs and two pods, and at the end clean them up with DeferCleanup
-			va1 := createVA(vaName1, workerNode)
-			va2 := createVA(vaName2, workerNode)
 			testPod := createRunningPod("far-test-1", testPodName, workerNode)
-			DeferCleanup(cleanupTestedResources, va1, va2, testPod)
+			DeferCleanup(cleanupTestedResources, testPod)
 
 			farPod := createRunningPod("far-manager-test", farPodName, "")
 			DeferCleanup(k8sClient.Delete, context.Background(), farPod)
@@ -499,37 +494,9 @@ func createRunningPod(containerName, podName, nodeName string) *corev1.Pod {
 	return pod
 }
 
-// createVA creates new volume attachment and return its object
-func createVA(vaName, unhealthyNodeName string) *storagev1.VolumeAttachment {
-	va := &storagev1.VolumeAttachment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      vaName,
-			Namespace: defaultNamespace,
-		},
-		Spec: storagev1.VolumeAttachmentSpec{
-			Attacher: "foo",
-			Source:   storagev1.VolumeAttachmentSource{},
-			NodeName: unhealthyNodeName,
-		},
-	}
-	foo := "foo"
-	va.Spec.Source.PersistentVolumeName = &foo
-	ExpectWithOffset(1, k8sClient.Create(context.Background(), va)).To(Succeed())
-	return va
-}
-
 // cleanupTestedResources fetches all the resources that we have crated for the test
 // and if they are still exist at the end of the test, then we clean them up for next test
-func cleanupTestedResources(va1, va2 *storagev1.VolumeAttachment, pod *corev1.Pod) {
-	for _, va := range []*storagev1.VolumeAttachment{va1, va2} {
-		vaTest := &storagev1.VolumeAttachment{}
-		key := client.ObjectKeyFromObject(va)
-		if err := k8sClient.Get(context.Background(), key, vaTest); err == nil {
-			log.Info("Cleanup: clean volume attachment", "va name", vaTest.Name)
-			Expect(k8sClient.Delete(context.Background(), vaTest)).To(Succeed())
-		}
-	}
-
+func cleanupTestedResources(pod *corev1.Pod) {
 	podTest := &corev1.Pod{}
 	key := client.ObjectKeyFromObject(pod)
 	if err := k8sClient.Get(context.Background(), key, podTest); err == nil {
