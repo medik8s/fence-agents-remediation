@@ -60,7 +60,6 @@ var _ = Describe("FAR E2e", func() {
 		pod                              *corev1.Pod
 		startTime, nodeBootTimeBefore    time.Time
 		err                              error
-		remediationStrategy              v1alpha1.RemediationStrategyType
 	)
 	BeforeEach(func() {
 		// create FAR CR spec based on OCP platformn
@@ -86,85 +85,60 @@ var _ = Describe("FAR E2e", func() {
 		testNodeParam, err = buildNodeParameters(clusterPlatform.Status.PlatformStatus.Type)
 		Expect(err).ToNot(HaveOccurred(), "can't get node information")
 	})
+
+	// runFARTests is a utility function to run FAR tests.
+	// It accepts a remediation strategy and a condition to determine if the tests should be skipped.
+	runFARTests := func(remediationStrategy v1alpha1.RemediationStrategyType, skipCondition func() bool) {
+		var availableWorkerNodes *corev1.NodeList
+		BeforeEach(func() {
+			if skipCondition() {
+				Skip("Skip this block due to unsupported condition")
+			}
+
+			if availableWorkerNodes == nil {
+				availableWorkerNodes = getAvailableWorkerNodes()
+			}
+			selectedNode = pickRemediatedNode(availableWorkerNodes)
+			nodeName = selectedNode.Name
+			printNodeDetails(selectedNode, nodeIdentifierPrefix, testNodeParam)
+
+			// save the node's boot time prior to the fence agent call
+			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
+			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
+
+			// create tested pod which will be deleted by the far CR
+			pod = createTestedPod(nodeName, testContainerName)
+			DeferCleanup(cleanupTestedResources, pod)
+
+			// set the node as "unhealthy" by disabling kubelet
+			makeNodeUnready(selectedNode)
+
+			startTime = time.Now()
+			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam, remediationStrategy)
+			DeferCleanup(deleteFAR, far)
+		})
+		When("running FAR to reboot two nodes", func() {
+			It("should successfully remediate the first node", func() {
+				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
+				remediationTimes = append(remediationTimes, time.Since(startTime))
+			})
+			It("should successfully remediate the second node", func() {
+				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
+				remediationTimes = append(remediationTimes, time.Since(startTime))
+			})
+		})
+	}
+
 	Context("stress cluster with ResourceDeletion remediation strategy", func() {
-		var availableWorkerNodes *corev1.NodeList
-		BeforeEach(func() {
-			if availableWorkerNodes == nil {
-				availableWorkerNodes = getAvailableWorkerNodes()
-			}
-			selectedNode = pickRemediatedNode(availableWorkerNodes)
-			nodeName = selectedNode.Name
-			printNodeDetails(selectedNode, nodeIdentifierPrefix, testNodeParam)
-
-			// save the node's boot time prior to the fence agent call
-			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
-			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
-
-			// create tested pod which will be deleted by the far CR
-			pod = createTestedPod(nodeName, testContainerName)
-			DeferCleanup(cleanupTestedResources, pod)
-
-			// set the node as "unhealthy" by disabling kubelet
-			makeNodeUnready(selectedNode)
-
-			startTime = time.Now()
-			remediationStrategy = v1alpha1.ResourceDeletionRemediationStrategy
-			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam, remediationStrategy)
-			DeferCleanup(deleteFAR, far)
-		})
-		When("running FAR to reboot two nodes", func() {
-			It("should successfully remediate the first node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
-				remediationTimes = append(remediationTimes, time.Since(startTime))
-			})
-			It("should successfully remediate the second node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
-				remediationTimes = append(remediationTimes, time.Since(startTime))
-			})
-		})
+		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, func() bool { return false })
 	})
+
 	Context("stress cluster with OutOfServiceTaint remediation strategy", func() {
-		var availableWorkerNodes *corev1.NodeList
-		BeforeEach(func() {
-			if _, isExist := os.LookupEnv(skipOOSREnvVarName); isExist {
-				Skip("Skip this block due to out-of-service taint not supported")
-			}
-
-			if availableWorkerNodes == nil {
-				availableWorkerNodes = getAvailableWorkerNodes()
-			}
-			selectedNode = pickRemediatedNode(availableWorkerNodes)
-			nodeName = selectedNode.Name
-			printNodeDetails(selectedNode, nodeIdentifierPrefix, testNodeParam)
-
-			// save the node's boot time prior to the fence agent call
-			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
-			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
-
-			// create tested pod which will be deleted by the far CR
-			pod = createTestedPod(nodeName, testContainerName)
-			DeferCleanup(cleanupTestedResources, pod)
-
-			// set the node as "unhealthy" by disabling kubelet
-			makeNodeUnready(selectedNode)
-
-			startTime = time.Now()
-			remediationStrategy = v1alpha1.OutOfServiceTaintRemediationStrategy
-			far := createFAR(nodeName, fenceAgent, testShareParam, testNodeParam, remediationStrategy)
-			DeferCleanup(deleteFAR, far)
-		})
-		When("running FAR to reboot two nodes", func() {
-			It("should successfully remediate the first node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
-				remediationTimes = append(remediationTimes, time.Since(startTime))
-			})
-			It("should successfully remediate the second node", func() {
-				checkRemediation(nodeName, nodeBootTimeBefore, pod, remediationStrategy)
-				remediationTimes = append(remediationTimes, time.Since(startTime))
-			})
+		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, func() bool {
+			_, isExist := os.LookupEnv(skipOOSREnvVarName)
+			return isExist
 		})
 	})
-
 })
 
 var _ = AfterSuite(func() {
