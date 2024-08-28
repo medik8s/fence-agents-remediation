@@ -19,9 +19,8 @@ package v1alpha1
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
-
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -71,30 +70,35 @@ func (far *FenceAgentsRemediation) ValidateDelete() (admission.Warnings, error) 
 }
 
 func validateFAR(farSpec *FenceAgentsRemediationSpec) (admission.Warnings, error) {
-	if _, err := validateAgentName(farSpec.Agent); err != nil {
-		return nil, err
-	}
-	return validateStrategy(farSpec.RemediationStrategy)
+	aggregated := errors.NewAggregate([]error{
+		validateAgentName(farSpec.Agent),
+		validateStrategy(farSpec.RemediationStrategy),
+	})
+
+	return admission.Warnings{}, aggregated
 }
 
 func InitOutOfServiceTaintSupportedFlag(outOfServiceTaintSupported bool) {
 	isOutOfServiceTaintSupported = outOfServiceTaintSupported
 }
 
-func validateAgentName(agent string) (admission.Warnings, error) {
+func validateAgentName(agent string) error {
 	exists, err := agentValidator.ValidateAgentName(agent)
 	if err != nil {
-		return nil, errors.WithMessagef(err, "Failed to validate fence agent: %s. You might want to try again.", agent)
+		return errors.NewAggregate([]error{
+			fmt.Errorf("Failed to validate fence agent: %s. You might want to try again.", agent),
+			err,
+		})
 	}
 	if !exists {
-		return nil, fmt.Errorf("unsupported fence agent: %s", agent)
+		return fmt.Errorf("unsupported fence agent: %s", agent)
 	}
-	return nil, nil
+	return nil
 }
 
-func validateStrategy(farRemStrategy RemediationStrategyType) (admission.Warnings, error) {
+func validateStrategy(farRemStrategy RemediationStrategyType) error {
 	if farRemStrategy == OutOfServiceTaintRemediationStrategy && !isOutOfServiceTaintSupported {
-		return nil, fmt.Errorf("%s remediation strategy is not supported at kubernetes version lower than 1.26, please use a different remediation strategy", OutOfServiceTaintRemediationStrategy)
+		return fmt.Errorf("%s remediation strategy is not supported at kubernetes version lower than 1.26, please use a different remediation strategy", OutOfServiceTaintRemediationStrategy)
 	}
-	return nil, nil
+	return nil
 }
