@@ -38,10 +38,9 @@ const (
 
 	//TODO: try to minimize timeout
 	// eventually parameters
-	timeoutLogs        = "3m0s"
-	timeoutTaint       = "2s"   // Timeout for checking the FAR taint
-	timeoutReboot      = "6m0s" // fencing with fence_aws should be completed within 6 minutes
-	timeoutAfterReboot = "5s"   // Timeout for verifying steps  after the node has been rebooted
+	timeoutTaint       = "2s"    // Timeout for checking the FAR taint
+	timeoutReboot      = "12m0s" // fencing with fence_aws should be completed within 6 minutes
+	timeoutAfterReboot = "5s"    // Timeout for verifying steps  after the node has been rebooted
 	pollTaint          = "100ms"
 	pollReboot         = "1s"
 	pollAfterReboot    = "250ms"
