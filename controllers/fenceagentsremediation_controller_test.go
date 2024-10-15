@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,11 +39,12 @@ import (
 )
 
 const (
-	dummyNode      = "dummy-node"
-	workerNode     = "worker-0"
-	fenceAgentIPMI = "fence_ipmilan"
-	farPodName     = "far-pod"
-	testPodName    = "far-pod-test-1"
+	dummyNode             = "dummy-node"
+	workerNode            = "worker-0"
+	fenceAgentIPMI        = "fence_ipmilan"
+	farPodName            = "far-pod"
+	testPodName           = "far-pod-test-1"
+	secretCredentialsName = "far-secret-credentials"
 
 	// intervals
 	timeoutPreRemediation  = "1s" // this timeout is used for the other steps that occur before remediation is completed
@@ -122,7 +124,7 @@ var _ = Describe("FAR Controller", func() {
 			When("FAR CR doesn't include the password and username paramaters", func() {
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      SecretCredentialsName,
+						Name:      secretCredentialsName,
 						Namespace: defaultNamespace,
 					},
 					Type: "kubernetes.io/basic-auth",
@@ -131,11 +133,10 @@ var _ = Describe("FAR Controller", func() {
 						"password": []byte("password"),
 					},
 				}
-				BeforeEach(func() {
+				It("should fetch the credentials from secret", func() {
 					Expect(k8sClient.Create(context.Background(), secret)).To(Succeed())
 					DeferCleanup(k8sClient.Delete, context.Background(), secret)
-				})
-				It("should fetch the credentials from secret", func() {
+					underTestFAR.Spec.CredentialsSecretName = secretCredentialsName
 					validShareString, err := buildFenceAgentParams(underTestFAR, k8sClient, defaultNamespace)
 					Expect(err).NotTo(HaveOccurred())
 
@@ -151,6 +152,19 @@ var _ = Describe("FAR Controller", func() {
 					Expect(missingCredentialsShareString).To(ConsistOf(validShareString))
 					// Eventually buildFenceAgentParams would return a different shareParam as password is missing
 					Expect(missingPasswordCredentialShareString).NotTo(ConsistOf(validShareString))
+				})
+				It("should fail on missing the credentials secret", func() {
+					underTestFAR.Spec.SharedParameters = missingTwoCredentialsShareParam
+					_, err := buildFenceAgentParams(underTestFAR, k8sClient, defaultNamespace)
+					Expect(err).To(HaveOccurred())
+					Expect(plogs.Contains("Failed to get secret")).To(BeTrue())
+
+					underTestFAR.Spec.SharedParameters = missingTwoCredentialsShareParam
+					underTestFAR.Spec.CredentialsSecretName = "missing-secret-name"
+					_, err = buildFenceAgentParams(underTestFAR, k8sClient, defaultNamespace)
+					Expect(err).To(HaveOccurred())
+					Expect(plogs.Contains("Secret not found")).To(BeTrue())
+					Expect(apiErrors.IsNotFound(err)).To(BeTrue())
 				})
 			})
 			When("FAR CR's name doesn't match a node name", func() {

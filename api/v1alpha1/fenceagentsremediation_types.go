@@ -62,6 +62,11 @@ type FenceAgentsRemediationSpec struct {
 	//+kubebuilder:validation:Pattern=fence_.+
 	Agent string `json:"agent"`
 
+	// CredentialsSecretName is the name of a secret with the API credentials to the fenced node
+	//+operator-sdk:csv:customresourcedefinitions:type=spec
+	//+kubebuilder:validation:Type=string
+	CredentialsSecretName string `json:"credentialsSecretName,omitempty"`
+
 	// RetryCount is the number of times the fencing agent will be executed
 	//+kubebuilder:default:=5
 	//+operator-sdk:csv:customresourcedefinitions:type=spec

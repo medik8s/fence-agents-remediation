@@ -55,8 +55,6 @@ const (
 	parameterPasswordName = "--password"
 	parameterUsernameName = "--username"
 	parameterActionValue  = "reboot"
-
-	SecretCredentialsName = "far-secret-credentials"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
@@ -342,14 +340,23 @@ func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
 	return far.GetName()
 }
 
-// Function to get the secret from Kubernetes
+// Function to get the user created credentials secret
 func getSecret(namespace, secretName string, r client.Reader) (*corev1.Secret, error) {
+	logger := ctrl.Log.WithName("get-far-secret")
 	secret := &corev1.Secret{}
 	err := r.Get(context.TODO(), client.ObjectKey{
 		Namespace: namespace,
 		Name:      secretName,
 	}, secret)
+
+	// Check if the error is a "not found" error
 	if err != nil {
+		if apiErrors.IsNotFound(err) {
+			logger.Info("Secret not found", "secretName", secretName, "namespace", namespace)
+			return nil, err
+		}
+
+		logger.Error(err, "Failed to get secret", "secretName", secretName, "namespace", namespace)
 		return nil, err
 	}
 	return secret, nil
@@ -403,7 +410,7 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, r client.Reader
 
 	if !hasCredentials {
 		// get credentials from the secret object when
-		secretName := SecretCredentialsName
+		secretName := far.Spec.CredentialsSecretName
 		secret, err := getSecret(namespace, secretName, r)
 		if err != nil {
 			logger.Error(err, "Missing FAR secret credentials", "secretName", secretName, "namespace", namespace)
