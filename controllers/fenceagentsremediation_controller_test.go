@@ -71,9 +71,20 @@ var _ = Describe("FAR Controller", func() {
 		"--ip":       "192.168.111.1",
 		"--lanplus":  "",
 	}
-	testShareParam := map[v1alpha1.ParameterName]string{
+	validShareParam := map[v1alpha1.ParameterName]string{
 		"--username": "admin",
 		"--password": "password",
+		"--action":   "reboot",
+		"--ip":       "192.168.111.1",
+		"--lanplus":  "",
+	}
+	missingTwoCredentialsShareParam := map[v1alpha1.ParameterName]string{
+		"--action":  "reboot",
+		"--ip":      "192.168.111.1",
+		"--lanplus": "",
+	}
+	missingPasswordCredentialsShareParam := map[v1alpha1.ParameterName]string{
+		"--username": "admin",
 		"--action":   "reboot",
 		"--ip":       "192.168.111.1",
 		"--lanplus":  "",
@@ -92,26 +103,60 @@ var _ = Describe("FAR Controller", func() {
 	Context("Functionality", func() {
 		BeforeEach(func() {
 			plogs.Clear()
-			underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+			underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, validShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 		})
 
 		Context("buildFenceAgentParams", func() {
-			When("FAR include different action than reboot", func() {
+			When("FAR CR action paramater is different than reboot", func() {
 				It("should succeed with a warning", func() {
 					invalidValTestFAR := getFenceAgentsRemediation(workerNode, fenceAgentIPMI, invalidShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
-					invalidShareString, err := buildFenceAgentParams(invalidValTestFAR)
+					invalidShareString, err := buildFenceAgentParams(invalidValTestFAR, k8sClient, defaultNamespace)
 					Expect(err).NotTo(HaveOccurred())
 					underTestFAR.ObjectMeta.Name = workerNode
-					validShareString, err := buildFenceAgentParams(underTestFAR)
+					validShareString, err := buildFenceAgentParams(underTestFAR, k8sClient, defaultNamespace)
 					Expect(err).NotTo(HaveOccurred())
 					// Eventually buildFenceAgentParams would return the same shareParam
 					Expect(invalidShareString).To(ConsistOf(validShareString))
 				})
 			})
+			When("FAR CR doesn't include the password and username paramaters", func() {
+				secret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      SecretCredentialsName,
+						Namespace: defaultNamespace,
+					},
+					Type: "kubernetes.io/basic-auth",
+					Data: map[string][]byte{
+						"username": []byte("admin"),
+						"password": []byte("password"),
+					},
+				}
+				BeforeEach(func() {
+					Expect(k8sClient.Create(context.Background(), secret)).To(Succeed())
+					DeferCleanup(k8sClient.Delete, context.Background(), secret)
+				})
+				It("should fetch the credentials from secret", func() {
+					validShareString, err := buildFenceAgentParams(underTestFAR, k8sClient, defaultNamespace)
+					Expect(err).NotTo(HaveOccurred())
+
+					underTestFAR.Spec.SharedParameters = missingTwoCredentialsShareParam
+					missingCredentialsShareString, err := buildFenceAgentParams(underTestFAR, k8sClient, defaultNamespace)
+					Expect(err).NotTo(HaveOccurred())
+
+					underTestFAR.Spec.SharedParameters = missingPasswordCredentialsShareParam
+					missingPasswordCredentialShareString, err := buildFenceAgentParams(underTestFAR, k8sClient, defaultNamespace)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Eventually buildFenceAgentParams would return the same shareParam
+					Expect(missingCredentialsShareString).To(ConsistOf(validShareString))
+					// Eventually buildFenceAgentParams would return a different shareParam as password is missing
+					Expect(missingPasswordCredentialShareString).NotTo(ConsistOf(validShareString))
+				})
+			})
 			When("FAR CR's name doesn't match a node name", func() {
 				It("should fail", func() {
 					underTestFAR.ObjectMeta.Name = dummyNode
-					_, err := buildFenceAgentParams(underTestFAR)
+					_, err := buildFenceAgentParams(underTestFAR, k8sClient, defaultNamespace)
 					Expect(err).To(HaveOccurred())
 					Expect(err).To(Equal(errors.New(errorMissingNodeParams)))
 				})
@@ -119,7 +164,7 @@ var _ = Describe("FAR Controller", func() {
 			When("FAR CR's name does match a node name", func() {
 				It("should succeed", func() {
 					underTestFAR.ObjectMeta.Name = workerNode
-					Expect(buildFenceAgentParams(underTestFAR)).Error().NotTo(HaveOccurred())
+					Expect(buildFenceAgentParams(underTestFAR, k8sClient, defaultNamespace)).Error().NotTo(HaveOccurred())
 				})
 			})
 		})
@@ -188,7 +233,7 @@ var _ = Describe("FAR Controller", func() {
 			}
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
-				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, validShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 			})
 			When("node name is stored in remediation name", func() {
 				It("should have finalizer, taint, while the two VAs and one pod will be deleted", testSuccessfulRemediation)
@@ -207,7 +252,7 @@ var _ = Describe("FAR Controller", func() {
 		When("creating invalid FAR CR Name", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
-				underTestFAR = getFenceAgentsRemediation(dummyNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+				underTestFAR = getFenceAgentsRemediation(dummyNode, fenceAgentIPMI, validShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 			})
 
 			It("should not have a finalizer nor taint, while the two VAs and one pod will remain", func() {
@@ -247,7 +292,7 @@ var _ = Describe("FAR Controller", func() {
 				plogs.Clear()
 				node = utils.GetNode("", workerNode)
 
-				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, validShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
 			})
 
 			When("CR is deleted in between fence agent retries", func() {
@@ -400,7 +445,7 @@ var _ = Describe("FAR Controller", func() {
 		When("creating valid FAR CR", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
-				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.OutOfServiceTaintRemediationStrategy)
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, validShareParam, testNodeParam, v1alpha1.OutOfServiceTaintRemediationStrategy)
 			})
 
 			It("should have finalizer, both remediation taint and out-of-service taint, and at the end they will be deleted", func() {
