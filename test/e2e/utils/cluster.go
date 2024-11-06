@@ -79,25 +79,28 @@ func GetAWSNodeInfoList(machineClient *machineclient.Clientset) (map[v1alpha1.No
 	}
 
 	var missNodeMachineErr error
+	missNodeMachineNames := ""
 	// creates map for nodeName and AWS instance ID
 	for _, machine := range machineList.Items {
 		if machine.Status.NodeRef == nil || machine.Spec.ProviderID == nil {
 			if missNodeMachineErr != nil {
-				missNodeMachineErr = fmt.Errorf("machine %s is not associated with any node or it't provider ID is missing\n%w", machine.Spec.Name, missNodeMachineErr)
+				missNodeMachineNames += ", " + machine.ObjectMeta.GetName()
+				missNodeMachineErr = fmt.Errorf("machines %s are not associated with any node or there provider ID is missing", missNodeMachineNames)
 			} else {
-				missNodeMachineErr = fmt.Errorf("machine %s is not associated with any node or it't provider ID is missing", machine.Spec.Name)
+				missNodeMachineNames = machine.ObjectMeta.GetName()
+				missNodeMachineErr = fmt.Errorf("machine %s is not associated with any node or it's provider ID is missing", machine.ObjectMeta.GetName())
 			}
-			continue
-		}
-		nodeName := v1alpha1.NodeName(machine.Status.NodeRef.Name)
-		nodeRole := getNodeRoleFromMachine(machine.Labels)
-		providerID := *machine.Spec.ProviderID
+		} else {
+			nodeName := v1alpha1.NodeName(machine.Status.NodeRef.Name)
+			nodeRole := getNodeRoleFromMachine(machine.Labels)
+			providerID := *machine.Spec.ProviderID
 
-		// Get the instance ID from the provider ID aws:///us-east-1b/i-082ac37ab919a82c2 -> i-082ac37ab919a82c2
-		splitedProviderID := strings.Split(providerID, "/i-")
-		instanceID := "i-" + splitedProviderID[1]
-		nodeList[nodeName] = instanceID
-		fmt.Printf("node: %s, Role: %s, Instance ID: %s \n", nodeName, nodeRole, instanceID)
+			// Get the instance ID from the provider ID aws:///us-east-1b/i-082ac37ab919a82c2 -> i-082ac37ab919a82c2
+			splitedProviderID := strings.Split(providerID, "/i-")
+			instanceID := "i-" + splitedProviderID[1]
+			nodeList[nodeName] = instanceID
+			fmt.Printf("node: %s, Role: %s, Instance ID: %s \n", nodeName, nodeRole, instanceID)
+		}
 	}
 	return nodeList, missNodeMachineErr
 }
