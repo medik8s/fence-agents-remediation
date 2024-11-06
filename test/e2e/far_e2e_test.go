@@ -55,10 +55,6 @@ var _ = Describe("FAR E2e", func() {
 		fenceAgent, nodeIdentifierPrefix string
 		testShareParam                   map[v1alpha1.ParameterName]string
 		testNodeParam                    map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
-		selectedNode                     *corev1.Node
-		nodeName                         string
-		pod                              *corev1.Pod
-		startTime, nodeBootTimeBefore    time.Time
 		err                              error
 	)
 	BeforeEach(func() {
@@ -89,14 +85,20 @@ var _ = Describe("FAR E2e", func() {
 	// runFARTests is a utility function to run FAR tests.
 	// It accepts a remediation strategy and a condition to determine if the tests should be skipped.
 	runFARTests := func(remediationStrategy v1alpha1.RemediationStrategyType, skipCondition func() bool) {
-		var availableWorkerNodes *corev1.NodeList
+		var (
+			availableWorkerNodes          *corev1.NodeList
+			selectedNode                  *corev1.Node
+			nodeName                      string
+			pod                           *corev1.Pod
+			startTime, nodeBootTimeBefore time.Time
+		)
 		BeforeEach(func() {
 			if skipCondition() {
 				Skip("Skip this block due to unsupported condition")
 			}
 
 			if availableWorkerNodes == nil {
-				availableWorkerNodes = getAvailableWorkerNodes()
+				availableWorkerNodes = getReadyWorkerNodes()
 			}
 			selectedNode = pickRemediatedNode(availableWorkerNodes)
 			nodeName = selectedNode.Name
@@ -240,24 +242,36 @@ func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha
 	return testNodeParam, nil
 }
 
-// getAvailableNodes a list of available worker nodes in the cluster
-func getAvailableWorkerNodes() *corev1.NodeList {
-	availableNodes := &corev1.NodeList{}
+// getReadyWorkerNodes returns a list of ready worker nodes in the cluster if any
+func getReadyWorkerNodes() *corev1.NodeList {
+	availableWorkerNodes := &corev1.NodeList{}
 	selector := labels.NewSelector()
-	requirement, _ := labels.NewRequirement(medik8sLabels.WorkerRole, selection.Exists, []string{})
+	requirement, err := labels.NewRequirement(medik8sLabels.WorkerRole, selection.Exists, []string{})
+	Expect(err).To(BeNil())
 	selector = selector.Add(*requirement)
-	Expect(k8sClient.List(context.Background(), availableNodes, &client.ListOptions{LabelSelector: selector})).ToNot(HaveOccurred())
-	if len(availableNodes.Items) < 1 {
-		Fail("No worker nodes found in the cluster")
+	Expect(k8sClient.List(context.Background(), availableWorkerNodes, &client.ListOptions{LabelSelector: selector})).ToNot(HaveOccurred())
+
+	// Filter nodes to only include those in "Ready" state
+	readyWorkerNodes := &corev1.NodeList{}
+	for _, node := range availableWorkerNodes.Items {
+		for _, condition := range node.Status.Conditions {
+			if condition.Type == corev1.NodeReady && condition.Status == corev1.ConditionTrue {
+				readyWorkerNodes.Items = append(readyWorkerNodes.Items, node)
+				break // "Ready" was found
+			}
+		}
 	}
-	return availableNodes
+	if len(readyWorkerNodes.Items) < 1 {
+		Skip("There isn't an available (and ready) worker node in the cluster")
+	}
+	return readyWorkerNodes
 }
 
 // pickRemediatedNode randomly returns a next remediated node from the current available nodes,
 // and then the node is removed from the list of available nodes
 func pickRemediatedNode(availableNodes *corev1.NodeList) *corev1.Node {
 	if len(availableNodes.Items) < 1 {
-		Fail("No available node found for remediation")
+		Skip("There isn't an available (and ready) worker node in the cluster")
 	}
 	// Generate a random seed based on the current time
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
