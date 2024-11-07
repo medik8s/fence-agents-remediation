@@ -80,6 +80,10 @@ spec:
           have a fence_ prefix.
         displayName: Agent
         path: agent
+      - description: CredentialsSecretName is the name of a secret with the API credentials
+          to the fenced node
+        displayName: Credentials Secret Name
+        path: credentialsSecretName
       - description: NodeParameters are passed to the fencing agent according to the
           node that is fenced, since they are node specific
         displayName: Node Parameters
@@ -136,6 +140,10 @@ spec:
           have a fence_ prefix.
         displayName: Agent
         path: template.spec.agent
+      - description: CredentialsSecretName is the name of a secret with the API credentials
+          to the fenced node
+        displayName: Credentials Secret Name
+        path: template.spec.credentialsSecretName
       - description: NodeParameters are passed to the fencing agent according to the
           node that is fenced, since they are node specific
         displayName: Node Parameters

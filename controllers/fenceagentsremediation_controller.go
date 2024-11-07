@@ -28,6 +28,7 @@ import (
 	commonEvents "github.com/medik8s/common/pkg/events"
 	commonResources "github.com/medik8s/common/pkg/resources"
 
+	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,9 +50,11 @@ const (
 	errorMissingParams     = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
 	errorMissingNodeParams = "node parameter is required, and cannot be empty"
 
-	SuccessFAResponse    = "Success: Rebooted"
-	parameterActionName  = "--action"
-	parameterActionValue = "reboot"
+	SuccessFAResponse     = "Success: Rebooted"
+	parameterActionName   = "--action"
+	parameterPasswordName = "--password"
+	parameterUsernameName = "--username"
+	parameterActionValue  = "reboot"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
@@ -226,7 +229,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		r.Log.Info("Build fence agent command line", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
-		faParams, err := buildFenceAgentParams(far)
+		faParams, err := buildFenceAgentParams(far, r.Client, req.Namespace)
 		if err != nil {
 			r.Log.Error(err, "Invalid shared or node parameters from CR", "Node Name", node.Name, "CR Name", req.Name)
 			return emptyResult, nil
@@ -337,9 +340,31 @@ func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
 	return far.GetName()
 }
 
+// Function to get the user created credentials secret
+func getSecret(namespace, secretName string, r client.Reader) (*corev1.Secret, error) {
+	logger := ctrl.Log.WithName("get-far-secret")
+	secret := &corev1.Secret{}
+	err := r.Get(context.TODO(), client.ObjectKey{
+		Namespace: namespace,
+		Name:      secretName,
+	}, secret)
+
+	// Check if the error is a "not found" error
+	if err != nil {
+		if apiErrors.IsNotFound(err) {
+			logger.Info("Secret not found", "secretName", secretName, "namespace", namespace)
+			return nil, err
+		}
+
+		logger.Error(err, "Failed to get secret", "secretName", secretName, "namespace", namespace)
+		return nil, err
+	}
+	return secret, nil
+}
+
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParameter name or it has an action which is different than reboot, then return an error
-func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, error) {
+func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, r client.Reader, namespace string) ([]string, error) {
 	logger := ctrl.Log.WithName("build-fa-parameters")
 	if far.Spec.NodeParameters == nil || far.Spec.SharedParameters == nil {
 		err := errors.New(errorMissingParams)
@@ -347,9 +372,14 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, erro
 		return nil, err
 	}
 	var fenceAgentParams []string
+	// TODO consider counting both of the credentials and they have only one apperance, e.g., --password parameter apperas only once
+	var hasCredentials bool
 	// add shared parameters except the action parameter
 	for paramName, paramVal := range far.Spec.SharedParameters {
 		if paramName != parameterActionName {
+			if paramName == parameterUsernameName || paramName == parameterPasswordName {
+				hasCredentials = true
+			}
 			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
 		} else if paramVal != parameterActionValue {
 			// --action attribute was selected but it is different than reboot
@@ -367,6 +397,9 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, erro
 	nodeName := v1alpha1.NodeName(getNodeName(far))
 	for paramName, nodeMap := range far.Spec.NodeParameters {
 		if nodeVal, isFound := nodeMap[nodeName]; isFound {
+			if paramName == parameterUsernameName || paramName == parameterPasswordName {
+				hasCredentials = true
+			}
 			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
 		} else {
 			err := errors.New(errorMissingNodeParams)
@@ -374,6 +407,22 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, erro
 			return nil, err
 		}
 	}
+
+	if !hasCredentials {
+		// get credentials from the secret object when
+		secretName := far.Spec.CredentialsSecretName
+		secret, err := getSecret(namespace, secretName, r)
+		if err != nil {
+			logger.Error(err, "Missing FAR secret credentials", "secretName", secretName, "namespace", namespace)
+			return nil, err
+		}
+		// Extract the credentials
+		username := string(secret.Data["username"])
+		fenceAgentParams = appendParamToSlice(fenceAgentParams, parameterUsernameName, username)
+		password := string(secret.Data["password"])
+		fenceAgentParams = appendParamToSlice(fenceAgentParams, parameterPasswordName, password)
+	}
+
 	return fenceAgentParams, nil
 }
 

@@ -50,6 +50,10 @@ spec:
                   It should have a fence_ prefix.
                 pattern: fence_.+
                 type: string
+              credentialsSecretName:
+                description: CredentialsSecretName is the name of a secret with the
+                  API credentials to the fenced node
+                type: string
               nodeparameters:
                 additionalProperties:
                   additionalProperties:
