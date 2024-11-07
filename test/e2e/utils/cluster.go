@@ -48,6 +48,23 @@ func GetSecretData(clientSet *kubernetes.Clientset, secretName, secretNamespace,
 	return string(secret.Data[secretData1]), string(secret.Data[secretData2]), nil
 }
 
+// getNodeRoleFromMachine return node role "master/control-plane" or "worker" from machine label if present, otherwise "unknown"
+func getNodeRoleFromMachine(nodeLabels map[string]string) string {
+	machineLabelPrefixRole := "machine.openshift.io/cluster-api-machine-"
+	// look for machine.openshift.io/cluster-api-machine-role or machine.openshift.io/cluster-api-machine-type label
+	for _, labelKey := range []string{machineLabelPrefixRole + "role", machineLabelPrefixRole + "type"} {
+		if labelVal, isFound := nodeLabels[labelKey]; isFound {
+			if labelVal == "worker" {
+				return "worker"
+			}
+			if labelVal == "master" {
+				return "master/control-plane"
+			}
+		}
+	}
+	return "unknown"
+}
+
 // GetAWSNodeInfoList returns a list of the node names and their identification, e.g., AWS instance ID
 func GetAWSNodeInfoList(machineClient *machineclient.Clientset) (map[v1alpha1.NodeName]string, error) {
 	//  oc get machine -n openshift-machine-api MACHINE_NAME -o jsonpath='{.spec.providerID}'
@@ -62,24 +79,28 @@ func GetAWSNodeInfoList(machineClient *machineclient.Clientset) (map[v1alpha1.No
 	}
 
 	var missNodeMachineErr error
+	missNodeMachineNames := ""
 	// creates map for nodeName and AWS instance ID
 	for _, machine := range machineList.Items {
 		if machine.Status.NodeRef == nil || machine.Spec.ProviderID == nil {
 			if missNodeMachineErr != nil {
-				missNodeMachineErr = fmt.Errorf("machine %s is not associated with any node or it't provider ID is missing\n%w", machine.Spec.Name, missNodeMachineErr)
+				missNodeMachineNames += ", " + machine.ObjectMeta.GetName()
+				missNodeMachineErr = fmt.Errorf("machines %s are not associated with any node or there provider ID is missing", missNodeMachineNames)
 			} else {
-				missNodeMachineErr = fmt.Errorf("machine %s is not associated with any node or it't provider ID is missing", machine.Spec.Name)
+				missNodeMachineNames = machine.ObjectMeta.GetName()
+				missNodeMachineErr = fmt.Errorf("machine %s is not associated with any node or it's provider ID is missing", machine.ObjectMeta.GetName())
 			}
-			continue
-		}
-		nodeName := v1alpha1.NodeName(machine.Status.NodeRef.Name)
-		providerID := *machine.Spec.ProviderID
+		} else {
+			nodeName := v1alpha1.NodeName(machine.Status.NodeRef.Name)
+			nodeRole := getNodeRoleFromMachine(machine.Labels)
+			providerID := *machine.Spec.ProviderID
 
-		// Get the instance ID from the provider ID aws:///us-east-1b/i-082ac37ab919a82c2 -> i-082ac37ab919a82c2
-		splitedProviderID := strings.Split(providerID, "/i-")
-		instanceID := "i-" + splitedProviderID[1]
-		nodeList[nodeName] = instanceID
-		fmt.Printf("node: %s Instance ID: %s \n", nodeName, instanceID)
+			// Get the instance ID from the provider ID aws:///us-east-1b/i-082ac37ab919a82c2 -> i-082ac37ab919a82c2
+			splitedProviderID := strings.Split(providerID, "/i-")
+			instanceID := "i-" + splitedProviderID[1]
+			nodeList[nodeName] = instanceID
+			fmt.Printf("node: %s, Role: %s, Instance ID: %s \n", nodeName, nodeRole, instanceID)
+		}
 	}
 	return nodeList, missNodeMachineErr
 }
