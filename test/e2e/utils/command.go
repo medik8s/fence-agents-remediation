@@ -193,7 +193,7 @@ func GetPod(nodeName, containerName string) *corev1.Pod {
 			Tolerations: []corev1.Toleration{
 				{
 					Key:      v1alpha1.FARNoExecuteTaintKey,
-					Operator: corev1.TolerationOpEqual,
+					Operator: corev1.TolerationOpExists,
 					Effect:   corev1.TaintEffectNoExecute,
 				},
 				{

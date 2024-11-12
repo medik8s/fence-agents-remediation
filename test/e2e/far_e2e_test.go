@@ -38,7 +38,6 @@ const (
 
 	//TODO: try to minimize timeout
 	// eventually parameters
-	timeoutLogs        = "3m0s"
 	timeoutTaint       = "2s"   // Timeout for checking the FAR taint
 	timeoutReboot      = "6m0s" // fencing with fence_aws should be completed within 6 minutes
 	timeoutAfterReboot = "5s"   // Timeout for verifying steps  after the node has been rebooted
@@ -48,7 +47,10 @@ const (
 	skipOOSREnvVarName = "SKIP_OOST_REMEDIATION_VERIFICATION"
 )
 
-var remediationTimes []time.Duration
+var (
+	stopTesting      bool
+	remediationTimes []time.Duration
+)
 
 var _ = Describe("FAR E2e", func() {
 	var (
@@ -57,29 +59,32 @@ var _ = Describe("FAR E2e", func() {
 		testNodeParam                    map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
 		err                              error
 	)
-	BeforeEach(func() {
-		// create FAR CR spec based on OCP platformn
-		clusterPlatform, err := e2eUtils.GetClusterInfo(configClient)
-		Expect(err).ToNot(HaveOccurred(), "can't identify the cluster platform")
-		log.Info("Begin e2e test", "Cluster name", string(clusterPlatform.Name), "PlatformType", string(clusterPlatform.Status.PlatformStatus.Type))
+	When("trying to identify cluster platform", func() {
+		It("should be AWS/BareMetal for finding the needed cluster and node parameters", func() {
+			// create FAR CR spec based on OCP platformn
+			clusterPlatform, err := e2eUtils.GetClusterInfo(configClient)
+			Expect(err).ToNot(HaveOccurred(), "can't identify the cluster platform")
+			log.Info("Getting Cluster Infromation", "Cluster name", string(clusterPlatform.Name), "PlatformType", string(clusterPlatform.Status.PlatformStatus.Type))
 
-		switch clusterPlatform.Status.PlatformStatus.Type {
-		case configv1.AWSPlatformType:
-			fenceAgent = fenceAgentAWS
-			nodeIdentifierPrefix = nodeIdentifierPrefixAWS
-			By("running fence_aws")
-		case configv1.BareMetalPlatformType:
-			fenceAgent = fenceAgentIPMI
-			nodeIdentifierPrefix = nodeIdentifierPrefixIPMI
-			By("running fence_ipmilan")
-		default:
-			Skip("FAR haven't been tested on this kind of cluster (non AWS or BareMetal)")
-		}
+			switch clusterPlatform.Status.PlatformStatus.Type {
+			case configv1.AWSPlatformType:
+				fenceAgent = fenceAgentAWS
+				nodeIdentifierPrefix = nodeIdentifierPrefixAWS
+				By("running fence_aws")
+			case configv1.BareMetalPlatformType:
+				fenceAgent = fenceAgentIPMI
+				nodeIdentifierPrefix = nodeIdentifierPrefixIPMI
+				By("running fence_ipmilan")
+			default:
+				stopTesting = true // Mark to stop subsequent tests
+				Fail("FAR haven't been tested on this kind of cluster (non AWS or BareMetal)")
+			}
 
-		testShareParam, err = buildSharedParameters(clusterPlatform, fenceAgentAction)
-		Expect(err).ToNot(HaveOccurred(), "can't get shared information")
-		testNodeParam, err = buildNodeParameters(clusterPlatform.Status.PlatformStatus.Type)
-		Expect(err).ToNot(HaveOccurred(), "can't get node information")
+			testShareParam, err = buildSharedParameters(clusterPlatform, fenceAgentAction)
+			Expect(err).ToNot(HaveOccurred(), "can't get shared information")
+			testNodeParam, err = buildNodeParameters(clusterPlatform.Status.PlatformStatus.Type)
+			Expect(err).ToNot(HaveOccurred(), "can't get node information")
+		})
 	})
 
 	// runFARTests is a utility function to run FAR tests.
@@ -93,6 +98,9 @@ var _ = Describe("FAR E2e", func() {
 			startTime, nodeBootTimeBefore time.Time
 		)
 		BeforeEach(func() {
+			if stopTesting {
+				Skip("Skip testing due to unsupported platform")
+			}
 			if skipCondition() {
 				Skip("Skip this block due to unsupported condition")
 			}
@@ -109,7 +117,7 @@ var _ = Describe("FAR E2e", func() {
 			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
 
 			// create tested pod which will be deleted by the far CR
-			pod = createTestedPod(nodeName, testContainerName)
+			pod = createTestedPod(nodeName)
 			DeferCleanup(cleanupTestedResources, pod)
 
 			// set the node as "unhealthy" by disabling kubelet
@@ -284,14 +292,14 @@ func pickRemediatedNode(availableNodes *corev1.NodeList) *corev1.Node {
 }
 
 // createTestedPod creates tested pod which will be deleted by the far CR
-func createTestedPod(nodeName, containerName string) *corev1.Pod {
+func createTestedPod(nodeName string) *corev1.Pod {
 	pod := e2eUtils.GetPod(nodeName, testContainerName)
 	pod.Name = testPodName
 	pod.Namespace = testNsName
 	pod.Spec.Tolerations = []corev1.Toleration{
 		{
 			Key:      v1alpha1.FARNoExecuteTaintKey,
-			Operator: corev1.TolerationOpEqual,
+			Operator: corev1.TolerationOpExists,
 			Effect:   corev1.TaintEffectNoExecute,
 		},
 	}
