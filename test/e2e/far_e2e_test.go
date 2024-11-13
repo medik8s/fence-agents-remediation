@@ -270,7 +270,7 @@ func getReadyWorkerNodes() *corev1.NodeList {
 		}
 	}
 	if len(readyWorkerNodes.Items) < 1 {
-		Skip("There isn't an available (and ready) worker node in the cluster")
+		Fail("There isn't an available (and ready) worker node in the cluster")
 	}
 	return readyWorkerNodes
 }
@@ -279,7 +279,7 @@ func getReadyWorkerNodes() *corev1.NodeList {
 // and then the node is removed from the list of available nodes
 func pickRemediatedNode(availableNodes *corev1.NodeList) *corev1.Node {
 	if len(availableNodes.Items) < 1 {
-		Skip("There isn't an available (and ready) worker node in the cluster")
+		Fail("There isn't an available (and ready) worker node in the cluster")
 	}
 	// Generate a random seed based on the current time
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
