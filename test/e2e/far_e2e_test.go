@@ -108,6 +108,10 @@ var _ = Describe("FAR E2e", func() {
 			if availableWorkerNodes == nil {
 				availableWorkerNodes = getReadyWorkerNodes()
 			}
+			if len(availableWorkerNodes.Items) < 1 {
+				Fail("There isn't an available (and Ready) worker node in the cluster")
+			}
+
 			selectedNode = pickRemediatedNode(availableWorkerNodes)
 			nodeName = selectedNode.Name
 			printNodeDetails(selectedNode, nodeIdentifierPrefix, testNodeParam)
@@ -269,18 +273,12 @@ func getReadyWorkerNodes() *corev1.NodeList {
 			}
 		}
 	}
-	if len(readyWorkerNodes.Items) < 1 {
-		Fail("There isn't an available (and ready) worker node in the cluster")
-	}
 	return readyWorkerNodes
 }
 
 // pickRemediatedNode randomly returns a next remediated node from the current available nodes,
 // and then the node is removed from the list of available nodes
 func pickRemediatedNode(availableNodes *corev1.NodeList) *corev1.Node {
-	if len(availableNodes.Items) < 1 {
-		Fail("There isn't an available (and ready) worker node in the cluster")
-	}
 	// Generate a random seed based on the current time
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// Randomly select a worker node
