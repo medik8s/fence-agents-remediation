@@ -38,7 +38,6 @@ const (
 
 	//TODO: try to minimize timeout
 	// eventually parameters
-	timeoutLogs        = "3m0s"
 	timeoutTaint       = "2s"   // Timeout for checking the FAR taint
 	timeoutReboot      = "6m0s" // fencing with fence_aws should be completed within 6 minutes
 	timeoutAfterReboot = "5s"   // Timeout for verifying steps  after the node has been rebooted
@@ -48,56 +47,71 @@ const (
 	skipOOSREnvVarName = "SKIP_OOST_REMEDIATION_VERIFICATION"
 )
 
-var remediationTimes []time.Duration
+var (
+	stopTesting      bool
+	remediationTimes []time.Duration
+)
 
 var _ = Describe("FAR E2e", func() {
 	var (
 		fenceAgent, nodeIdentifierPrefix string
 		testShareParam                   map[v1alpha1.ParameterName]string
 		testNodeParam                    map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string
-		selectedNode                     *corev1.Node
-		nodeName                         string
-		pod                              *corev1.Pod
-		startTime, nodeBootTimeBefore    time.Time
 		err                              error
 	)
-	BeforeEach(func() {
-		// create FAR CR spec based on OCP platformn
-		clusterPlatform, err := e2eUtils.GetClusterInfo(configClient)
-		Expect(err).ToNot(HaveOccurred(), "can't identify the cluster platform")
-		log.Info("Begin e2e test", "Cluster name", string(clusterPlatform.Name), "PlatformType", string(clusterPlatform.Status.PlatformStatus.Type))
+	When("trying to identify cluster platform", func() {
+		It("should be AWS/BareMetal for finding the needed cluster and node parameters", func() {
+			// create FAR CR spec based on OCP platformn
+			clusterPlatform, err := e2eUtils.GetClusterInfo(configClient)
+			Expect(err).ToNot(HaveOccurred(), "can't identify the cluster platform")
+			log.Info("Getting Cluster Infromation", "Cluster name", string(clusterPlatform.Name), "PlatformType", string(clusterPlatform.Status.PlatformStatus.Type))
 
-		switch clusterPlatform.Status.PlatformStatus.Type {
-		case configv1.AWSPlatformType:
-			fenceAgent = fenceAgentAWS
-			nodeIdentifierPrefix = nodeIdentifierPrefixAWS
-			By("running fence_aws")
-		case configv1.BareMetalPlatformType:
-			fenceAgent = fenceAgentIPMI
-			nodeIdentifierPrefix = nodeIdentifierPrefixIPMI
-			By("running fence_ipmilan")
-		default:
-			Skip("FAR haven't been tested on this kind of cluster (non AWS or BareMetal)")
-		}
+			switch clusterPlatform.Status.PlatformStatus.Type {
+			case configv1.AWSPlatformType:
+				fenceAgent = fenceAgentAWS
+				nodeIdentifierPrefix = nodeIdentifierPrefixAWS
+				By("running fence_aws")
+			case configv1.BareMetalPlatformType:
+				fenceAgent = fenceAgentIPMI
+				nodeIdentifierPrefix = nodeIdentifierPrefixIPMI
+				By("running fence_ipmilan")
+			default:
+				stopTesting = true // Mark to stop subsequent tests
+				Fail("FAR haven't been tested on this kind of cluster (non AWS or BareMetal)")
+			}
 
-		testShareParam, err = buildSharedParameters(clusterPlatform, fenceAgentAction)
-		Expect(err).ToNot(HaveOccurred(), "can't get shared information")
-		testNodeParam, err = buildNodeParameters(clusterPlatform.Status.PlatformStatus.Type)
-		Expect(err).ToNot(HaveOccurred(), "can't get node information")
+			testShareParam, err = buildSharedParameters(clusterPlatform, fenceAgentAction)
+			Expect(err).ToNot(HaveOccurred(), "can't get shared information")
+			testNodeParam, err = buildNodeParameters(clusterPlatform.Status.PlatformStatus.Type)
+			Expect(err).ToNot(HaveOccurred(), "can't get node information")
+		})
 	})
 
 	// runFARTests is a utility function to run FAR tests.
 	// It accepts a remediation strategy and a condition to determine if the tests should be skipped.
 	runFARTests := func(remediationStrategy v1alpha1.RemediationStrategyType, skipCondition func() bool) {
-		var availableWorkerNodes *corev1.NodeList
+		var (
+			availableWorkerNodes          *corev1.NodeList
+			selectedNode                  *corev1.Node
+			nodeName                      string
+			pod                           *corev1.Pod
+			startTime, nodeBootTimeBefore time.Time
+		)
 		BeforeEach(func() {
+			if stopTesting {
+				Skip("Skip testing due to unsupported platform")
+			}
 			if skipCondition() {
 				Skip("Skip this block due to unsupported condition")
 			}
 
 			if availableWorkerNodes == nil {
-				availableWorkerNodes = getAvailableWorkerNodes()
+				availableWorkerNodes = getReadyWorkerNodes()
 			}
+			if len(availableWorkerNodes.Items) < 1 {
+				Fail("There isn't an available (and Ready) worker node in the cluster")
+			}
+
 			selectedNode = pickRemediatedNode(availableWorkerNodes)
 			nodeName = selectedNode.Name
 			printNodeDetails(selectedNode, nodeIdentifierPrefix, testNodeParam)
@@ -107,7 +121,7 @@ var _ = Describe("FAR E2e", func() {
 			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
 
 			// create tested pod which will be deleted by the far CR
-			pod = createTestedPod(nodeName, testContainerName)
+			pod = createTestedPod(nodeName)
 			DeferCleanup(cleanupTestedResources, pod)
 
 			// set the node as "unhealthy" by disabling kubelet
@@ -240,25 +254,31 @@ func buildNodeParameters(clusterPlatformType configv1.PlatformType) (map[v1alpha
 	return testNodeParam, nil
 }
 
-// getAvailableNodes a list of available worker nodes in the cluster
-func getAvailableWorkerNodes() *corev1.NodeList {
-	availableNodes := &corev1.NodeList{}
+// getReadyWorkerNodes returns a list of ready worker nodes in the cluster if any
+func getReadyWorkerNodes() *corev1.NodeList {
+	availableWorkerNodes := &corev1.NodeList{}
 	selector := labels.NewSelector()
-	requirement, _ := labels.NewRequirement(medik8sLabels.WorkerRole, selection.Exists, []string{})
+	requirement, err := labels.NewRequirement(medik8sLabels.WorkerRole, selection.Exists, []string{})
+	Expect(err).To(BeNil())
 	selector = selector.Add(*requirement)
-	Expect(k8sClient.List(context.Background(), availableNodes, &client.ListOptions{LabelSelector: selector})).ToNot(HaveOccurred())
-	if len(availableNodes.Items) < 1 {
-		Fail("No worker nodes found in the cluster")
+	Expect(k8sClient.List(context.Background(), availableWorkerNodes, &client.ListOptions{LabelSelector: selector})).ToNot(HaveOccurred())
+
+	// Filter nodes to only include those in "Ready" state
+	readyWorkerNodes := &corev1.NodeList{}
+	for _, node := range availableWorkerNodes.Items {
+		for _, condition := range node.Status.Conditions {
+			if condition.Type == corev1.NodeReady && condition.Status == corev1.ConditionTrue {
+				readyWorkerNodes.Items = append(readyWorkerNodes.Items, node)
+				break // "Ready" was found
+			}
+		}
 	}
-	return availableNodes
+	return readyWorkerNodes
 }
 
 // pickRemediatedNode randomly returns a next remediated node from the current available nodes,
 // and then the node is removed from the list of available nodes
 func pickRemediatedNode(availableNodes *corev1.NodeList) *corev1.Node {
-	if len(availableNodes.Items) < 1 {
-		Fail("No available node found for remediation")
-	}
 	// Generate a random seed based on the current time
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// Randomly select a worker node
@@ -270,14 +290,14 @@ func pickRemediatedNode(availableNodes *corev1.NodeList) *corev1.Node {
 }
 
 // createTestedPod creates tested pod which will be deleted by the far CR
-func createTestedPod(nodeName, containerName string) *corev1.Pod {
+func createTestedPod(nodeName string) *corev1.Pod {
 	pod := e2eUtils.GetPod(nodeName, testContainerName)
 	pod.Name = testPodName
 	pod.Namespace = testNsName
 	pod.Spec.Tolerations = []corev1.Toleration{
 		{
 			Key:      v1alpha1.FARNoExecuteTaintKey,
-			Operator: corev1.TolerationOpEqual,
+			Operator: corev1.TolerationOpExists,
 			Effect:   corev1.TaintEffectNoExecute,
 		},
 	}
@@ -303,7 +323,7 @@ func createFAR(nodeName string, agent string, sharedParameters map[v1alpha1.Para
 			SharedParameters:    sharedParameters,
 			NodeParameters:      nodeParameters,
 			RemediationStrategy: strategy,
-			RetryCount:          5,
+			RetryCount:          10,
 			RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
 			Timeout:             metav1.Duration{Duration: 60 * time.Second},
 		},
