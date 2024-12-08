@@ -21,7 +21,9 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		When("agent name was not found ", func() {
 			It("should be rejected", func() {
 				farTemplate := getTestFARTemplate(invalidAgentName)
-				Expect(farTemplate.ValidateCreate()).Error().To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
+				warnings, err := farTemplate.ValidateCreate()
+				ExpectWithOffset(1, warnings).To(BeEmpty())
+				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
 			})
 		})
 
@@ -49,7 +51,9 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					isOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
-					Expect(outOfServiceStrategy.ValidateCreate()).Error().To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
+					warnings, err := outOfServiceStrategy.ValidateCreate()
+					ExpectWithOffset(1, warnings).To(BeEmpty())
+					Expect(err).To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
 				})
 			})
 		})
@@ -73,7 +77,9 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			})
 			It("should be rejected", func() {
 				farTemplate := getTestFARTemplate(invalidAgentName)
-				Expect(farTemplate.ValidateUpdate(oldFARTemplate)).Error().To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
+				warnings, err := farTemplate.ValidateUpdate(oldFARTemplate)
+				ExpectWithOffset(1, warnings).To(BeEmpty())
+				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
 			})
 		})
 
@@ -103,7 +109,9 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					isOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
-					Expect(outOfServiceStrategy.ValidateUpdate(resourceDeletionStrategy)).Error().To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
+					warnings, err := outOfServiceStrategy.ValidateUpdate(resourceDeletionStrategy)
+					ExpectWithOffset(1, warnings).To(BeEmpty())
+					Expect(err).To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
 				})
 			})
 		})
