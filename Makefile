@@ -8,7 +8,7 @@ CONTROLLER_GEN_VERSION ?= v0.14.0
 # Why to use the git commit sha? https://github.com/kubernetes-sigs/controller-runtime/issues/1670
 ENVTEST_VERSION ?= v0.0.0-20240112123317-48d9a7b44e54
 # See https://github.com/onsi/ginkgo/releases for the last version
-GINKGO_VERSION ?= v2.14.0
+GINKGO_VERSION ?= v2.22.0
 # See https://pkg.go.dev/golang.org/x/tools/cmd/goimports?tab=versions for the last version
 GOIMPORTS_VERSION ?= v0.17.0
 # See https://github.com/slintes/sort-imports/releases for the last version
@@ -21,7 +21,7 @@ OPERATOR_SDK_VERSION ?= v1.32.0
 ENVTEST_K8S_VERSION = 1.28
 
 # OCP Version: for OKD bundle community
-OCP_VERSION = 4.12
+OCP_VERSION = 4.14
 
 # update for major version updates to YQ_VERSION! see https://github.com/mikefarah/yq
 YQ_API_VERSION = v4

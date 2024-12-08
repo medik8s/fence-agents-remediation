@@ -59,6 +59,8 @@ var _ = BeforeSuite(func() {
 	}
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseFlagOptions(&opts)))
 
+	ctx, cancel = context.WithCancel(ctrl.SetupSignalHandler())
+
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
@@ -85,7 +87,7 @@ var _ = BeforeSuite(func() {
 
 	go func() {
 		// https://github.com/kubernetes-sigs/controller-runtime/issues/1571
-		ctx, cancel = context.WithCancel(ctrl.SetupSignalHandler())
+		defer GinkgoRecover()
 		err := k8sManager.Start(ctx)
 		Expect(err).NotTo(HaveOccurred())
 	}()
