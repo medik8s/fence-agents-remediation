@@ -346,7 +346,7 @@ func resloveParamaterValueFromSecret(ctx context.Context, c client.Client, name,
 	if err := c.Get(ctx, secretKeyObj, secret); err != nil {
 		return "", fmt.Errorf("failed to fetch secret `%s` at namespace `%s`: %w", name, namespace, err)
 	}
-
+	// TODO use Data over StringData for base64 encoded strings
 	for secretPar, secretData := range secret.StringData {
 		fmt.Printf("\nsecret `%s` with parameter `%s` and value `%s`\n", name, secretPar, secretData)
 	}
