@@ -28,6 +28,7 @@ import (
 	commonEvents "github.com/medik8s/common/pkg/events"
 	commonResources "github.com/medik8s/common/pkg/resources"
 
+	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -73,6 +74,7 @@ func (r *FenceAgentsRemediationReconciler) SetupWithManager(mgr ctrl.Manager) er
 //+kubebuilder:rbac:groups=storage.k8s.io,resources=volumeattachments,verbs=get;list;watch;delete
 //+kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;delete;deletecollection
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;update;delete
 //+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 //+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations,verbs=get;list;watch;create;update;patch;delete
@@ -226,14 +228,14 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		r.Log.Info("Build fence agent command line", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
-		faParams, err := buildFenceAgentParams(far)
+		faParams, err := buildFenceAgentParams(far, ctx, r.Client)
 		if err != nil {
-			r.Log.Error(err, "Invalid shared or node parameters from CR", "Node Name", node.Name, "CR Name", req.Name)
+			r.Log.Error(err, "Invalid credential or shared or node parameters from CR", "Node Name", node.Name, "CR Name", req.Name)
 			return emptyResult, nil
 		}
 
 		cmd := append([]string{far.Spec.Agent}, faParams...)
-		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID())
+		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID(), "command", cmd)
 		r.Executor.AsyncExecute(ctx, far.GetUID(), cmd, far.Spec.RetryCount, far.Spec.RetryInterval.Duration, far.Spec.Timeout.Duration)
 		commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonFenceAgentExecuted, utils.EventMessageFenceAgentExecuted)
 		return emptyResult, nil
@@ -337,19 +339,66 @@ func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
 	return far.GetName()
 }
 
+func resloveParamaterValueFromSecret(ctx context.Context, c client.Client, name, namespace string, paramName v1alpha1.ParameterName) (string, error) {
+	// Fetch the secret
+	secret := &corev1.Secret{}
+	secretKeyObj := client.ObjectKey{Namespace: namespace, Name: name}
+	if err := c.Get(ctx, secretKeyObj, secret); err != nil {
+		return "", fmt.Errorf("failed to fetch secret `%s` at namespace `%s`: %w", name, namespace, err)
+	}
+	// TODO use Data over StringData for base64 encoded strings
+	for secretPar, secretData := range secret.StringData {
+		fmt.Printf("\nsecret `%s` with parameter `%s` and value `%s`\n", name, secretPar, secretData)
+	}
+	// Extract the secret value
+	secretValue, exists := secret.StringData[string(paramName)]
+	if !exists {
+		return "", fmt.Errorf("secret key `%s` was not found in secret `%s` at namespace `%s`", paramName, name, namespace)
+	}
+
+	return secretValue, nil
+}
+
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParameter name or it has an action which is different than reboot, then return an error
-func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, error) {
+func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, ctx context.Context, c client.Client) ([]string, error) {
 	logger := ctrl.Log.WithName("build-fa-parameters")
 	if far.Spec.NodeParameters == nil || far.Spec.SharedParameters == nil {
 		err := errors.New(errorMissingParams)
 		logger.Error(err, "Missing parameters")
 		return nil, err
 	}
+
+	nodeName := getNodeName(far)
 	var fenceAgentParams []string
+
+	// append credential parameters
+	for _, paramName := range far.Spec.CredentialParameters {
+		resolvedVal, err := resloveParamaterValueFromSecret(ctx, c, nodeName, far.Namespace, paramName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve the value of credential parameter '%s': %w", paramName, err)
+		} else {
+			//TODO: validate the prarameter doesn't exist in fenceAgentParams
+			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, resolvedVal)
+		}
+	}
+
+	// append node parameters
+	for paramName, nodeMap := range far.Spec.NodeParameters {
+		if nodeVal, isFound := nodeMap[v1alpha1.NodeName(nodeName)]; isFound {
+			//TODO: validate the prarameter doesn't exist in fenceAgentParams
+			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
+		} else {
+			err := errors.New(errorMissingNodeParams)
+			logger.Error(err, "Missing matching nodeParam and CR's name")
+			return nil, err
+		}
+	}
+
 	// add shared parameters except the action parameter
 	for paramName, paramVal := range far.Spec.SharedParameters {
 		if paramName != parameterActionName {
+			//TODO: validate the prarameter doesn't exist in fenceAgentParams
 			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
 		} else if paramVal != parameterActionValue {
 			// --action attribute was selected but it is different than reboot
@@ -358,22 +407,10 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, erro
 			return nil, err
 		}
 	}
-	// if --action attribute was not selected, then its default value is reboot
+	// We can safely add the reboot (default value) action regardless if it was initially added into the CR
 	// https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
-	// Therefore we can safely add the reboot action regardless if it was initially added into the CR
 	fenceAgentParams = appendParamToSlice(fenceAgentParams, parameterActionName, parameterActionValue)
 
-	// append node parameters
-	nodeName := v1alpha1.NodeName(getNodeName(far))
-	for paramName, nodeMap := range far.Spec.NodeParameters {
-		if nodeVal, isFound := nodeMap[nodeName]; isFound {
-			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
-		} else {
-			err := errors.New(errorMissingNodeParams)
-			logger.Error(err, "Missing matching nodeParam and CR's name")
-			return nil, err
-		}
-	}
 	return fenceAgentParams, nil
 }
 
