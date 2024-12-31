@@ -50,6 +50,7 @@ RUN dnf install -y dnf-plugins-core \
     fence-agents-eaton-snmp fence-agents-emerson fence-agents-eps fence-agents-ibmblade fence-agents-ifmib fence-agents-ilo2 \
     fence-agents-intelmodular fence-agents-ipdu fence-agents-ipmilan fence-agents-redfish fence-agents-rhevm \
     fence-agents-vmware-rest fence-agents-vmware-soap \
+    fence-agents-kubevirt fence-agents-ibm-powervs fence-agents-ibm-vpc \
     fence-agents-aws fence-agents-azure-arm fence-agents-gce \
     && dnf clean all -y
 
