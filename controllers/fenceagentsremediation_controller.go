@@ -248,7 +248,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		switch far.Spec.RemediationStrategy {
 		case v1alpha1.ResourceDeletionRemediationStrategy, "":
 			// Basically RemediationStrategy should be set to ResourceDeletion strategy as the default strategy.
-			// However it will be empty when the CS was created when ResourceDeletion strategy was the only strategy.
+			// However, it will be empty when the CS was created when ResourceDeletion strategy was the only strategy.
 			// In this case, the empty strategy should be treated as if ResourceDeletion strategy selected.
 			r.Log.Info("Remediation strategy is ResourceDeletion which explicitly deletes resources - manually deleting workload", "Node Name", req.Name)
 			commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonDeleteResources, utils.EventMessageDeleteResources)
@@ -338,7 +338,7 @@ func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
 }
 
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
-// or the CR's name don't match nodeParameter name or it has an action which is different than reboot, then return an error
+// or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
 func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, error) {
 	logger := ctrl.Log.WithName("build-fa-parameters")
 	if far.Spec.NodeParameters == nil || far.Spec.SharedParameters == nil {
@@ -347,32 +347,39 @@ func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation) ([]string, erro
 		return nil, err
 	}
 	var fenceAgentParams []string
-	// add shared parameters except the action parameter
+	fenceAgentParamNames := make(map[v1alpha1.ParameterName]bool)
+
+	// append shared parameters
 	for paramName, paramVal := range far.Spec.SharedParameters {
-		if paramName != parameterActionName {
-			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
-		} else if paramVal != parameterActionValue {
-			// --action attribute was selected but it is different than reboot
+		if paramName == parameterActionName && paramVal != parameterActionValue {
+			// --action parameter with a differnet value from reboot is not supported
 			err := errors.New("FAR doesn't support any other action than reboot")
 			logger.Error(err, "can't build CR with this action attribute", "action", paramVal)
 			return nil, err
+		} else if _, exist := fenceAgentParamNames[paramName]; !exist {
+			fenceAgentParamNames[paramName] = true
+			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
 		}
 	}
-	// if --action attribute was not selected, then its default value is reboot
-	// https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
-	// Therefore we can safely add the reboot action regardless if it was initially added into the CR
-	fenceAgentParams = appendParamToSlice(fenceAgentParams, parameterActionName, parameterActionValue)
 
+	nodeName := getNodeName(far)
 	// append node parameters
-	nodeName := v1alpha1.NodeName(getNodeName(far))
 	for paramName, nodeMap := range far.Spec.NodeParameters {
-		if nodeVal, isFound := nodeMap[nodeName]; isFound {
-			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
+		if nodeVal, isFound := nodeMap[v1alpha1.NodeName(nodeName)]; isFound {
+			if _, exist := fenceAgentParamNames[paramName]; !exist {
+				fenceAgentParamNames[paramName] = true
+				fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
+			}
 		} else {
 			err := errors.New(errorMissingNodeParams)
 			logger.Error(err, "Missing matching nodeParam and CR's name")
 			return nil, err
 		}
+	}
+	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
+	if _, exist := fenceAgentParamNames[parameterActionName]; !exist {
+		logger.Info("`action` parameter is missing, so we add it with the default value of `reboot`")
+		fenceAgentParams = appendParamToSlice(fenceAgentParams, parameterActionName, parameterActionValue)
 	}
 	return fenceAgentParams, nil
 }
