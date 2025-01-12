@@ -28,6 +28,7 @@ import (
 	commonEvents "github.com/medik8s/common/pkg/events"
 	commonResources "github.com/medik8s/common/pkg/resources"
 
+	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -132,13 +133,22 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return emptyResult, err
 	}
 
-	// Check NHC timeout annotation
+	// Check NHC timeout annotation and stop the agent, since remediation is no longer relevant (most likely because fixed by a different remediator)
 	if isTimedOutByNHC(far) {
 		r.Log.Info(utils.EventMessageRemediationStoppedByNHC)
-		r.Executor.Remove(far.GetUID())
+		r.stopAgentAndGetCrStatus(far, node.Name)
 		utils.UpdateConditions(utils.RemediationInterruptedByNHC, far, r.Log)
 		commonEvents.RemediationStoppedByNHC(r.Recorder, far)
-		return emptyResult, err
+
+		if far.GetDeletionTimestamp() != nil {
+			if res, err := r.removeFarTaints(far, node); res != emptyResult || err != nil {
+				return res, err
+			}
+			// Removing FAR CR finalizer so NHC deletion of the remediation can be completed
+			r.Log.Info("Removing finalizer of timed-out remediation deleted by NHC", "remediation name", far.GetName())
+			return emptyResult, r.removeFarFinalizer(far)
+		}
+		return emptyResult, nil
 	}
 
 	// Add finalizer when the CR is created
@@ -158,54 +168,12 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Info("CR's deletion timestamp is not zero, and FAR finalizer exists", "CR Name", req.Name)
 
 		if !meta.IsStatusConditionPresentAndEqual(far.Status.Conditions, commonConditions.SucceededType, metav1.ConditionTrue) {
-			processingCondition := meta.FindStatusCondition(far.Status.Conditions, commonConditions.ProcessingType).Status
-			fenceAgentActionSucceededCondition := meta.FindStatusCondition(far.Status.Conditions, utils.FenceAgentActionSucceededType).Status
-			succeededCondition := meta.FindStatusCondition(far.Status.Conditions, commonConditions.SucceededType).Status
-			r.Log.Info("FAR didn't finish remediate the node ", "CR Name", req.Name, "processing condition", processingCondition,
-				"fenceAgentActionSucceeded condition", fenceAgentActionSucceededCondition, "succeeded condition", succeededCondition)
-			r.Executor.Remove(far.GetUID())
+			r.stopAgentAndGetCrStatus(far, node.Name)
 		}
-
-		// remove out-of-service taint when using OutOfServiceTaint remediation
-		if far.Spec.RemediationStrategy == v1alpha1.OutOfServiceTaintRemediationStrategy {
-			r.Log.Info("Removing out-of-service taint", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
-			taint := utils.CreateOutOfServiceTaint()
-			if err := utils.RemoveTaint(r.Client, node.Name, taint); err != nil {
-				if apiErrors.IsConflict(err) {
-					r.Log.Error(err, "Failed to remove taint from node due to node update, retrying... ,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
-					return ctrl.Result{RequeueAfter: time.Second}, nil
-				} else if !apiErrors.IsNotFound(err) {
-					r.Log.Error(err, "Failed to remove taint from node,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
-					return emptyResult, err
-				}
-			}
-			r.Log.Info("out-of-service taint was removed", "Node Name", req.Name)
-			commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveOutOfServiceTaint, utils.EventMessageRemoveOutOfServiceTaint)
+		if res, err := r.removeFarTaints(far, node); res != emptyResult || err != nil {
+			return res, err
 		}
-
-		// remove node's taints
-		taint := utils.CreateRemediationTaint()
-		if err := utils.RemoveTaint(r.Client, node.Name, taint); err != nil {
-			if apiErrors.IsConflict(err) {
-				r.Log.Info("Failed to remove taint from node due to node update, retrying... ,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
-				return ctrl.Result{RequeueAfter: time.Second}, nil
-
-			} else if !apiErrors.IsNotFound(err) {
-				r.Log.Error(err, "Failed to remove taint from node,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
-				return emptyResult, err
-			}
-		}
-
-		r.Log.Info("FAR remediation taint was removed", "Node Name", node.Name)
-		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveRemediationTaint, utils.EventMessageRemoveRemediationTaint)
-		// remove finalizer
-		controllerutil.RemoveFinalizer(far, v1alpha1.FARFinalizer)
-		if err := r.Client.Update(context.Background(), far); err != nil {
-			return emptyResult, fmt.Errorf("failed to remove finalizer from CR - %w", err)
-		}
-		r.Log.Info("Finalizer was removed", "CR Name", req.Name)
-		commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonRemoveFinalizer, utils.EventMessageRemoveFinalizer)
-		return emptyResult, nil
+		return emptyResult, r.removeFarFinalizer(far)
 	}
 	// Add FAR (medik8s) remediation taint
 	taintAdded, err := utils.AppendTaint(r.Client, node.Name, utils.CreateRemediationTaint())
@@ -281,6 +249,64 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	return emptyResult, nil
+}
+
+// removeFarTaints removes the out-of-service and remeidaiton taints if present, and returns an error on failure
+func (r *FenceAgentsRemediationReconciler) removeFarTaints(far *v1alpha1.FenceAgentsRemediation, node *corev1.Node) (ctrl.Result, error) {
+	emptyResult := ctrl.Result{}
+	// remove out-of-service taint when using OutOfServiceTaint remediation
+	if far.Spec.RemediationStrategy == v1alpha1.OutOfServiceTaintRemediationStrategy {
+		r.Log.Info("Removing out-of-service taint", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
+		taint := utils.CreateOutOfServiceTaint()
+		if err := utils.RemoveTaint(r.Client, node.Name, taint); err != nil {
+			if apiErrors.IsConflict(err) {
+				r.Log.Error(err, "Failed to remove taint from node due to node update, retrying... ,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
+				return ctrl.Result{RequeueAfter: time.Second}, nil
+			} else if !apiErrors.IsNotFound(err) {
+				r.Log.Error(err, "Failed to remove taint from node,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
+				return emptyResult, err
+			}
+		}
+		r.Log.Info("out-of-service taint was removed", "Node Name", node.Name)
+		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveOutOfServiceTaint, utils.EventMessageRemoveOutOfServiceTaint)
+	}
+
+	// remove FAR remediation taint
+	taint := utils.CreateRemediationTaint()
+	if err := utils.RemoveTaint(r.Client, node.Name, taint); err != nil {
+		if apiErrors.IsConflict(err) {
+			r.Log.Info("Failed to remove taint from node due to node update, retrying... ,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
+			return ctrl.Result{RequeueAfter: time.Second}, nil
+
+		} else if !apiErrors.IsNotFound(err) {
+			r.Log.Error(err, "Failed to remove taint from node,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
+			return emptyResult, err
+		}
+	}
+	r.Log.Info("FAR remediation taint was removed", "Node Name", node.Name)
+	commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveRemediationTaint, utils.EventMessageRemoveRemediationTaint)
+	return emptyResult, nil
+}
+
+// stopAgentAndGetCrStatus log FAR CR status and stops the agent's parallel execution
+func (r *FenceAgentsRemediationReconciler) stopAgentAndGetCrStatus(far *v1alpha1.FenceAgentsRemediation, nodeName string) {
+	processingCondition := meta.FindStatusCondition(far.Status.Conditions, commonConditions.ProcessingType).Status
+	fenceAgentActionSucceededCondition := meta.FindStatusCondition(far.Status.Conditions, utils.FenceAgentActionSucceededType).Status
+	succeededCondition := meta.FindStatusCondition(far.Status.Conditions, commonConditions.SucceededType).Status
+	r.Log.Info("FAR didn't finish to remediate the node", "Node Name", nodeName, "Agent Name", far.Spec.Agent, "processing condition", processingCondition,
+		"fenceAgentActionSucceeded condition", fenceAgentActionSucceededCondition, "succeeded condition", succeededCondition)
+	r.Executor.Remove(far.GetUID())
+}
+
+// removeFarFinalizer removes FAR finalizer, update CR, and emits an event
+func (r *FenceAgentsRemediationReconciler) removeFarFinalizer(far *v1alpha1.FenceAgentsRemediation) error {
+	controllerutil.RemoveFinalizer(far, v1alpha1.FARFinalizer)
+	if err := r.Client.Update(context.Background(), far); err != nil {
+		return fmt.Errorf("failed to remove finalizer from CR - %w", err)
+	}
+	r.Log.Info("Finalizer was removed", "CR Name", far.Name)
+	commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonRemoveFinalizer, utils.EventMessageRemoveFinalizer)
+	return nil
 }
 
 // isTimedOutByNHC checks if NHC set a timeout annotation on the CR
