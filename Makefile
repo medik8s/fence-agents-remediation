@@ -27,6 +27,8 @@ OCP_VERSION = 4.14
 YQ_API_VERSION = v4
 YQ_VERSION = v4.44.2
 
+BLUE_ICON_PATH = "./config/assets/medik8s_blue_icon.png"
+
 # IMAGE_REGISTRY used to indicate the registery/group for the operator, bundle and catalog
 IMAGE_REGISTRY ?= quay.io/medik8s
 export IMAGE_REGISTRY
@@ -259,7 +261,7 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 
 ##@ Bundle Creation Addition
 ## Some addition to bundle creation in the bundle
-DEFAULT_ICON_BASE64 := $(shell base64 --wrap=0 ./config/assets/medik8s_blue_icon.png)
+DEFAULT_ICON_BASE64 := $(shell base64 --wrap=0 ${BLUE_ICON_PATH})
 export ICON_BASE64 ?= ${DEFAULT_ICON_BASE64}
 export CSV ?="./bundle/manifests/$(OPERATOR_NAME).clusterserviceversion.yaml"
 
