@@ -9,22 +9,22 @@ COPY go.mod go.mod
 COPY go.sum go.sum
 
 RUN \
-    # get Go version from mod file
+    # Get Go version from mod file
     export GO_VERSION=$(grep -oE "go [[:digit:]]\.[[:digit:]][[:digit:]]" go.mod | awk '{print $2}') && \
     echo ${GO_VERSION} && \
-    # find filename for latest z version from Go download page
+    # Find filename for latest z version from Go download page
     export GO_FILENAME=$(curl -sL 'https://go.dev/dl/?mode=json&include=all' | jq -r "[.[] | select(.version | startswith(\"go${GO_VERSION}\"))][0].files[] | select(.os == \"linux\" and .arch == \"amd64\") | .filename") && \
     echo ${GO_FILENAME} && \
-    # download and unpack
+    # Download and unpack
     curl -sL -o go.tar.gz "https://golang.org/dl/${GO_FILENAME}" && \
     tar -C /usr/local -xzf go.tar.gz && \
     rm go.tar.gz
 
-# add Go directory to PATH
+# Add Go directory to PATH
 ENV PATH="${PATH}:/usr/local/go/bin"
 RUN go version
 
-# Copy the go source
+# Copy the Go source
 COPY main.go main.go
 COPY api/ api/
 COPY controllers/ controllers/
