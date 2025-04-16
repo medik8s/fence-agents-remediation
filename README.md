@@ -187,7 +187,6 @@ The FAR CR, `FenceAgentsRemediation`, is created by the admin and is used to tri
 The CR includes the following parameters:
 
 * `agent` - fence agent name. File name which is validated (by kubebuilder and Webhook) against a list of supported agents in the FAR pod.
-* `credentialarameters` - credential parameters for accessing the node to be remediated.
 * `sharedparameters` - cluster wide parameters for executing the fence agent.
 * `nodeparameters` - node specific parameters for executing the fence agent.
 * `retrycount` - number of times to retry the fence agent in case of failure. The default is 5.
@@ -196,6 +195,8 @@ The CR includes the following parameters:
 * `remediationStrategy` - either `OutOfServiceTaint` or `ResourceDeletion`:
     * `OutOfServiceTaint`: This remediation strategy implicitly causes the deletion of the pods and the detachment of the associated volumes on the node. It achieves this by placing the [`OutOfServiceTaint` taint](https://kubernetes.io/docs/reference/labels-annotations-taints/#node-kubernetes-io-out-of-service) on the node.
     * `ResourceDeletion`: This remediation strategy deletes the pods on the node.
+* `sharedSecretName` - the name of the Secret containing cluster-wide parameters. Defaults to "fence-agents-credentials-shared", but can be overridden by the user.
+* `nodeSecretNames` - is mapping the node name to the Secret name which contains params relevant for that node.
 
 The FenceAgentsRemediation CR is created by the administrator and is used to trigger the fence agent on a specific node. The CR includes an *agent* field for the fence agent name, *sharedparameters* field with all the shared, not specific to a node, parameters, and a *nodeparameters* field to specify the parameters for the fenced node.
 For better understanding please see the below example of FenceAgentsRemediation CR for node `worker-1` (see it also as the [sample FAR](https://github.com/medik8s/fence-agents-remediation/blob/main/config/samples/fence-agents-remediation_v1alpha1_fenceagentsremediation.yaml)):
@@ -210,8 +211,6 @@ spec:
   retrycount: 5
   retryinterval: "5s"
   timeout: "60s"
-  credentialparameters:
-    --password
   sharedparameters:
     --username: "admin"
     --lanplus: ""
@@ -226,6 +225,37 @@ spec:
       worker-1: "6234"
       worker-2: "6235"
   remediationStrategy: OutOfServiceTaint
+  sharedSecretName: fence-agents-credentials-shared
+  nodeSecretNames:
+    worker-0: fence-agents-credentials-worker0
+    worker-1: fence-agents-credentials-worker1
+    master-0: fence-agents-credentials-master0
+
+```
+
+#### Secret Support:
+
+* You can define:
+
+  * A **shared Secret** containing parameters used across all nodes.
+
+  * **Node-specific Secrets**, use `nodeSecretNames` to define a mapping between each node to the secret it should consume.
+
+* If a parameter exists in both a shared and a node Secret, the **node Secret value takes precedence**.
+
+If a parameter is defined in both a Secret and in the `sharedparameters` or `nodeparameters` fields of the CR, a **validation error will occur** to prevent ambiguity.
+
+Here is an example for a Secret
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+name: fence-agents-credentials-worker0
+namespace: openshift-workload-availability
+type: Opaque
+data:
+  --password: eXl5eQ== # "yyyy" base64 encoded
+
 ```
 
 ## Tests

@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
+	"maps"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -48,14 +48,14 @@ import (
 
 const (
 	// errors
-	errorMissingParams      = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
-	errorMissingNodeParams  = "node parameter is required, and cannot be empty"
-	errorFailFetchingSecret = "failed to fetch secret key `%s` from secret `%s` at namespace `%s`: %w"
+	errorMissingParams             = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
+	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR param"
+	errorFailGettingSecret         = "failed to get secret `%s` at namespace `%s`: %w"
 
 	SuccessFAResponse    = "Success: Rebooted"
-	parameterActionName  = "--action"
+	parameterActionName  = "--" + actionName
+	actionName           = "action"
 	parameterActionValue = "reboot"
-	DefaultSecretName    = "defaultSecret"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
@@ -74,15 +74,15 @@ func (r *FenceAgentsRemediationReconciler) SetupWithManager(mgr ctrl.Manager) er
 		Complete(r)
 }
 
-//+kubebuilder:rbac:groups=storage.k8s.io,resources=volumeattachments,verbs=get;list;watch;delete
-//+kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
-//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;delete;deletecollection
-//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
-//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;update;delete
-//+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
-//+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations/finalizers,verbs=update
+// +kubebuilder:rbac:groups=storage.k8s.io,resources=volumeattachments,verbs=get;list;watch;delete
+// +kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;delete;deletecollection
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch,namespace=system
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;update;delete
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
+// +kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -100,7 +100,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	emptyResult := ctrl.Result{}
 	requeueImmediately := ctrl.Result{Requeue: true}
 
-	// Fetch the FenceAgentsRemediation instance
+	// Get the FenceAgentsRemediation instance
 	far := &v1alpha1.FenceAgentsRemediation{}
 	if err := r.Get(ctx, req.NamespacedName, far); err != nil {
 		if apiErrors.IsNotFound(err) {
@@ -231,15 +231,16 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		r.Log.Info("Build fence agent command line", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
-		faParams, err := buildFenceAgentParams(far, ctx, r.Client)
+		faParams, isRetryRequired, err := r.buildFenceAgentParams(ctx, far)
 		if err != nil {
-			r.Log.Error(err, "Invalid credential/shared/node parameter from CR", "Node Name", node.Name, "CR Name", req.Name)
-			return emptyResult, nil
+			if !isRetryRequired {
+				return emptyResult, nil
+			}
+			return emptyResult, err
 		}
 
-		cmd := append([]string{far.Spec.Agent}, faParams...)
-		//TODO remove the below change after testing
-		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID(), "command", cmd)
+		cmd := append([]string{far.Spec.Agent}, mapToSliceConvert(faParams)...)
+		r.Log.Info("Execute the fence agent", "Fence Agent", far.Spec.Agent, "Node Name", node.Name, "FAR uid", far.GetUID(), "Parameters", maps.Keys(faParams))
 		r.Executor.AsyncExecute(ctx, far.GetUID(), cmd, far.Spec.RetryCount, far.Spec.RetryInterval.Duration, far.Spec.Timeout.Duration)
 		commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonFenceAgentExecuted, utils.EventMessageFenceAgentExecuted)
 		return emptyResult, nil
@@ -273,7 +274,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 				commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonAddOutOfServiceTaint, utils.EventMessageAddOutOfServiceTaint)
 			}
 		default:
-			//this should never happen since we enforce valid values with kubebuilder
+			// this should never happen since we enforce valid values with kubebuilder
 			err := errors.New("unsupported remediation strategy")
 			r.Log.Error(err, "Encountered unsupported remediation strategy. Please check template spec", "strategy", far.Spec.RemediationStrategy)
 			return emptyResult, nil
@@ -287,6 +288,15 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	return emptyResult, nil
+}
+
+// mapToSliceConvert converts param value map to slice
+func mapToSliceConvert(fenceAgentParams map[v1alpha1.ParameterName]string) []string {
+	fenceAgentParamsSlice := make([]string, 0, len(fenceAgentParams))
+	for paramName, paramVal := range fenceAgentParams {
+		fenceAgentParamsSlice = appendParamToSlice(fenceAgentParamsSlice, paramName, paramVal)
+	}
+	return fenceAgentParamsSlice
 }
 
 // isTimedOutByNHC checks if NHC set a timeout annotation on the CR
@@ -331,6 +341,49 @@ func (r *FenceAgentsRemediationReconciler) updateStatus(ctx context.Context, far
 	return nil
 }
 
+// collectRemediationSecretParams collects the parameters from the shared secret and the node secret
+func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (map[string]string, error) {
+	secretParams := map[string]string{}
+	var err error
+
+	// collect secret params from shared secret
+	if far.Spec.SharedSecretName != nil {
+		secretParams, err = r.collectSecretParams(ctx, *far.Spec.SharedSecretName, far.Namespace)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// collect secret params from the node's secret
+	nodeSecretName, isFound := far.Spec.NodeSecretNames[v1alpha1.NodeName(getNodeName(far))]
+	var nodeSecretParams map[string]string
+	if isFound {
+		nodeSecretParams, err = r.collectSecretParams(ctx, nodeSecretName, far.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		// Apply node secret params, in case param exist both in shared and node, node param will override the shared.
+		maps.Copy(secretParams, nodeSecretParams)
+	}
+	return secretParams, nil
+}
+
+// collectSecretParams reads and adds the secret params if they are available, otherwise returns an error
+func (r *FenceAgentsRemediationReconciler) collectSecretParams(ctx context.Context, secretName, namespace string) (map[string]string, error) {
+	secretParams := make(map[string]string)
+	secret, err := r.getSecret(ctx, client.ObjectKey{Name: secretName, Namespace: namespace})
+	if err != nil {
+		return nil, fmt.Errorf(errorFailGettingSecret, secretName, namespace, err)
+	}
+	// fill secret params from secret
+	if secret != nil {
+		for secretKey, secretVal := range secret.Data {
+			secretParams[secretKey] = string(secretVal)
+			r.Log.Info("found a value from secret", "secret name", secretName, "parameter name", secretKey)
+		}
+	}
+	return secretParams, nil
+}
+
 // getNodeName checks for the node name in far's commonAnnotations.NodeNameAnnotation if it does not exist it assumes the node name equals to far CR's name and return it.
 func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
 	ann := far.GetAnnotations()
@@ -343,115 +396,111 @@ func getNodeName(far *v1alpha1.FenceAgentsRemediation) string {
 	return far.GetName()
 }
 
-// fetchSecret fetches a secret and returns an error on failure
-func fetchSecret(ctx context.Context, c client.Client, secretKeyObj client.ObjectKey) (*corev1.Secret, error) {
+// getSecret gets a secret returns an error on failure
+func (r *FenceAgentsRemediationReconciler) getSecret(ctx context.Context, secretKeyObj client.ObjectKey) (*corev1.Secret, error) {
 	secret := &corev1.Secret{}
-	if err := c.Get(ctx, secretKeyObj, secret); err != nil {
+	if err := r.Get(ctx, secretKeyObj, secret); err != nil && !apiErrors.IsNotFound(err) {
+		r.Log.Error(err, "failed to get secret", "secret name", secretKeyObj.Name, "namespace", secretKeyObj.Namespace)
 		return nil, err
+	} else if apiErrors.IsNotFound(err) {
+		return nil, nil
 	}
 	return secret, nil
 }
 
-// resolveParameterValueFromSecret resolve parameter value from secret if exist, otherwise returns an error
-func resolveParameterValueFromSecret(ctx context.Context, c client.Client, far *v1alpha1.FenceAgentsRemediation, paramName v1alpha1.ParameterName) (string, error) {
-	var secret *corev1.Secret
-	var err error
-	logger := ctrl.Log.WithName("resolve-value-from-secret")
-	secretName := far.Name
-	// fetch secret/node name from remediation's annotation if present
-	if annotatedName, exist := far.Annotations["remediation.medik8s.io/node-name"]; exist {
-		secretName = annotatedName
-	}
-	secret, err = fetchSecret(ctx, c, client.ObjectKey{Name: secretName, Namespace: far.Namespace})
-	if err != nil {
-		if apiErrors.IsNotFound(err) {
-			// when there is no specefic secret, then we try the default secret
-			logger.Info("secret is missing - try default secret", "secret name", secretName, "default secret", DefaultSecretName, "namespace", far.Namespace, "paramter mame", string(paramName))
-			secretName = DefaultSecretName
-			secret, err = fetchSecret(ctx, c, client.ObjectKey{Name: secretName, Namespace: far.Namespace})
-		}
-		if err != nil {
-			logger.Error(err, "failed to fetch secret", "secret name", secretName, "namespace", far.Namespace)
-			return "", fmt.Errorf(errorFailFetchingSecret, paramName, secretName, far.Namespace, err)
-		}
-	}
-	// Extract the secret value
-	secretValue, exists := secret.Data[string(paramName)]
-	if !exists {
-		return "", fmt.Errorf("secret key `%s` was not found in secret `%s` at namespace `%s`", paramName, secretName, far.Namespace)
-	}
-	logger.Info("found a value from secret", "secret name", secretName, "paramter mame", string(paramName), "secret value", secretValue)
-
-	return string(secretValue), nil
-}
-
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
 // or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
-func buildFenceAgentParams(far *v1alpha1.FenceAgentsRemediation, ctx context.Context, c client.Client) ([]string, error) {
-	logger := ctrl.Log.WithName("build-fa-parameters")
-	if far.Spec.NodeParameters == nil || far.Spec.SharedParameters == nil {
-		err := errors.New(errorMissingParams)
-		logger.Error(err, "Missing parameters")
-		return nil, err
+func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (map[v1alpha1.ParameterName]string, bool, error) {
+	nodeName := getNodeName(far)
+	secretParams, err := r.collectRemediationSecretParams(ctx, far)
+	if err != nil {
+		r.Log.Error(err, "Failed collecting secrets data", "Node Name", nodeName, "CR Name", far.Name)
+		return nil, true, err
 	}
-	var fenceAgentParams []string
-	fenceAgentParamNames := make(map[v1alpha1.ParameterName]bool)
+
+	fenceAgentParams := make(map[v1alpha1.ParameterName]string)
 
 	// append shared parameters
 	for paramName, paramVal := range far.Spec.SharedParameters {
-		if paramName == parameterActionName && paramVal != parameterActionValue {
-			// --action parameter with a differnet value from reboot is not supported
-			err := errors.New("FAR doesn't support any other action than reboot")
-			logger.Error(err, "can't build CR with this action attribute", "action", paramVal)
-			return nil, err
-		} else if _, exist := fenceAgentParamNames[paramName]; !exist {
-			fenceAgentParamNames[paramName] = true
-			fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, paramVal)
+		// Verify action must be reboot
+		if err := validateRebootAction(paramName, paramVal, r.Log); err != nil {
+			return nil, false, err
 		}
+		// Verify param isn't already defined
+		if err := validateUniqueParam(fenceAgentParams, paramName, r.Log); err != nil {
+			return nil, false, err
+		}
+		fenceAgentParams[paramName] = paramVal
 	}
 
-	nodeName := getNodeName(far)
 	// append node parameters
 	for paramName, nodeMap := range far.Spec.NodeParameters {
 		if nodeVal, isFound := nodeMap[v1alpha1.NodeName(nodeName)]; isFound {
-			if _, exist := fenceAgentParamNames[paramName]; !exist {
-				fenceAgentParamNames[paramName] = true
-				fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, nodeVal)
+			// Verify action must be reboot
+			if err := validateRebootAction(paramName, nodeVal, r.Log); err != nil {
+				return nil, false, err
 			}
+			// For node params we don't enforce uniqueness node param value will override shared param
+			if _, exist := fenceAgentParams[paramName]; exist {
+				r.Log.Info("Shared parameter is overridden by node parameter", "parameter", paramName)
+			}
+			fenceAgentParams[paramName] = nodeVal
+
 		} else {
-			err := errors.New(errorMissingNodeParams)
-			logger.Error(err, "Missing matching nodeParam and CR's name")
-			return nil, err
+			r.Log.Info("Node parameter is missing for this node", "parameter name", paramName, "node name", nodeName)
 		}
 	}
 
-	// append credential parameters
-	for _, paramName := range far.Spec.CredentialParameters {
-		resolvedVal, err := resolveParameterValueFromSecret(ctx, c, far, paramName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve credential parameter: %w", err)
-		} else {
-			if _, exist := fenceAgentParamNames[paramName]; !exist {
-				fenceAgentParamNames[paramName] = true
-				fenceAgentParams = appendParamToSlice(fenceAgentParams, paramName, resolvedVal)
-			}
+	// append secret parameters
+	for secretKey, secretVal := range secretParams {
+		secretParam := v1alpha1.ParameterName(secretKey)
+		// Verify action must be reboot
+		if err := validateRebootAction(secretParam, secretVal, r.Log); err != nil {
+			return nil, false, err
 		}
+		if err := validateUniqueParam(fenceAgentParams, secretParam, r.Log); err != nil {
+			return nil, false, err
+		}
+		fenceAgentParams[secretParam] = secretVal
+	}
+
+	if len(fenceAgentParams) == 0 {
+		err := errors.New(errorMissingParams)
+		r.Log.Error(err, "Missing parameters")
+		return nil, false, err
 	}
 
 	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
-	if _, exist := fenceAgentParamNames[parameterActionName]; !exist {
-		logger.Info("`action` parameter is missing, so we add it with the default value of `reboot`")
-		fenceAgentParams = appendParamToSlice(fenceAgentParams, parameterActionName, parameterActionValue)
+	if _, exist := fenceAgentParams[parameterActionName]; !exist {
+		r.Log.Info("`action` parameter is missing, so we add it with the default value of `reboot`")
+		fenceAgentParams[parameterActionName] = parameterActionValue
 	}
-	return fenceAgentParams, nil
+
+	return fenceAgentParams, false, nil
+}
+
+func validateRebootAction(paramName v1alpha1.ParameterName, paramVal string, logger logr.Logger) error {
+	if (paramName == actionName || paramName == parameterActionName) && paramVal != parameterActionValue {
+		// --action parameter with a different value from reboot is not supported
+		err := errors.New("FAR doesn't support any other action than reboot")
+		logger.Error(err, "can't build CR with this action attribute", "action", paramVal)
+		return err
+	}
+	return nil
+}
+
+func validateUniqueParam(fenceAgentParamNames map[v1alpha1.ParameterName]string, paramName v1alpha1.ParameterName, logger logr.Logger) error {
+	if _, exist := fenceAgentParamNames[paramName]; exist {
+		err := errors.New(errorParamDefinedMultipleTimes)
+		logger.Error(err, "can't build fence agents params a param is defined multiple times", "param name", paramName)
+		return err
+	}
+	return nil
 }
 
 // appendParamToSlice appends parameters in a key-value manner, when value can be empty
 func appendParamToSlice(fenceAgentParams []string, paramName v1alpha1.ParameterName, paramVal string) []string {
 	stringParam := string(paramName)
-	if !strings.HasPrefix(stringParam, "--") {
-		stringParam = "--" + stringParam
-	}
 	if paramVal != "" {
 		fenceAgentParams = append(fenceAgentParams, fmt.Sprintf("%s=%s", stringParam, paramVal))
 	} else {

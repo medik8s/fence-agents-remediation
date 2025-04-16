@@ -35,11 +35,10 @@ spec:
           have a fence_ prefix.
         displayName: Agent
         path: agent
-      - description: CredentialParameters are passed to the fencing agent according
-          to the node that is fenced, and the parameters values are fetched from a
-          known secret
-        displayName: Credential Parameters
-        path: credentialparameters
+      - description: NodeSecretNames maps the node name to the Secret name which contains
+          params relevant for that node.
+        displayName: Node Secret Names
+        path: nodeSecrets
       - description: NodeParameters are passed to the fencing agent according to the
           node that is fenced, since they are node specific
         displayName: Node Parameters
@@ -60,8 +59,12 @@ spec:
       - description: RetryInterval is the interval between each fencing agent execution
         displayName: Retry Interval
         path: retryinterval
-      - description: SharedParameters are passed to the fencing agent regardless of
-          which node is about to be fenced (i.e., they are common for all the nodes)
+      - description: SharedSecretName is the name of the Secret which will contain
+          params needed for FAR in order to remediate any node. Using this Secret
+          is optional.
+        displayName: Shared Secret Name
+        path: sharedSecretName
+      - description: SharedParameters are parameters common to all nodes
         displayName: Shared Parameters
         path: sharedparameters
       - description: Timeout is the timeout for each fencing agent execution
@@ -96,11 +99,10 @@ spec:
           have a fence_ prefix.
         displayName: Agent
         path: template.spec.agent
-      - description: CredentialParameters are passed to the fencing agent according
-          to the node that is fenced, and the parameters values are fetched from a
-          known secret
-        displayName: Credential Parameters
-        path: template.spec.credentialparameters
+      - description: NodeSecretNames maps the node name to the Secret name which contains
+          params relevant for that node.
+        displayName: Node Secret Names
+        path: template.spec.nodeSecrets
       - description: NodeParameters are passed to the fencing agent according to the
           node that is fenced, since they are node specific
         displayName: Node Parameters
@@ -121,8 +123,12 @@ spec:
       - description: RetryInterval is the interval between each fencing agent execution
         displayName: Retry Interval
         path: template.spec.retryinterval
-      - description: SharedParameters are passed to the fencing agent regardless of
-          which node is about to be fenced (i.e., they are common for all the nodes)
+      - description: SharedSecretName is the name of the Secret which will contain
+          params needed for FAR in order to remediate any node. Using this Secret
+          is optional.
+        displayName: Shared Secret Name
+        path: template.spec.sharedSecretName
+      - description: SharedParameters are parameters common to all nodes
         displayName: Shared Parameters
         path: template.spec.sharedparameters
       - description: Timeout is the timeout for each fencing agent execution
