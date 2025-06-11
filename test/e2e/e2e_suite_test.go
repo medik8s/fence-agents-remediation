@@ -43,6 +43,7 @@ var (
 
 	// The ns test pods are started in
 	testNsName = "far-test"
+	secretMap  map[string]string
 )
 
 func TestE2e(t *testing.T) {
@@ -108,7 +109,7 @@ var _ = BeforeSuite(func() {
 		err = k8sClient.Create(context.Background(), testNs)
 	}
 	Expect(err).ToNot(HaveOccurred(), "could not get or create test ns")
-
+	preTestsSetup()
 	debug()
 })
 
