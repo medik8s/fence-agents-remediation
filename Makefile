@@ -513,12 +513,13 @@ ocp-aws-credentials: ## Add CredentialsRequest for OCP on AWS
 
 .PHONY: test-e2e
 # -r: If set, ginkgo finds and runs test suites under the current directory recursively.
+# --timeout: Sets the maximum duration for the test run before Ginkgo stops the run (default is 1h)
 # --keep-going:  If set, failures from earlier test suites do not prevent later test suites from running.
 # --require-suite: If set, Ginkgo fails if there are ginkgo tests in a directory but no invocation of RunSpecs.
 # --vv: If set, emits with maximal verbosity - includes skipped and pending tests.
 test-e2e: ginkgo ## Run end to end (E2E) tests
 	@test -n "${KUBECONFIG}" -o -r ${HOME}/.kube/config || (echo "Failed to find kubeconfig in ~/.kube/config or no KUBECONFIG set"; exit 1)
-	$(GINKGO) -r --keep-going --require-suite --vv  -coverprofile cover.out ./test/e2e 
+	$(GINKGO) -r --timeout=90m --keep-going --require-suite --vv  -coverprofile cover.out ./test/e2e
 
 # Revert all version or build date related changes
 .PHONY: bundle-reset

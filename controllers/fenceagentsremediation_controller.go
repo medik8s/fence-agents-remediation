@@ -52,11 +52,13 @@ const (
 	errorMissingParams             = "nodeParameters or sharedParameters or both are missing, and they cannot be empty"
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR param"
 	errorFailGettingSecret         = "failed to get secret `%s` at namespace `%s`: %w"
+	errorUnsupportedAction         = "FAR doesn't support any other action than reboot and off"
 
-	SuccessFAResponse    = "Success: Rebooted"
-	parameterActionName  = "--" + actionName
-	actionName           = "action"
-	parameterActionValue = "reboot"
+	parameterActionName         = "--" + actionName
+	actionName                  = "action"
+	parameterRebootActionValue  = "reboot"
+	parameterOffActionValue     = "off"
+	parameterDefaultActionValue = parameterRebootActionValue
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
@@ -202,6 +204,9 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		faParams, isRetryRequired, err := r.buildFenceAgentParams(ctx, far)
 		if err != nil {
 			if !isRetryRequired {
+				if err.Error() == errorUnsupportedAction {
+					commonEvents.WarningEvent(r.Recorder, far, utils.EventReasonCrUnsupportedAction, utils.EventMessageCrUnsupportedAction)
+				}
 				return emptyResult, nil
 			}
 			return emptyResult, err
@@ -441,7 +446,7 @@ func (r *FenceAgentsRemediationReconciler) getSecret(ctx context.Context, secret
 }
 
 // buildFenceAgentParams collects the FAR's parameters for the node based on FAR CR, and if the CR is missing parameters
-// or the CR's name don't match nodeParameter name, or it has an action which is different from reboot, then return an error
+// or the CR's name don't match nodeParameter name, or it has an action which is different from reboot and off, then return an error
 func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (map[v1alpha1.ParameterName]string, bool, error) {
 	nodeName := getNodeName(far)
 	secretParams, err := r.collectRemediationSecretParams(ctx, far)
@@ -461,8 +466,8 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 			return nil, false, err
 		}
 
-		// Verify action must be reboot
-		if err := validateRebootAction(paramName, processedParamVal, r.Log); err != nil {
+		// Verify action must be reboot or off
+		if err := validateFenceAction(paramName, processedParamVal, r.Log); err != nil {
 			return nil, false, err
 		}
 		// Verify param isn't already defined
@@ -475,8 +480,8 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	// append node parameters
 	for paramName, nodeMap := range far.Spec.NodeParameters {
 		if nodeVal, isFound := nodeMap[v1alpha1.NodeName(nodeName)]; isFound {
-			// Verify action must be reboot
-			if err := validateRebootAction(paramName, nodeVal, r.Log); err != nil {
+			// Verify action must be reboot or off
+			if err := validateFenceAction(paramName, nodeVal, r.Log); err != nil {
 				return nil, false, err
 			}
 			// For node params we don't enforce uniqueness node param value will override shared param
@@ -493,8 +498,8 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	// append secret parameters
 	for secretKey, secretVal := range secretParams {
 		secretParam := v1alpha1.ParameterName(secretKey)
-		// Verify action must be reboot
-		if err := validateRebootAction(secretParam, secretVal, r.Log); err != nil {
+		// Verify action must be reboot or off
+		if err := validateFenceAction(secretParam, secretVal, r.Log); err != nil {
 			return nil, false, err
 		}
 		if err := validateUniqueParam(fenceAgentParams, secretParam, r.Log); err != nil {
@@ -512,16 +517,17 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
 	if _, exist := fenceAgentParams[parameterActionName]; !exist {
 		r.Log.Info("`action` parameter is missing, so we add it with the default value of `reboot`")
-		fenceAgentParams[parameterActionName] = parameterActionValue
+		fenceAgentParams[parameterActionName] = parameterDefaultActionValue
 	}
 
 	return fenceAgentParams, false, nil
 }
 
-func validateRebootAction(paramName v1alpha1.ParameterName, paramVal string, logger logr.Logger) error {
-	if (paramName == actionName || paramName == parameterActionName) && paramVal != parameterActionValue {
-		// --action parameter with a different value from reboot is not supported
-		err := errors.New("FAR doesn't support any other action than reboot")
+func validateFenceAction(paramName v1alpha1.ParameterName, paramVal string, logger logr.Logger) error {
+	if (paramName == actionName || paramName == parameterActionName) &&
+		(paramVal != parameterRebootActionValue && paramVal != parameterOffActionValue) {
+		// --action parameter with a different value from reboot or off is not supported
+		err := errors.New(errorUnsupportedAction)
 		logger.Error(err, "can't build CR with this action attribute", "action", paramVal)
 		return err
 	}
