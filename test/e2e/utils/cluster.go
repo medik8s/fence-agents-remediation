@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -119,4 +120,49 @@ func GetBMHNodeInfoList(machineClient *machineclient.Clientset) (map[v1alpha1.No
 		"worker-2": "6235",
 	}
 	return nodeList, nil
+}
+
+// GetPowerStatus returns node power status via machine-api
+func GetPowerStatus(machineClient *machineclient.Clientset, targetNodename string) (string, error) {
+	//  oc get machine -n openshift-machine-api MACHINE_NAME -o jsonpath='{.status.providerStatus.instanceState}'
+
+	machinename, err := FindMachineByNodeName(machineClient, targetNodename)
+	if err != nil {
+		return "", fmt.Errorf("failed to get machine name %s: %w", targetNodename, err)
+	}
+
+	machine, err := machineClient.MachineV1beta1().Machines(machinesNamespace).Get(context.TODO(), machinename, metav1.GetOptions{})
+
+	if err != nil || machine.Status.ProviderStatus == nil || machine.Status.ProviderStatus.Raw == nil {
+		return "", fmt.Errorf("providerStatus is nil for machine %s", machinename)
+	}
+
+	var status struct {
+		InstanceState *string `json:"instanceState,omitempty"`
+	}
+
+	if err := json.Unmarshal(machine.Status.ProviderStatus.Raw, &status); err != nil {
+		return "", fmt.Errorf("failed to unmarshal providerStatus for machine %q: %w", targetNodename, err)
+	}
+
+	return *status.InstanceState, err
+}
+
+// FindMachineByNodeName finds the Machine that matches the given Node name.
+func FindMachineByNodeName(machineClient *machineclient.Clientset, nodeName string) (string, error) {
+	machineList, err := machineClient.MachineV1beta1().Machines(machinesNamespace).List(context.TODO(), metav1.ListOptions{})
+
+	if err != nil {
+		return "", err
+	}
+
+	for _, machine := range machineList.Items {
+		for _, addr := range machine.Status.Addresses {
+			if addr.Type == "Hostname" && addr.Address == nodeName {
+				return machine.Name, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no machine found for node name %q", nodeName)
 }
