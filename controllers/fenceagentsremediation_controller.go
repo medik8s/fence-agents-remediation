@@ -43,6 +43,7 @@ import (
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
+	"github.com/medik8s/fence-agents-remediation/pkg/template"
 	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 )
 
@@ -422,15 +423,22 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 
 	// append shared parameters
 	for paramName, paramVal := range far.Spec.SharedParameters {
+		// Process template in parameter value
+		processedParamVal, err := template.ProcessParameterValue(paramVal, nodeName)
+		if err != nil {
+			r.Log.Error(err, "Failed to process template in shared parameter", "parameter", paramName, "value", paramVal, "node", nodeName)
+			return nil, false, err
+		}
+
 		// Verify action must be reboot
-		if err := validateRebootAction(paramName, paramVal, r.Log); err != nil {
+		if err := validateRebootAction(paramName, processedParamVal, r.Log); err != nil {
 			return nil, false, err
 		}
 		// Verify param isn't already defined
 		if err := validateUniqueParam(fenceAgentParams, paramName, r.Log); err != nil {
 			return nil, false, err
 		}
-		fenceAgentParams[paramName] = paramVal
+		fenceAgentParams[paramName] = processedParamVal
 	}
 
 	// append node parameters
