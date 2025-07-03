@@ -347,10 +347,14 @@ func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(ctx co
 	secretParams := map[string]string{}
 	var err error
 
-	// collect secret params from shared secret
 	if far.Spec.SharedSecretName != nil {
+		// collect secret params from shared secret
 		secretParams, err = r.collectSecretParams(ctx, *far.Spec.SharedSecretName, far.Namespace)
 		if err != nil {
+			return nil, err
+		}
+		// process secret params: replace nodeName template with the node name
+		if secretParams, err = r.processSecretParams(secretParams, *far.Spec.SharedSecretName, getNodeName(far)); err != nil {
 			return nil, err
 		}
 	}
@@ -366,6 +370,19 @@ func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(ctx co
 		maps.Copy(secretParams, nodeSecretParams)
 	}
 	return secretParams, nil
+}
+
+func (r *FenceAgentsRemediationReconciler) processSecretParams(secretParams map[string]string, secretName, nodeName string) (map[string]string, error) {
+	processedSecretParams := map[string]string{}
+	for key, val := range secretParams {
+		processedParamVal, err := template.ProcessParameterValue(val, nodeName)
+		if err != nil {
+			r.Log.Error(err, "Failed to process parameter value stored in secret", "param key", key, "secret name", secretName)
+			return nil, err
+		}
+		processedSecretParams[key] = processedParamVal
+	}
+	return processedSecretParams, nil
 }
 
 // collectSecretParams reads and adds the secret params if they are available, otherwise returns an error

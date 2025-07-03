@@ -316,6 +316,54 @@ var _ = Describe("FAR Controller", func() {
 				})
 
 			})
+			When("shared secret contains NodeName template", func() {
+				BeforeEach(func() {
+					sharedSecret = generateSecret(sharedSecretName, map[string][]byte{
+						"--systems-uri": []byte("/redfish/v1/Systems/{{.NodeName}}"),
+						"--hostname":    []byte("{{.NodeName}}.example.com"),
+						"--port":        []byte("623"), // No template, should be fine
+					})
+					underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+				})
+				It("should process NodeName template correctly", func() {
+					Eventually(func(g Gomega) {
+						g.Expect(storedCommand).To(ConsistOf([]string{
+							"fence_ipmilan",
+							"--lanplus",
+							"--password=password",
+							"--username=admin",
+							"--action=reboot",
+							"--ip=192.168.111.1",
+							"--systems-uri=/redfish/v1/Systems/worker-0",
+							"--hostname=worker-0.example.com",
+							"--port=623",
+							"--pass=abc",
+							"--pass2=abc2",
+							"--ipport=6233"}))
+					}, timeoutPreRemediation, pollInterval).Should(Succeed())
+				})
+			})
+
+			When("shared secret contains invalid NodeName template", func() {
+				BeforeEach(func() {
+					sharedSecret = generateSecret(sharedSecretName, map[string][]byte{
+						"--systems-uri": []byte("/redfish/v1/Systems/{{.NodeName"), // Missing closing brace
+						"--hostname":    []byte("{{.InvalidField}}"),               // Invalid field
+					})
+					underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+				})
+				It("should prevent fence agent execution due to template processing error", func() {
+					// No remediation should be executed due to template processing error
+					Consistently(func(g Gomega) {
+						g.Expect(storedCommand).To(BeEmpty())
+					}, timeoutPreRemediation, pollInterval).Should(Succeed())
+					// Taint is added before template processing takes place
+					verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddRemediationTaint, utils.EventMessageAddRemediationTaint)
+					// Actual execution does not happen because of the template processing error
+					verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonFenceAgentExecuted, utils.EventMessageFenceAgentExecuted)
+				})
+			})
+
 		})
 		When("creating valid FAR CR", func() {
 
