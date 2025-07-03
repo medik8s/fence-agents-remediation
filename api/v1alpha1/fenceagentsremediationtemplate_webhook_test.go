@@ -116,6 +116,69 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			})
 		})
 	})
+
+	Context("validating template syntax", func() {
+		It("should aggregate multiple template validation errors", func() {
+			// Create a template with multiple invalid template strings
+			farTemplate := &FenceAgentsRemediationTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "invalid-template",
+					Namespace: "test-namespace",
+				},
+				Spec: FenceAgentsRemediationTemplateSpec{
+					Template: FenceAgentsRemediationTemplateResource{
+						Spec: FenceAgentsRemediationSpec{
+							Agent: validAgentName,
+							SharedParameters: map[ParameterName]string{
+								"--systems-uri": "/redfish/v1/Systems/{{.NodeName", // Missing closing brace
+								"--hostname":    "{{.InvalidField}}",               // Invalid field
+								"--port":        "{{.NodeName}}.com",               // Valid template
+								"--invalid":     "/path/{{.NodeName",               // Another missing closing brace
+							},
+						},
+					},
+				},
+			}
+
+			// Validate and expect aggregated errors
+			warnings, err := farTemplate.ValidateCreate()
+			Expect(warnings).To(BeEmpty())
+			Expect(err).To(HaveOccurred())
+
+			// Check that the error message contains information about multiple failures
+			errorMsg := err.Error()
+			Expect(errorMsg).To(ContainSubstring("--systems-uri"))
+			Expect(errorMsg).To(ContainSubstring("--hostname"))
+			Expect(errorMsg).To(ContainSubstring("--invalid"))
+			// The valid parameter should not appear in error message
+			Expect(errorMsg).ToNot(ContainSubstring("--port"))
+		})
+
+		It("should succeed when all templates are valid", func() {
+			farTemplate := &FenceAgentsRemediationTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "valid-template",
+					Namespace: "test-namespace",
+				},
+				Spec: FenceAgentsRemediationTemplateSpec{
+					Template: FenceAgentsRemediationTemplateResource{
+						Spec: FenceAgentsRemediationSpec{
+							Agent: validAgentName,
+							SharedParameters: map[ParameterName]string{
+								"--systems-uri": "/redfish/v1/Systems/{{.NodeName}}",
+								"--hostname":    "{{.NodeName}}.example.com",
+								"--port":        "623", // No template, should be fine
+							},
+						},
+					},
+				},
+			}
+
+			warnings, err := farTemplate.ValidateCreate()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
+	})
 })
 
 func getTestFARTemplate(agentName string) *FenceAgentsRemediationTemplate {
