@@ -375,7 +375,7 @@ func (r *FenceAgentsRemediationReconciler) collectRemediationSecretParams(ctx co
 func (r *FenceAgentsRemediationReconciler) processSecretParams(secretParams map[string]string, secretName, nodeName string) (map[string]string, error) {
 	processedSecretParams := map[string]string{}
 	for key, val := range secretParams {
-		processedParamVal, err := template.ProcessParameterValue(val, nodeName)
+		processedParamVal, err := template.RenderParameterTemplate(val, nodeName)
 		if err != nil {
 			r.Log.Error(err, "Failed to process parameter value stored in secret", "param key", key, "secret name", secretName)
 			return nil, err
@@ -441,7 +441,7 @@ func (r *FenceAgentsRemediationReconciler) buildFenceAgentParams(ctx context.Con
 	// append shared parameters
 	for paramName, paramVal := range far.Spec.SharedParameters {
 		// Process template in parameter value
-		processedParamVal, err := template.ProcessParameterValue(paramVal, nodeName)
+		processedParamVal, err := template.RenderParameterTemplate(paramVal, nodeName)
 		if err != nil {
 			r.Log.Error(err, "Failed to process template in shared parameter", "parameter", paramName, "value", paramVal, "node", nodeName)
 			return nil, false, err

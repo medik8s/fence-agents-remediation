@@ -29,12 +29,12 @@ func TestTemplate(t *testing.T) {
 }
 
 var _ = Describe("Template Processing", func() {
-	Describe("ProcessParameterValue", func() {
+	Describe("RenderParameterTemplate", func() {
 		It("should replace NodeName placeholder", func() {
 			paramValue := "/redfish/v1/Systems/{{.NodeName}}"
 			nodeName := "worker-1"
 
-			result, err := ProcessParameterValue(paramValue, nodeName)
+			result, err := RenderParameterTemplate(paramValue, nodeName)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal("/redfish/v1/Systems/worker-1"))
 		})
@@ -43,7 +43,7 @@ var _ = Describe("Template Processing", func() {
 			paramValue := "https://{{.NodeName}}.example.com/{{.NodeName}}/power"
 			nodeName := "worker-1"
 
-			result, err := ProcessParameterValue(paramValue, nodeName)
+			result, err := RenderParameterTemplate(paramValue, nodeName)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal("https://worker-1.example.com/worker-1/power"))
 		})
@@ -52,7 +52,7 @@ var _ = Describe("Template Processing", func() {
 			paramValue := "/redfish/v1/Systems/{{.WrongTemplate}}"
 			nodeName := "worker-1"
 
-			_, err := ProcessParameterValue(paramValue, nodeName)
+			_, err := RenderParameterTemplate(paramValue, nodeName)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("can't evaluate field WrongTemplate"))
 		})
@@ -61,7 +61,7 @@ var _ = Describe("Template Processing", func() {
 			paramValue := "/redfish/v1/Systems/{{.NodeName}}"
 			nodeName := ""
 
-			_, err := ProcessParameterValue(paramValue, nodeName)
+			_, err := RenderParameterTemplate(paramValue, nodeName)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("nodeName cannot be empty"))
 		})
@@ -70,7 +70,7 @@ var _ = Describe("Template Processing", func() {
 			paramValue := "/redfish/v1/Systems/{{.NodeName"
 			nodeName := "worker-1"
 
-			_, err := ProcessParameterValue(paramValue, nodeName)
+			_, err := RenderParameterTemplate(paramValue, nodeName)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to parse template"))
 		})
@@ -79,7 +79,7 @@ var _ = Describe("Template Processing", func() {
 			paramValue := "/redfish/v1/Systems/static-value"
 			nodeName := "worker-1"
 
-			result, err := ProcessParameterValue(paramValue, nodeName)
+			result, err := RenderParameterTemplate(paramValue, nodeName)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal("/redfish/v1/Systems/static-value"))
 		})

@@ -18,6 +18,24 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			})
 		})
 
+		When("template has only shared parameters and no node parameters", func() {
+			It("should be accepted", func() {
+				farTemplate := getTestFARTemplate(validAgentName)
+				farTemplate.Spec.Template.Spec.SharedParameters = map[ParameterName]string{
+					"ip":       "192.168.1.100",
+					"username": "admin",
+					"password": "secret",
+				}
+				// Explicitly ensure no node parameters
+				farTemplate.Spec.Template.Spec.NodeParameters = nil
+
+				warnings, err := farTemplate.ValidateCreate()
+				Expect(err).NotTo(HaveOccurred())
+				// No warnings expected about node-specific parameters since there are none
+				Expect(warnings).To(BeEmpty())
+			})
+		})
+
 		When("agent name was not found ", func() {
 			It("should be rejected", func() {
 				farTemplate := getTestFARTemplate(invalidAgentName)
@@ -131,7 +149,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 							Agent: validAgentName,
 							SharedParameters: map[ParameterName]string{
 								"--systems-uri": "/redfish/v1/Systems/{{.NodeName", // Missing closing brace
-								"--hostname":    "{{.InvalidField}}",               // Invalid field
+								"--hostname":    "{{.InvalidField}}",               // Unsupported name, only NodeName is supported
 								"--port":        "{{.NodeName}}.com",               // Valid template
 								"--invalid":     "/path/{{.NodeName",               // Another missing closing brace
 							},

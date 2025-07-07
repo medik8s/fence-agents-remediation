@@ -17,18 +17,13 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"fmt"
-
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
-	"github.com/medik8s/fence-agents-remediation/pkg/template"
 )
 
 var (
@@ -64,55 +59,20 @@ func (farTemplate *FenceAgentsRemediationTemplate) Default() {
 
 var _ webhook.Validator = &FenceAgentsRemediationTemplate{}
 
-// validateTemplateParameters validates template syntax in shared parameters and collects all errors
-func validateTemplateParameters(spec *FenceAgentsRemediationSpec) error {
-	var validationErrors []error
-
-	// Validate template syntax in shared parameters
-	for paramName, paramValue := range spec.SharedParameters {
-		if _, err := template.ProcessParameterValue(paramValue, "dummy-node-name"); err != nil {
-			validationErrors = append(validationErrors, fmt.Errorf("invalid template syntax in shared parameter %s: %w", paramName, err))
-		}
-	}
-
-	return errors.NewAggregate(validationErrors)
-}
-
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (farTemplate *FenceAgentsRemediationTemplate) ValidateCreate() (admission.Warnings, error) {
 	webhookFARTemplateLog.Info("validate create", "name", farTemplate.Name)
-
-	// Aggregate template validation and FAR validation errors
-	aggregated := errors.NewAggregate([]error{
-		validateTemplateParameters(&farTemplate.Spec.Template.Spec),
-		validateFARTemplateSpec(&farTemplate.Spec.Template.Spec),
-	})
-
-	return admission.Warnings{}, aggregated
+	return validateFAR(&farTemplate.Spec.Template.Spec)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (farTemplate *FenceAgentsRemediationTemplate) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	webhookFARTemplateLog.Info("validate update", "name", farTemplate.Name)
-
-	// Aggregate template validation and FAR validation errors
-	aggregated := errors.NewAggregate([]error{
-		validateTemplateParameters(&farTemplate.Spec.Template.Spec),
-		validateFARTemplateSpec(&farTemplate.Spec.Template.Spec),
-	})
-
-	return admission.Warnings{}, aggregated
+	return validateFAR(&farTemplate.Spec.Template.Spec)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (farTemplate *FenceAgentsRemediationTemplate) ValidateDelete() (admission.Warnings, error) {
 	webhookFARTemplateLog.Info("validate delete", "name", farTemplate.Name)
 	return nil, nil
-}
-
-// validateFARTemplateSpec validates the underlying FenceAgentsRemediationSpec
-func validateFARTemplateSpec(spec *FenceAgentsRemediationSpec) error {
-	warnings, err := validateFAR(spec)
-	_ = warnings // Ignore warnings for now
-	return err
 }

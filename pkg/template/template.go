@@ -27,9 +27,9 @@ type TemplateData struct {
 	NodeName string `json:"nodeName"`
 }
 
-// ProcessParameterValue processes a parameter value string with Go template syntax
+// RenderParameterTemplate processes a parameter value string with Go template syntax
 // It replaces placeholders like {{.NodeName}} with actual values
-func ProcessParameterValue(paramValue string, nodeName string) (string, error) {
+func RenderParameterTemplate(paramValue string, nodeName string) (string, error) {
 	if nodeName == "" {
 		return "", fmt.Errorf("nodeName cannot be empty")
 	}
