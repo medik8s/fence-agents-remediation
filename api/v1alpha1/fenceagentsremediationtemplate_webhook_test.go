@@ -131,7 +131,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 							Agent: validAgentName,
 							SharedParameters: map[ParameterName]string{
 								"--systems-uri": "/redfish/v1/Systems/{{.NodeName", // Missing closing brace
-								"--hostname":    "{{.InvalidField}}",               // Invalid field
+								"--hostname":    "{{.InvalidField}}",               // Unsupported name, only NodeName is supported
 								"--port":        "{{.NodeName}}.com",               // Valid template
 								"--invalid":     "/path/{{.NodeName",               // Another missing closing brace
 							},

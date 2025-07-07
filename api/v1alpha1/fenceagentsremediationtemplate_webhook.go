@@ -70,7 +70,7 @@ func validateTemplateParameters(spec *FenceAgentsRemediationSpec) error {
 
 	// Validate template syntax in shared parameters
 	for paramName, paramValue := range spec.SharedParameters {
-		if _, err := template.ProcessParameterValue(paramValue, "dummy-node-name"); err != nil {
+		if _, err := template.RenderParameterTemplate(paramValue, "dummy-node-name"); err != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("invalid template syntax in shared parameter %s: %w", paramName, err))
 		}
 	}
