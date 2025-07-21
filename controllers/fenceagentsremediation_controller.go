@@ -141,16 +141,15 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	if isTimedOutByNHC(far) {
 		r.Executor.Remove(far.GetUID())
 		if far.DeletionTimestamp != nil {
-			//Removing finalizer so NHC deletion of the remediation can be completed
+			// Removing finalizer so NHC deletion of the remediation can be completed
 			r.Log.Info("Cleaning up a timed-out remediation which is deleted by NHC", "remediation name", far.GetName())
-			//Node found, cleanup Taints before removing the finlizer
+			// Node found, cleanup Taints before removing the finalizer
 			return r.handleFARDeletion(ctx, far, node)
-		} else {
-			r.Log.Info(utils.EventMessageRemediationStoppedByNHC)
-			utils.UpdateConditions(utils.RemediationInterruptedByNHC, far, r.Log)
-			commonEvents.RemediationStoppedByNHC(r.Recorder, far)
-			return emptyResult, err
 		}
+		r.Log.Info(utils.EventMessageRemediationStoppedByNHC)
+		utils.UpdateConditions(utils.RemediationInterruptedByNHC, far, r.Log)
+		commonEvents.RemediationStoppedByNHC(r.Recorder, far)
+		return emptyResult, err
 	}
 
 	// Add finalizer when the CR is created
@@ -275,7 +274,7 @@ func (r *FenceAgentsRemediationReconciler) handleFARDeletion(ctx context.Context
 				return emptyResult, err
 			}
 		}
-		r.Log.Info("out-of-service taint was removed", "Node Name", far.Name)
+		r.Log.Info("out-of-service taint was removed", "Node Name", node.Name)
 		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveOutOfServiceTaint, utils.EventMessageRemoveOutOfServiceTaint)
 	}
 
