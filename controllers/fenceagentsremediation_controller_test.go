@@ -669,6 +669,7 @@ var _ = Describe("FAR Controller", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
 				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.OutOfServiceTaintRemediationStrategy)
+				underTestFAR.Spec.NodeSecretNames = nil
 			})
 
 			It("should have finalizer, both remediation taint and out-of-service taint, and at the end they will be deleted", func() {
@@ -717,6 +718,7 @@ var _ = Describe("FAR Controller", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
 				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.OutOfServiceTaintRemediationStrategy)
+				underTestFAR.Spec.NodeSecretNames = nil
 			})
 
 			It("should cleanup the node taints and remove the finalizer", func() {
@@ -884,7 +886,7 @@ func verifyPreRemediationSucceed(underTestFAR *v1alpha1.FenceAgentsRemediation, 
 	By("Searching for remediation taint if we have a finalizer")
 	Eventually(func(g Gomega) {
 		node := &corev1.Node{}
-		g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: getNodeName(underTestFAR)}, node)).To(Succeed())
+		g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: v1alpha1.GetNodeName(underTestFAR)}, node)).To(Succeed())
 		g.Expect(utils.TaintExists(node.Spec.Taints, taint)).To(BeTrue(), "remediation taint should exist")
 	}, timeoutPreRemediation, pollInterval).Should(Succeed())
 	verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddRemediationTaint, utils.EventMessageAddRemediationTaint)
