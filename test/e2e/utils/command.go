@@ -26,6 +26,16 @@ import (
 
 const (
 	containerTestName = "test-command"
+	// NOTE: These constants are duplicated from far_e2e_test.go for simplicity.
+	fenceAgentAWS  = "fence_aws"
+	fenceAgentIPMI = "fence_ipmilan"
+)
+
+// Context keys for values needed to run fence commands on the FAR controller pod
+const (
+	ClientSetContextKey    = "ClientSet"
+	ControllerNSContextKey = "ControllerNS"
+	LoggerContextKey       = "Logger"
 )
 
 // StopKubelet runs cmd command to stop kubelet for the node and returns an error only if it fails
@@ -62,6 +72,7 @@ func runCommandInCluster(c *kubernetes.Clientset, nodeName string, ns string, co
 	pod := GetPod(nodeName, containerTestName)
 	pod, err := c.CoreV1().Pods(ns).Create(context.Background(), pod, metav1.CreateOptions{})
 	if err != nil {
+		log.Error(err, "helper pod can't create")
 		return "", err
 	}
 
@@ -80,10 +91,12 @@ func runCommandInCluster(c *kubernetes.Clientset, nodeName string, ns string, co
 	return strings.TrimSpace(string(bytes)), nil
 }
 
-func waitForPodOutput(c *kubernetes.Clientset, pod *corev1.Pod, command []string) ([]byte, error) {
+// If the pod has multiple containers (e.g., check with `oc get pod <pod> -o jsonpath='{.spec.containers[*].name}'`),
+// specify the target container name explicitly.
+func waitForPodOutput(c *kubernetes.Clientset, pod *corev1.Pod, command []string, containerName ...string) ([]byte, error) {
 	var out []byte
 	if err := wait.PollImmediate(1*time.Second, time.Minute, func() (done bool, err error) {
-		out, err = execCommandOnPod(c, pod, command)
+		out, err = execCommandOnPod(c, pod, command, containerName...)
 		if err != nil {
 			return false, err
 		}
@@ -97,9 +110,14 @@ func waitForPodOutput(c *kubernetes.Clientset, pod *corev1.Pod, command []string
 }
 
 // execCommandOnPod runs command in the pod and returns buffer output
-func execCommandOnPod(c *kubernetes.Clientset, pod *corev1.Pod, command []string) ([]byte, error) {
+func execCommandOnPod(c *kubernetes.Clientset, pod *corev1.Pod, command []string, containerName ...string) ([]byte, error) {
 	var outputBuf bytes.Buffer
 	var errorBuf bytes.Buffer
+
+	selectedContainer := pod.Spec.Containers[0].Name
+	if len(containerName) > 0 {
+		selectedContainer = containerName[0]
+	}
 
 	req := c.CoreV1().RESTClient().
 		Post().
@@ -108,7 +126,7 @@ func execCommandOnPod(c *kubernetes.Clientset, pod *corev1.Pod, command []string
 		Name(pod.Name).
 		SubResource("exec").
 		VersionedParams(&corev1.PodExecOptions{
-			Container: pod.Spec.Containers[0].Name,
+			Container: selectedContainer,
 			Command:   command,
 			Stdin:     true,
 			Stdout:    true,
@@ -204,4 +222,107 @@ func GetPod(nodeName, containerName string) *corev1.Pod {
 			},
 		},
 	}
+}
+
+// PowerOnNode executes the power-on command to turn on the node during the cleanup phase for the off-action test.
+func PowerOnNode(ctx context.Context, far *v1alpha1.FenceAgentsRemediation, targetNodeName string) (bool, error) {
+	clientset := ctx.Value(ClientSetContextKey).(*kubernetes.Clientset)
+	controllerNS := ctx.Value(ControllerNSContextKey).(string)
+	log := ctx.Value(LoggerContextKey).(logr.Logger)
+
+	farController, err := GetActiveFARControllerManagerPod(clientset, controllerNS, log)
+	if err != nil {
+		return false, err
+	}
+
+	cmd, err := CreateFenceCommandForAction(ctx, far, targetNodeName, "on")
+	if err != nil {
+		log.Error(err, "Unsupported agent")
+		return false, err
+	}
+
+	bytes, err := waitForPodOutput(clientset, farController, cmd, "manager")
+
+	log.Info("Output of power-on command", "stdout", string(bytes))
+
+	if err != nil {
+		log.Error(err, "Power-on Failed")
+		return false, err
+	}
+
+	log.Info("Power-on command executed successfully", "targetNode", targetNodeName)
+	return true, nil
+}
+
+func CreateFenceCommandForAction(ctx context.Context, far *v1alpha1.FenceAgentsRemediation, targetNodeName string, action string) ([]string, error) {
+	var command []string
+	var err error
+	var agent string = far.Spec.Agent
+
+	clientset := ctx.Value(ClientSetContextKey).(*kubernetes.Clientset)
+	nodeparms := far.Spec.NodeParameters
+	sharedparms := far.Spec.SharedParameters
+
+	switch agent {
+	case fenceAgentAWS:
+		var accessKey, secretKey string
+		accessKey, secretKey, err = GetSecretData(clientset, "aws-cloud-fencing-credentials-secret", "openshift-operators", "aws_access_key_id", "aws_secret_access_key")
+		command = []string{
+			fmt.Sprintf("/usr/sbin/%s", agent),
+			fmt.Sprintf("--action=%s", action),
+			fmt.Sprintf("--access-key=%s", accessKey),
+			fmt.Sprintf("--secret-key=%s", secretKey),
+			fmt.Sprintf("--region=%s", sharedparms["--region"]),
+			fmt.Sprintf("--plug=%s", nodeparms[v1alpha1.ParameterName("--plug")][v1alpha1.NodeName(targetNodeName)]),
+			"--retry-on=10",
+		}
+
+	case fenceAgentIPMI:
+		var username, password string
+		secretBMHName := "ostest-master-0-bmc-secret"
+		username, password, err = GetSecretData(clientset, secretBMHName, "openshift-machine-api", "username", "password")
+		command = []string{
+			fmt.Sprintf("/usr/sbin/%s", agent),
+			fmt.Sprintf("--action=%s", action),
+			fmt.Sprintf("--username=%s", username),
+			fmt.Sprintf("--password=%s", password),
+			fmt.Sprintf("--ip=%s", sharedparms["--ip"]),
+			fmt.Sprintf("--ipport=%s", nodeparms[v1alpha1.ParameterName("--ipport")][v1alpha1.NodeName(targetNodeName)]),
+			"--lanplus",
+			"--retry-on=10",
+		}
+	default:
+		err = fmt.Errorf("Unsupported agent: %s", agent)
+		return nil, err
+	}
+
+	return command, err
+}
+
+// GetFARControllerManagerPod returns the first running fence-agents-remediation-controller-manager pod
+func GetActiveFARControllerManagerPod(c *kubernetes.Clientset, targetNS string, log logr.Logger) (*corev1.Pod, error) {
+	// oc get pods -n OPERATOR_NS -l control-plane=controller-manager -l app.kubernetes.io/name=fence-agents-remediation-operator
+
+	pods, err := c.CoreV1().Pods(targetNS).List(context.Background(), metav1.ListOptions{
+		LabelSelector: "control-plane=controller-manager,app.kubernetes.io/name=fence-agents-remediation-operator",
+	})
+
+	if err != nil || len(pods.Items) == 0 {
+		return nil, fmt.Errorf("FAR controller-manager pod not found")
+	}
+
+	var activePod *corev1.Pod
+	for _, pod := range pods.Items {
+		if pod.Status.Phase == corev1.PodRunning {
+			log.Info("Found running FAR controller-manager pod", "name", pod.Name)
+			activePod = &pod
+			break
+		}
+	}
+
+	if activePod == nil {
+		return nil, fmt.Errorf("no running FAR controller-manager pod found in namespace %s", targetNS)
+	}
+
+	return activePod, nil
 }
