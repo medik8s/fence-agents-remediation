@@ -30,6 +30,7 @@ import (
 	commonEvents "github.com/medik8s/common/pkg/events"
 	commonResources "github.com/medik8s/common/pkg/resources"
 
+	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -189,7 +190,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		faParams, isRetryRequired, err := v1alpha1.BuildFenceAgentParams(ctx, r.Client, far)
 		if err != nil {
 			if !isRetryRequired {
-				if err.Error() == errorUnsupportedAction {
+				if err.Error() == v1alpha1.ErrorUnsupportedAction {
 					commonEvents.WarningEvent(r.Recorder, far, utils.EventReasonCrUnsupportedAction, utils.EventMessageCrUnsupportedAction)
 				}
 				return emptyResult, nil
