@@ -142,6 +142,40 @@ var _ = Describe("FAR E2e", func() {
 				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
 		})
+
+		When("Trying to create or update to an invalid FAR/T CR", func() {
+			BeforeEach(func() {
+				testShareParam = addSecretsToSharedParams(testShareParam)
+			})
+			It("it should fail", func() {
+				// eventually block used to avoid update conflict
+				Eventually(func(g Gomega) bool {
+					far := getFar(nodeName)
+					g.Expect(far).ToNot(BeNil())
+					far.Spec.NodeParameters = nil
+					far.Spec.SharedParameters = nil
+					far.Spec.SharedSecretName = nil
+					far.Spec.NodeSecretNames = nil
+					g.Expect(k8sClient.Update(context.Background(), far)).To(MatchError(ContainSubstring("invalid template: mandatory parameters are missing")), "update to invalid far without any params should be prevented")
+					return true
+				}, "10s", "100ms").Should(BeTrue())
+
+				emptyParamsSpec := v1alpha1.FenceAgentsRemediationSpec{
+					Agent:               fenceAgent,
+					SharedParameters:    nil,
+					NodeParameters:      nil,
+					RemediationStrategy: remediationStrategy,
+					RetryCount:          10,
+					RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
+					Timeout:             metav1.Duration{Duration: 60 * time.Second},
+				}
+				fart := &v1alpha1.FenceAgentsRemediationTemplate{ObjectMeta: metav1.ObjectMeta{Name: "invalid-fart", Namespace: operatorNsName}}
+				fart.Spec = v1alpha1.FenceAgentsRemediationTemplateSpec{Template: v1alpha1.FenceAgentsRemediationTemplateResource{Spec: emptyParamsSpec}}
+				Expect(k8sClient.Create(context.Background(), fart)).To(MatchError(ContainSubstring("invalid template: mandatory parameters are missing")), "create fart without any params should be prevented")
+
+			})
+		})
+
 	}
 
 	Context("stress cluster with ResourceDeletion remediation strategy under reboot scenario", func() {
@@ -166,6 +200,14 @@ var _ = Describe("FAR E2e", func() {
 		})
 	})
 })
+
+func getFar(nodeName string) *v1alpha1.FenceAgentsRemediation {
+	far := &v1alpha1.FenceAgentsRemediation{ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: operatorNsName}}
+	if err := k8sClient.Get(context.TODO(), client.ObjectKeyFromObject(far), far); err == nil {
+		return far
+	}
+	return nil
+}
 
 var _ = AfterSuite(func() {
 	if len(remediationTimes) > 0 {
