@@ -3,6 +3,8 @@ package v1alpha1
 import (
 	"context"
 	"errors"
+	"slices"
+	"sort"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -12,32 +14,24 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // mockClient for testing
 type mockClient struct {
 	client.Client
+	GetFunc func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error
 }
 
 // Implement Get method to handle secret retrieval in tests
 func (m *mockClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-	// Return a pre-built secret for testing duplicate parameters
-	if key.Name == "test-node-secret" && key.Namespace == "test-namespace" {
-		if secret, ok := obj.(*corev1.Secret); ok {
-			secret.ObjectMeta = metav1.ObjectMeta{
-				Name:      "test-node-secret",
-				Namespace: "test-namespace",
-			}
-			secret.Data = map[string][]byte{
-				"--ip":       []byte("192.168.1.100"), // This will conflict with NodeParameters
-				"--username": []byte("admin"),
-			}
-			return nil
-		}
+	if m.GetFunc != nil {
+		return m.GetFunc(ctx, key, obj, opts...)
 	}
-	// Return NotFound error for any other secret to simulate missing secrets
-	return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
+
+	// When GetFunc is nil, call the underlying Client.Get
+	return m.Client.Get(ctx, key, obj, opts...)
 }
 
 // MockCommandExecutor for testing - implements executor.CommandExecutor
@@ -56,14 +50,56 @@ func (m *MockCommandExecutor) RunCommand(ctx context.Context, name string, args 
 	fullCmd := append([]string{name}, args...)
 	m.Commands = append(m.Commands, fullCmd)
 
-	// Match command pattern and return predefined response
-	cmdStr := strings.Join(fullCmd, " ")
-	if response, exists := m.Responses[cmdStr]; exists {
-		return response.Stdout, response.Stderr, response.Err
+	// Check if any registered response matches the current command
+	for cmdStr, response := range m.Responses {
+		// Compare sorted slices
+		if m.compareSlicesContent(fullCmd, strings.Fields(cmdStr)) {
+			return response.Stdout, response.Stderr, response.Err
+		}
 	}
 
 	// Default behavior - return error as fence agent is not available in test environment
 	return "", "executable file not found in $PATH", errors.New("executable file not found in $PATH")
+}
+
+// compareSlicesContent compares two string slices for equality
+func (m *MockCommandExecutor) compareSlicesContent(slice1, slice2 []string) bool {
+
+	if len(slice1) != len(slice2) {
+		return false
+	}
+
+	sorted1, sorted2 := make([]string, len(slice1)), make([]string, len(slice2))
+	copy(sorted1, slice1)
+	sort.Strings(sorted1)
+
+	copy(sorted2, slice2)
+	sort.Strings(sorted2)
+
+	return slices.Equal(sorted1, sorted2)
+
+}
+
+// getFuncNodeSecretIpConflict returns the default Get function behavior for secrets
+func getFuncNodeSecretIpConflict() func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	return func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+		// Default behavior - Return a pre-built secret for testing duplicate parameters
+		if key.Name == "test-node-secret-ip-conflict" && key.Namespace == "test-namespace" {
+			if secret, ok := obj.(*corev1.Secret); ok {
+				secret.ObjectMeta = metav1.ObjectMeta{
+					Name:      "test-node-secret-ip-conflict",
+					Namespace: "test-namespace",
+				}
+				secret.Data = map[string][]byte{
+					"--ip":       []byte("192.168.1.100"), // This will conflict with NodeParameters
+					"--username": []byte("admin"),
+				}
+				return nil
+			}
+		}
+		// Return NotFound error for any other secret to simulate missing secrets
+		return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
+	}
 }
 
 var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
@@ -86,15 +122,15 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 		When("agent name match format and binary", func() {
 			It("should be accepted", func() {
-				farTemplate := getTestFARTemplate(validAgentName)
+				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
 				_, err := validator.ValidateCreate(ctx, farTemplate)
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
-		When("template has only shared parameters and no node parameters", func() {
-			It("should be accepted", func() {
-				farTemplate := getTestFARTemplate(validAgentName)
+		When("template has only shared parameters without template and no node parameters", func() {
+			It("should be rejected", func() {
+				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
 				farTemplate.Spec.Template.Spec.SharedParameters = map[ParameterName]string{
 					"ip":       "192.168.1.100",
 					"username": "admin",
@@ -104,15 +140,105 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				farTemplate.Spec.Template.Spec.NodeParameters = nil
 
 				warnings, err := validator.ValidateCreate(ctx, farTemplate)
-				Expect(err).NotTo(HaveOccurred())
-				// No warnings expected about node-specific parameters since there are none
 				Expect(warnings).To(BeEmpty())
+				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError(ContainSubstring("nodeParameters or sharedParameters or both are missing, and they cannot be empty")))
+			})
+		})
+
+		When("template has only shared parameters with NodeTemplate and no node parameters", func() {
+			It("should be accepted", func() {
+				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+				farTemplate.Spec.Template.Spec.SharedParameters = map[ParameterName]string{
+					"ip":       "192.168.1.100",
+					"username": "admin",
+					"password": "secret-{{.NodeName}}", // This contains a NodeTemplate
+				}
+				// Explicitly ensure no node parameters
+				farTemplate.Spec.Template.Spec.NodeParameters = nil
+
+				warnings, err := validator.ValidateCreate(ctx, farTemplate)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(warnings).To(BeEmpty())
+			})
+		})
+
+		When("template has only secret parameters with NodeTemplate and no node parameters", func() {
+			It("should be accepted", func() {
+				// Setup mock to return secret with NodeTemplate
+				originalGetFunc := mockValidatorClient.GetFunc
+				DeferCleanup(func() {
+					mockValidatorClient.GetFunc = originalGetFunc
+				})
+
+				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					if key.Name == "test-shared-secret-with-template" && key.Namespace == "test-namespace" {
+						if secret, ok := obj.(*corev1.Secret); ok {
+							secret.ObjectMeta = metav1.ObjectMeta{
+								Name:      "test-shared-secret-with-template",
+								Namespace: "test-namespace",
+							}
+							secret.Data = map[string][]byte{
+								"--ip":       []byte("192.168.1.{{.NodeName}}"), // This contains a NodeTemplate
+								"--username": []byte("admin"),
+								"--password": []byte("secret"),
+							}
+							return nil
+						}
+					}
+					return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
+				}
+
+				farTemplate := &FenceAgentsRemediationTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-secret-template",
+						Namespace: "test-namespace",
+					},
+					Spec: FenceAgentsRemediationTemplateSpec{
+						Template: FenceAgentsRemediationTemplateResource{
+							Spec: FenceAgentsRemediationSpec{
+								Agent:               validAgentName,
+								RemediationStrategy: ResourceDeletionRemediationStrategy,
+								SharedSecretName:    ptr.To("test-shared-secret-with-template"),
+								// Explicitly ensure no node parameters or shared parameters
+								NodeParameters:   nil,
+								SharedParameters: nil,
+							},
+						},
+					},
+				}
+
+				warnings, err := validator.ValidateCreate(ctx, farTemplate)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(warnings).To(BeEmpty())
+			})
+		})
+
+		When("template has no shared parameters and no node parameters", func() {
+			It("should be rejected", func() {
+				farTemplate := &FenceAgentsRemediationTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-" + validAgentName + "-template",
+					},
+					Spec: FenceAgentsRemediationTemplateSpec{
+						Template: FenceAgentsRemediationTemplateResource{
+							Spec: FenceAgentsRemediationSpec{
+								Agent:               validAgentName,
+								RemediationStrategy: ResourceDeletionRemediationStrategy,
+								// Explicitly no SharedParameters or NodeParameters
+							},
+						},
+					},
+				}
+				warnings, err := validator.ValidateCreate(ctx, farTemplate)
+				ExpectWithOffset(1, warnings).To(BeEmpty())
+				Expect(err).To(MatchError(ContainSubstring("nodeParameters or sharedParameters or both are missing, and they cannot be empty")))
 			})
 		})
 
 		When("agent name was not found ", func() {
 			It("should be rejected", func() {
-				farTemplate := getTestFARTemplate(invalidAgentName)
+				farTemplate := getFARTemplate(invalidAgentName, ResourceDeletionRemediationStrategy)
 				warnings, err := validator.ValidateCreate(ctx, farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
@@ -156,10 +282,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		var oldFARTemplate *FenceAgentsRemediationTemplate
 		When("agent name match format and binary", func() {
 			BeforeEach(func() {
-				oldFARTemplate = getTestFARTemplate(invalidAgentName)
+				oldFARTemplate = getFARTemplate(invalidAgentName, ResourceDeletionRemediationStrategy)
 			})
 			It("should be accepted", func() {
-				farTemplate := getTestFARTemplate(validAgentName)
+				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
 				_, err := validator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -167,10 +293,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 		When("agent name was not found ", func() {
 			BeforeEach(func() {
-				oldFARTemplate = getTestFARTemplate(invalidAgentName)
+				oldFARTemplate = getFARTemplate(invalidAgentName, ResourceDeletionRemediationStrategy)
 			})
 			It("should be rejected", func() {
-				farTemplate := getTestFARTemplate(invalidAgentName)
+				farTemplate := getFARTemplate(invalidAgentName, ResourceDeletionRemediationStrategy)
 				warnings, err := validator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
@@ -179,10 +305,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 		When("action parameter is invalid", func() {
 			BeforeEach(func() {
-				oldFARTemplate = getTestFARTemplate(validAgentName)
+				oldFARTemplate = getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
 			})
 			It("should be rejected", func() {
-				farTemplate := getTestFARTemplate(validAgentName)
+				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
 				farTemplate.Spec.Template.Spec.SharedParameters = map[ParameterName]string{
 					"action": "off", // Invalid action
 				}
@@ -295,6 +421,8 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			// Reset mock state before each test
 			mockCommandExecutor.Commands = [][]string{}
 			mockCommandExecutor.Responses = make(map[string]MockResponse)
+			// Set up default secret behavior for tests that need it
+			mockValidatorClient.GetFunc = getFuncNodeSecretIpConflict()
 		})
 
 		It("should fail when template has invalid action parameter", func() {
@@ -369,7 +497,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 								},
 							},
 							NodeSecretNames: map[NodeName]string{
-								"worker-1": "test-node-secret", // This secret contains "--ip" parameter
+								"worker-1": "test-node-secret-ip-conflict", // This secret contains "--ip" parameter
 							},
 						},
 					},
@@ -380,7 +508,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			// Should fail because "--ip" is defined in both NodeParameters and the secret
 			Expect(warnings).To(BeEmpty())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("invalid multiple definition of FAR param"))
+			Expect(err.Error()).To(ContainSubstring("invalid multiple definition of FAR parameter"))
 		})
 
 		It("should test validateParametersWithStatus success scenario", func() {
@@ -524,10 +652,6 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 	})
 })
 
-func getTestFARTemplate(agentName string) *FenceAgentsRemediationTemplate {
-	return getFARTemplate(agentName, ResourceDeletionRemediationStrategy)
-}
-
 func getFARTemplate(agentName string, strategy RemediationStrategyType) *FenceAgentsRemediationTemplate {
 	return &FenceAgentsRemediationTemplate{
 		ObjectMeta: metav1.ObjectMeta{
@@ -538,6 +662,11 @@ func getFARTemplate(agentName string, strategy RemediationStrategyType) *FenceAg
 				Spec: FenceAgentsRemediationSpec{
 					Agent:               agentName,
 					RemediationStrategy: strategy,
+					// Add basic shared parameters with a template to satisfy new validation
+					SharedParameters: map[ParameterName]string{
+						"ip":       "192.168.1.100",
+						"username": "admin-{{.NodeName}}", // Contains NodeTemplate to satisfy validation
+					},
 				},
 			},
 		},
