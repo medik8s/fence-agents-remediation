@@ -30,6 +30,7 @@ import (
 	commonEvents "github.com/medik8s/common/pkg/events"
 	commonResources "github.com/medik8s/common/pkg/resources"
 
+	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
