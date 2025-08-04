@@ -69,3 +69,17 @@ spec:
             memory: 64Mi
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: control-plane
+                    operator: In
+                    values:
+                      - controller-manager
+                  - key: app.kubernetes.io/name
+                    operator: In
+                    values:
+                      - fence-agents-remediation-operator
+              topologyKey: "kubernetes.io/hostname"
