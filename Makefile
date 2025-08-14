@@ -3,18 +3,18 @@
 # See https://github.com/kubernetes-sigs/kustomize for the last version
 KUSTOMIZE_VERSION ?= v4@v4.5.7
 # https://github.com/kubernetes-sigs/controller-tools/releases for the last version
-CONTROLLER_GEN_VERSION ?= v0.14.0
+CONTROLLER_GEN_VERSION ?= v0.18.0
 # See for the last version
 # Why to use the git commit sha? https://github.com/kubernetes-sigs/controller-runtime/issues/1670
 ENVTEST_VERSION ?= v0.0.0-20240112123317-48d9a7b44e54
 # See https://github.com/onsi/ginkgo/releases for the last version
 GINKGO_VERSION ?= v2.22.0
 # See https://pkg.go.dev/golang.org/x/tools/cmd/goimports?tab=versions for the last version
-GOIMPORTS_VERSION ?= v0.17.0
+GOIMPORTS_VERSION ?= v0.36.0
 # See https://github.com/slintes/sort-imports/releases for the last version
-SORT_IMPORTS_VERSION = v0.2.1
+SORT_IMPORTS_VERSION = v0.3.0
 # See https://github.com/operator-framework/operator-registry/releases for the last version
-OPM_VERSION ?= v1.35.0
+OPM_VERSION ?= v1.56.0
 # See https://github.com/operator-framework/operator-sdk/releases for the last version
 OPERATOR_SDK_VERSION ?= v1.32.0
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
@@ -27,7 +27,7 @@ OCP_VERSION = 4.14
 REPEAT_TIMES ?= 1
 # update for major version updates to YQ_VERSION! see https://github.com/mikefarah/yq
 YQ_API_VERSION = v4
-YQ_VERSION = v4.44.2
+YQ_VERSION = v4.47.1
 
 BLUE_ICON_PATH = "./config/assets/medik8s_blue_icon.png"
 
@@ -363,7 +363,7 @@ envtest: ## Download envtest-setup locally if necessary.
 ifneq ($(wildcard $(ENVTEST_DIR)),)
 	chmod -R +w $(ENVTEST_DIR)
 endif
-	$(call go-install-tool,$(ENVTEST),$(ENVTEST_DIR),sigs.k8s.io/controller-runtime/tools/setup-envtest@${ENVTEST_VERSION})
+	$(call go-install-tool,$(ENVTEST),$(ENVTEST_DIR),sigs.k8s.io/controller-runtime/tools/setup-envtest)
 
 .PHONY: ginkgo
 ginkgo: ## Download ginkgo locally if necessary.
