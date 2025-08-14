@@ -18,7 +18,7 @@ OPM_VERSION ?= v1.56.0
 # See https://github.com/operator-framework/operator-sdk/releases for the last version
 OPERATOR_SDK_VERSION ?= v1.32.0
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.30
+ENVTEST_K8S_VERSION = 1.33
 
 # OCP Version: for OKD bundle community
 OCP_VERSION = 4.14
