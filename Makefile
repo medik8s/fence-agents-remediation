@@ -518,7 +518,7 @@ ocp-aws-credentials: ## Add CredentialsRequest for OCP on AWS
 # --vv: If set, emits with maximal verbosity - includes skipped and pending tests.
 test-e2e: ginkgo ## Run end to end (E2E) tests
 	@test -n "${KUBECONFIG}" -o -r ${HOME}/.kube/config || (echo "Failed to find kubeconfig in ~/.kube/config or no KUBECONFIG set"; exit 1)
-	$(GINKGO) -r --keep-going --require-suite --vv  ./test/e2e -coverprofile cover.out
+	$(GINKGO) -r --keep-going --require-suite --vv  -coverprofile cover.out ./test/e2e 
 
 # Revert all version or build date related changes
 .PHONY: bundle-reset
