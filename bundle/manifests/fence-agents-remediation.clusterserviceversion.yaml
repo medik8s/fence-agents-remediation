@@ -307,6 +307,22 @@ spec:
                 app.kubernetes.io/name: fence-agents-remediation-operator
                 control-plane: controller-manager
             spec:
+              affinity:
+                podAntiAffinity:
+                  preferredDuringSchedulingIgnoredDuringExecution:
+                  - podAffinityTerm:
+                      labelSelector:
+                        matchExpressions:
+                        - key: control-plane
+                          operator: In
+                          values:
+                          - controller-manager
+                        - key: app.kubernetes.io/name
+                          operator: In
+                          values:
+                          - fence-agents-remediation-operator
+                      topologyKey: kubernetes.io/hostname
+                    weight: 100
               containers:
               - args:
                 - --secure-listen-address=0.0.0.0:8443
