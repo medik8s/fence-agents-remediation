@@ -30,15 +30,14 @@ metadata:
                 "worker-2": "6235"
               }
             },
-            "remediationStrategy": "ResourceDeletion",
+            "remediationStrategy": "OutOfServiceTaint",
             "retrycount": 5,
             "retryinterval": "5s",
             "sharedSecretName": "fence-agents-credentials-shared",
             "sharedparameters": {
               "--action": "reboot",
               "--ip": "192.168.111.1",
-              "--lanplus": "",
-              "--username": "admin"
+              "--lanplus": ""
             },
             "timeout": "60s"
           }
@@ -71,15 +70,14 @@ metadata:
                     "worker-2": "6235"
                   }
                 },
-                "remediationStrategy": "ResourceDeletion",
+                "remediationStrategy": "OutOfServiceTaint",
                 "retrycount": 5,
                 "retryinterval": "5s",
                 "sharedSecretName": "fence-agents-credentials-shared",
                 "sharedparameters": {
                   "--action": "reboot",
                   "--ip": "192.168.111.1",
-                  "--lanplus": "",
-                  "--username": "admin"
+                  "--lanplus": ""
                 },
                 "timeout": "60s"
               }
