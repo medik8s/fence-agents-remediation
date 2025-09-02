@@ -19,7 +19,7 @@ spec:
       worker-0: "6233"
       worker-1: "6234"
       worker-2: "6235"
-  remediationStrategy: ResourceDeletion
+  remediationStrategy: OutOfServiceTaint
   retrycount: 5
   retryinterval: "5s"
   sharedSecretName: fence-agents-credentials-shared
