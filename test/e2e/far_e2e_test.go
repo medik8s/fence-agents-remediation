@@ -276,9 +276,9 @@ func createTestedPod(nodeName string) *corev1.Pod {
 	pod.Namespace = testNsName
 	pod.Spec.Tolerations = []corev1.Toleration{
 		{
-			Key:      v1alpha1.FARNoExecuteTaintKey,
+			Key:      v1alpha1.FARNoScheduleTaintKey,
 			Operator: corev1.TolerationOpExists,
-			Effect:   corev1.TaintEffectNoExecute,
+			Effect:   corev1.TaintEffectNoSchedule,
 		},
 	}
 	Expect(k8sClient.Create(context.Background(), pod)).To(Succeed())
@@ -441,7 +441,7 @@ func verifyStatusCondition(nodeName, conditionType string, conditionStatus *meta
 // checkRemediation verify whether the node was remediated
 func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, pod *corev1.Pod, strategy v1alpha1.RemediationStrategyType, testAction string) {
 
-	By("Check if FAR NoExecute taint was added")
+	By("Check if FAR NoSchedule taint was added")
 	wasTaintAdded(utils.CreateRemediationTaint(), nodeName)
 
 	if testAction == "reboot" {

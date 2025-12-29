@@ -43,11 +43,11 @@ func deleteTaint(taints []corev1.Taint, taintToDelete *corev1.Taint) ([]corev1.T
 	return newTaints, deleted
 }
 
-// CreateRemediationTaint returns a remediation NoExeucte taint
+// CreateRemediationTaint returns a remediation NoSchedule taint
 func CreateRemediationTaint() corev1.Taint {
 	return corev1.Taint{
-		Key:    v1alpha1.FARNoExecuteTaintKey,
-		Effect: corev1.TaintEffectNoExecute,
+		Key:    v1alpha1.FARNoScheduleTaintKey,
+		Effect: corev1.TaintEffectNoSchedule,
 	}
 }
 

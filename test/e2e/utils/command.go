@@ -203,9 +203,9 @@ func GetPod(nodeName, containerName string) *corev1.Pod {
 			},
 			Tolerations: []corev1.Toleration{
 				{
-					Key:      v1alpha1.FARNoExecuteTaintKey,
+					Key:      v1alpha1.FARNoScheduleTaintKey,
 					Operator: corev1.TolerationOpExists,
-					Effect:   corev1.TaintEffectNoExecute,
+					Effect:   corev1.TaintEffectNoSchedule,
 				},
 				{
 					Key:      corev1.TaintNodeOutOfService,
