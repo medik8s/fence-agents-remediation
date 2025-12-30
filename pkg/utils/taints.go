@@ -53,10 +53,12 @@ func CreateRemediationTaint() corev1.Taint {
 
 // CreateOutOfServiceTaint returns an OutOfService taint
 func CreateOutOfServiceTaint() corev1.Taint {
+	now := metav1.Now()
 	return corev1.Taint{
-		Key:    corev1.TaintNodeOutOfService,
-		Value:  "nodeshutdown",
-		Effect: corev1.TaintEffectNoExecute,
+		Key:       corev1.TaintNodeOutOfService,
+		Value:     "nodeshutdown",
+		Effect:    corev1.TaintEffectNoExecute,
+		TimeAdded: &now,
 	}
 }
 
