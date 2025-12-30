@@ -45,6 +45,10 @@ const (
 	pollAfterFenceAction        = "10s"
 	pollForRemediationChecks    = "250ms"
 	skipOOSREnvVarName          = "SKIP_OOST_REMEDIATION_VERIFICATION"
+
+	// test Action
+	reboot = "reboot"
+	off    = "off"
 )
 
 var (
@@ -75,8 +79,10 @@ var _ = Describe("FAR E2e", func() {
 			nodeName                      string
 			pod                           *corev1.Pod
 			startTime, nodeBootTimeBefore time.Time
+			skipRemediationCreation       bool
 		)
 		BeforeEach(func() {
+			skipRemediationCreation = false
 			if stopTesting {
 				Skip("Skip testing due to unsupported platform")
 			}
@@ -102,6 +108,9 @@ var _ = Describe("FAR E2e", func() {
 
 		})
 		JustBeforeEach(func() {
+			if skipRemediationCreation {
+				return
+			}
 			// create tested pod which will be deleted by the far CR
 			pod = createTestedPod(nodeName)
 			DeferCleanup(cleanupTestedResources, pod)
@@ -142,25 +151,63 @@ var _ = Describe("FAR E2e", func() {
 				remediationTimes = append(remediationTimes, time.Since(startTime))
 			})
 		})
+
+		When("Trying to create or update to an invalid FAR/T CR", func() {
+			BeforeEach(func() {
+				// since we test here the webhook we are skipping remediation creation in order to make sure failed nodes wouldn't affect the tested webhooks
+				skipRemediationCreation = true
+				testShareParam = addSecretsToSharedParams(testShareParam)
+			})
+			It("it should fail", func() {
+				far := &v1alpha1.FenceAgentsRemediation{
+					ObjectMeta: metav1.ObjectMeta{Name: nodeName, Namespace: operatorNsName},
+					Spec: v1alpha1.FenceAgentsRemediationSpec{
+						Agent:               fenceAgent,
+						SharedParameters:    nil,
+						NodeParameters:      nil,
+						RemediationStrategy: remediationStrategy,
+						RetryCount:          10,
+						RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
+						Timeout:             metav1.Duration{Duration: 60 * time.Second},
+					},
+				}
+				Expect(k8sClient.Create(context.Background(), far)).To(MatchError(ContainSubstring("invalid spec: mandatory parameters are missing")), "update to invalid far without any params should be prevented")
+
+				emptyParamsSpec := v1alpha1.FenceAgentsRemediationSpec{
+					Agent:               fenceAgent,
+					SharedParameters:    nil,
+					NodeParameters:      nil,
+					RemediationStrategy: remediationStrategy,
+					RetryCount:          10,
+					RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
+					Timeout:             metav1.Duration{Duration: 60 * time.Second},
+				}
+				fart := &v1alpha1.FenceAgentsRemediationTemplate{ObjectMeta: metav1.ObjectMeta{Name: "invalid-fart", Namespace: operatorNsName}}
+				fart.Spec = v1alpha1.FenceAgentsRemediationTemplateSpec{Template: v1alpha1.FenceAgentsRemediationTemplateResource{Spec: emptyParamsSpec}}
+				Expect(k8sClient.Create(context.Background(), fart)).To(MatchError(ContainSubstring("invalid spec: mandatory parameters are missing")), "create fart without any params should be prevented")
+
+			})
+		})
+
 	}
 
 	Context("stress cluster with ResourceDeletion remediation strategy under reboot scenario", func() {
-		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, "reboot", func() bool { return false })
+		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, reboot, func() bool { return false })
 	})
 
 	Context("stress cluster with OutOfServiceTaint remediation strategy under reboot scenario", func() {
-		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, "reboot", func() bool {
+		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, reboot, func() bool {
 			_, isExist := os.LookupEnv(skipOOSREnvVarName)
 			return isExist
 		})
 	})
 
 	Context("stress cluster with ResourceDeletion remediation strategy under power-off scenario", func() {
-		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, "off", func() bool { return false })
+		runFARTests(v1alpha1.ResourceDeletionRemediationStrategy, off, func() bool { return false })
 	})
 
 	Context("stress cluster with OutOfServiceTaint remediation strategy under power-off scenario", func() {
-		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, "off", func() bool {
+		runFARTests(v1alpha1.OutOfServiceTaintRemediationStrategy, off, func() bool {
 			_, isExist := os.LookupEnv(skipOOSREnvVarName)
 			return isExist
 		})
@@ -444,10 +491,10 @@ func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, pod *corev1
 	By("Check if FAR NoExecute taint was added")
 	wasTaintAdded(utils.CreateRemediationTaint(), nodeName)
 
-	if testAction == "reboot" {
+	if testAction == reboot {
 		By("Getting new node's boot time")
 		verifyNodeRebooted(nodeName, nodeBootTimeBefore)
-	} else if testAction == "off" {
+	} else if testAction == off {
 		By("Check if the node powered off")
 		verifyNodePoweredOff(nodeName)
 	}
