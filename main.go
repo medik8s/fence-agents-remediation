@@ -48,10 +48,11 @@ import (
 )
 
 const (
-	WebhookCertDir  = "/apiserver.local.config/certificates"
-	WebhookCertName = "apiserver.crt"
-	WebhookKeyName  = "apiserver.key"
-	operatorName    = "FenceAgentsRemediation"
+	WebhookCertDir     = "/apiserver.local.config/certificates"
+	WebhookCertName    = "apiserver.crt"
+	WebhookKeyName     = "apiserver.key"
+	farControllerName  = "FenceAgentsRemediation"
+	fartControllerName = "FenceAgentsRemediationTemplate"
 )
 
 var (
@@ -116,7 +117,7 @@ func main() {
 	}
 	fenceagentsremediationv1alpha1.InitOutOfServiceTaintSupportedFlag(isOutOfServiceTaintSupported)
 
-	executer, err := cli.NewExecuter(mgr.GetClient(), mgr.GetEventRecorderFor(operatorName+"-executer"))
+	executer, err := cli.NewExecuter(mgr.GetClient(), mgr.GetEventRecorderFor(farControllerName+"-executer"))
 	if err != nil {
 		setupLog.Error(err, "unable to create executer")
 		os.Exit(1)
@@ -124,12 +125,12 @@ func main() {
 
 	if err = (&controllers.FenceAgentsRemediationReconciler{
 		Client:   mgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers").WithName(operatorName),
+		Log:      ctrl.Log.WithName("controllers").WithName(farControllerName),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor(operatorName),
+		Recorder: mgr.GetEventRecorderFor(farControllerName),
 		Executor: executer,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", operatorName)
+		setupLog.Error(err, "unable to create controller", "controller", farControllerName)
 		os.Exit(1)
 	}
 
@@ -139,6 +140,16 @@ func main() {
 	}
 	if err = (&fenceagentsremediationv1alpha1.FenceAgentsRemediationTemplate{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "FenceAgentsRemediationTemplate")
+		os.Exit(1)
+	}
+	if err = (&controllers.FenceAgentsRemediationTemplateReconciler{
+		Client:   mgr.GetClient(),
+		Log:      ctrl.Log.WithName("controllers").WithName(fartControllerName),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor(fartControllerName),
+		Executor: executer,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "FenceAgentsRemediationTemplate")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
