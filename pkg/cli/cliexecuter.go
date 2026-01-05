@@ -79,9 +79,14 @@ func (e *Executer) AsyncExecute(ctx context.Context, uid types.UID, command []st
 	go e.fenceAgentRoutine(cancellableCtx, uid, command, retryCount, retryInterval, timeout)
 }
 
+func (e *Executer) SyncExecute(ctx context.Context, command []string, retryCount int, retryInterval, timeout time.Duration) (string, string, error, error) {
+	fakeUid := types.UID("")
+	return e.runWithRetry(ctx, fakeUid, command, retryCount, retryInterval, timeout)
+}
+
 func (e *Executer) fenceAgentRoutine(ctx context.Context, uid types.UID, command []string, retryCount int, retryInterval, timeout time.Duration) {
 	// run the command and update the status
-	retryErr, cmdErr := e.runWithRetry(ctx, uid, command, retryCount, retryInterval, timeout)
+	_, _, retryErr, cmdErr := e.runWithRetry(ctx, uid, command, retryCount, retryInterval, timeout)
 	if retryErr != nil {
 		switch {
 		case errors.Is(retryErr, context.Canceled):
@@ -104,7 +109,7 @@ func (e *Executer) fenceAgentRoutine(ctx context.Context, uid types.UID, command
 	}
 }
 
-func (e *Executer) runWithRetry(ctx context.Context, uid types.UID, command []string, retryCount int, retryInterval, timeout time.Duration) (retryErr, faErr error) {
+func (e *Executer) runWithRetry(ctx context.Context, uid types.UID, command []string, retryCount int, retryInterval, timeout time.Duration) (stdout, stderr string, retryErr, faErr error) {
 	// Run the command with an exponential backoff retry to handle the following cases:
 	// - the command fails: the command is retried until the retryCount is reached
 	// - the command times out: the command is retried until the retryCount is reached
@@ -118,9 +123,12 @@ func (e *Executer) runWithRetry(ctx context.Context, uid types.UID, command []st
 		Factor:   1.0,
 	}
 
+	if len(command) == 0 {
+		return "", "", nil, fmt.Errorf("command is empty")
+	}
+
 	e.log.Info("fence agent start", "uid", uid, "fence_agent", command[0], "retryCount", retryCount, "retryInterval", retryInterval, "timeout", timeout)
 
-	var stdout, stderr string
 	retryErr = wait.ExponentialBackoffWithContext(ctx,
 		backoff,
 		func(ctx context.Context) (bool, error) {
@@ -142,7 +150,7 @@ func (e *Executer) runWithRetry(ctx context.Context, uid types.UID, command []st
 		})
 
 	e.log.Info("fence agent done", "uid", uid, "fence_agent", command[0], "stdout", stdout, "stderr", stderr, "err", faErr)
-	return retryErr, faErr
+	return stdout, stderr, retryErr, faErr
 }
 
 func (e *Executer) updateStatusWithRetry(ctx context.Context, uid types.UID, fenceAgentErr error) error {
@@ -210,6 +218,9 @@ func (e *Executer) Remove(uid types.UID) {
 
 // run runs the command in the container and updates the status of the FAR instance maching the UID
 func run(ctx context.Context, command []string) (stdout, stderr string, err error) {
+	if len(command) == 0 {
+		return "", "", fmt.Errorf("command is empty")
+	}
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 
 	var outBuilder, errBuilder strings.Builder

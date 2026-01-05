@@ -41,8 +41,8 @@ import (
 const (
 	parameterRebootActionValue     = "reboot"
 	parameterOffActionValue        = "off"
-	actionName                     = "action"
-	parameterActionName            = "--" + actionName
+	ActionName                     = "action"
+	ParameterActionName            = "--" + ActionName
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR parameter, parameter name: %s"
 	errorMissingParams             = "invalid spec: mandatory parameters are missing"
 	ErrorUnsupportedAction         = "FAR doesn't support any other action than `reboot` or `off`"
@@ -205,7 +205,7 @@ func (v *customValidator) validateFenceAgentForNodes(ctx context.Context, namesp
 	}
 
 	// Collect all unique node names from NodeParameters and NodeSecretNames
-	nodeNames := getNodeNamesFromSpec(spec)
+	nodeNames := GetNodeNamesFromSpec(spec)
 
 	// If no node-specific parameters, validate with shared parameters only, use a dummy placeholder for node name
 	if len(nodeNames) == 0 {
@@ -233,7 +233,7 @@ func (v *customValidator) validateFenceAgentForNodes(ctx context.Context, namesp
 	return nil
 }
 
-func getNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) []string {
+func GetNodeNamesFromSpec(spec *FenceAgentsRemediationSpec) []string {
 	nodeNamesMap := make(map[string]bool)
 	for _, nodeMap := range spec.NodeParameters {
 		for nodeName := range nodeMap {
@@ -319,7 +319,7 @@ func validateFenceAgentParams(far *FenceAgentsRemediation, secretParams SecretPa
 
 // validateFenceAction validates that action parameters are set correctly
 func validateFenceAction(paramName, paramVal string) error {
-	if (paramName == actionName || paramName == parameterActionName) &&
+	if (paramName == ActionName || paramName == ParameterActionName) &&
 		(paramVal != "" && paramVal != parameterRebootActionValue && paramVal != parameterOffActionValue) {
 		// --action parameter with a different value from `reboot` or `off` is not supported
 		err := errors.New(ErrorUnsupportedAction)
@@ -348,9 +348,9 @@ func BuildFenceAgentParams(ctx context.Context, k8sClient client.Client, far *Fe
 	}
 
 	// Add the reboot action with its default value - https://github.com/ClusterLabs/fence-agents/blob/main/lib/fencing.py.py#L103
-	if _, exist := fenceAgentParams[parameterActionName]; !exist {
+	if _, exist := fenceAgentParams[ParameterActionName]; !exist {
 		paramsLog.Info("`action` parameter is missing, so we add it with the default value of `reboot`")
-		fenceAgentParams[parameterActionName] = parameterRebootActionValue
+		fenceAgentParams[ParameterActionName] = parameterRebootActionValue
 	}
 
 	paramsLog.Info("BuildFenceAgentParams finished successfully ", "Node Name", far.Name)
