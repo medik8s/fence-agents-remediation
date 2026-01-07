@@ -16,7 +16,7 @@ const node0 = "worker-0"
 var _ = Describe("Utils-taint", func() {
 	nodeKey := client.ObjectKey{Name: node0}
 	controlPlaneRoleTaint := getControlPlaneRoleTaint()
-	farNoExecuteTaint := CreateRemediationTaint()
+	farNoScheduleTaint := CreateRemediationTaint()
 	Context("Taint functioninality test", func() {
 		// Check functionaility with control-plane node which already has a taint
 		BeforeEach(func() {
@@ -34,13 +34,13 @@ var _ = Describe("Utils-taint", func() {
 				Expect(AppendTaint(k8sClient, node0, CreateRemediationTaint())).Error().NotTo(HaveOccurred())
 				Expect(k8sClient.Get(context.Background(), nodeKey, taintedNode)).To(Succeed())
 				Expect(TaintExists(taintedNode.Spec.Taints, &controlPlaneRoleTaint)).To(BeTrue())
-				Expect(TaintExists(taintedNode.Spec.Taints, &farNoExecuteTaint)).To(BeTrue())
+				Expect(TaintExists(taintedNode.Spec.Taints, &farNoScheduleTaint)).To(BeTrue())
 				By("removing medik8s NoSchedule taint")
 				// We want to see that RemoveTaint only remove the taint it receives
 				Expect(RemoveTaint(k8sClient, node0, CreateRemediationTaint())).To(Succeed())
 				Expect(k8sClient.Get(context.Background(), nodeKey, taintedNode)).To(Succeed())
 				Expect(TaintExists(taintedNode.Spec.Taints, &controlPlaneRoleTaint)).To(BeTrue())
-				Expect(TaintExists(taintedNode.Spec.Taints, &farNoExecuteTaint)).To(BeFalse())
+				Expect(TaintExists(taintedNode.Spec.Taints, &farNoScheduleTaint)).To(BeFalse())
 
 				// there is a not-ready taint now as well, so there will be 2 taints... skip count tests
 				// Expect(len(taintedNode.Spec.Taints)).To(Equal(1))
