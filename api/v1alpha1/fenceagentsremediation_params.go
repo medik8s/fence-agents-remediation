@@ -345,7 +345,7 @@ func collectAllSecretParams(ctx context.Context, k8sClient client.Client, far *F
 
 	// collect secret params from shared secret
 	if sharedSecretName != nil {
-		sharedSecretParams, err := collectSecretParams(ctx, k8sClient, *sharedSecretName, namespace, true) // true = isSharedSecret
+		sharedSecretParams, err := collectSecretParams(ctx, k8sClient, *sharedSecretName, namespace)
 		if err != nil {
 			return SecretParams{}, err
 		}
@@ -365,7 +365,7 @@ func collectAllSecretParams(ctx context.Context, k8sClient client.Client, far *F
 	// collect secret params from the node's secret
 	nodeSecretName, isFound := nodeSecretNames[NodeName(nodeName)]
 	if isFound {
-		nodeSecretParams, err := collectSecretParams(ctx, k8sClient, nodeSecretName, namespace, false) // false = isSharedSecret
+		nodeSecretParams, err := collectSecretParams(ctx, k8sClient, nodeSecretName, namespace)
 		if err != nil {
 			return SecretParams{}, err
 		}
@@ -377,24 +377,15 @@ func collectAllSecretParams(ctx context.Context, k8sClient client.Client, far *F
 }
 
 // collectSecretParams reads and adds the secret params if they are available
-// For shared secrets, IsNotFound errors are ignored (returns empty map)
-// For node secrets, IsNotFound errors are returned as errors
-func collectSecretParams(ctx context.Context, k8sClient client.Client, secretName, namespace string, isSharedSecret bool) (map[string]string, error) {
+func collectSecretParams(ctx context.Context, k8sClient client.Client, secretName, namespace string) (map[string]string, error) {
 	secretParams := make(map[string]string)
 	secret := &corev1.Secret{}
 	secretKeyObj := client.ObjectKey{Name: secretName, Namespace: namespace}
 
 	if err := k8sClient.Get(ctx, secretKeyObj, secret); err != nil {
 		if apiErrors.IsNotFound(err) {
-			if isSharedSecret {
-				// For shared secrets, IsNotFound is OK - return empty params
-				paramsLog.Info("shared secret not found, continuing with empty params", "secret name", secretName, "namespace", namespace)
-				return secretParams, nil
-			}
-			// For node secrets, IsNotFound is an error
-			paramsLog.Error(err, "node secret not found", "secret name", secretName, "namespace", namespace)
-			return nil, fmt.Errorf("node secret '%s' not found in namespace '%s': %w", secretName, namespace, err)
-
+			paramsLog.Error(err, "secret not found", "secret name", secretName, "namespace", namespace)
+			return nil, fmt.Errorf("secret '%s' not found in namespace '%s': %w", secretName, namespace, err)
 		}
 		// For any other error, always return it
 		paramsLog.Error(err, "failed to get secret", "secret name", secretName, "namespace", namespace)

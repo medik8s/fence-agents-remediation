@@ -45,7 +45,7 @@ const (
 	testPodName    = "far-pod-test-1"
 
 	// intervals
-	timeoutPreRemediation  = "1s" // this timeout is used for the other steps that occur before remediation is completed
+	timeoutPreRemediation  = "5s" // this timeout is used for the other steps that occur before remediation is completed
 	timeoutPostRemediation = "2s" // this timeout is used for the other steps that occur after remediation is completed
 	pollInterval           = "200ms"
 
@@ -145,8 +145,10 @@ var _ = Describe("FAR Controller", func() {
 			Expect(k8sClient.Create(context.Background(), nodeSecret)).To(Succeed())
 			DeferCleanup(k8sClient.Delete, context.Background(), nodeSecret)
 
-			Expect(k8sClient.Create(context.Background(), sharedSecret)).To(Succeed())
-			DeferCleanup(k8sClient.Delete, context.Background(), sharedSecret)
+			if sharedSecret != nil {
+				Expect(k8sClient.Create(context.Background(), sharedSecret)).To(Succeed())
+				DeferCleanup(k8sClient.Delete, context.Background(), sharedSecret)
+			}
 
 			Expect(k8sClient.Create(context.Background(), underTestFAR)).To(Succeed())
 			DeferCleanup(func() {
@@ -160,6 +162,62 @@ var _ = Describe("FAR Controller", func() {
 
 			// Sleep for a second to ensure dummy reconciliation has begun running before the unit tests
 			time.Sleep(1 * time.Second)
+		})
+		Context("Verify shared secret default name workaround", func() {
+			BeforeEach(func() {
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+				node = utils.GetNode("", workerNode)
+			})
+			When("default secret name is set and secret exists", func() {
+				BeforeEach(func() {
+					Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(OldDefaultSecretName))
+					Expect(sharedSecret).ToNot(BeNil())
+					Expect(sharedSecret.GetName()).To(Equal(OldDefaultSecretName))
+				})
+				It("should keep the name", func() {
+					Eventually(func(g Gomega) {
+						Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
+						Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(OldDefaultSecretName))
+					}, timeoutPreRemediation, pollInterval).Should(Succeed())
+				})
+			})
+			When("default secret name is set and secret does not exist", func() {
+				BeforeEach(func() {
+					Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(OldDefaultSecretName))
+					sharedSecret = nil
+				})
+				It("should remove the name", func() {
+					Eventually(func(g Gomega) {
+						Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
+						Expect(underTestFAR.Spec.SharedSecretName).To(BeNil())
+					}, timeoutPreRemediation, pollInterval).Should(Succeed())
+				})
+			})
+			When("default secret name is not set and secret exists", func() {
+				BeforeEach(func() {
+					underTestFAR.Spec.SharedSecretName = nil
+					Expect(sharedSecret).ToNot(BeNil())
+					Expect(sharedSecret.GetName()).To(Equal(OldDefaultSecretName))
+				})
+				It("should set the name", func() {
+					Eventually(func(g Gomega) {
+						Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
+						Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(OldDefaultSecretName))
+					}, timeoutPreRemediation, pollInterval).Should(Succeed())
+				})
+			})
+			When("default secret name is not set and secret does not exist", func() {
+				BeforeEach(func() {
+					underTestFAR.Spec.SharedSecretName = nil
+					sharedSecret = nil
+				})
+				It("should not set the name", func() {
+					Eventually(func(g Gomega) {
+						Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
+						Expect(underTestFAR.Spec.SharedSecretName).To(BeNil())
+					}, timeoutPreRemediation, pollInterval).Should(Succeed())
+				})
+			})
 		})
 		Context("Verify correct params", func() {
 			BeforeEach(func() {

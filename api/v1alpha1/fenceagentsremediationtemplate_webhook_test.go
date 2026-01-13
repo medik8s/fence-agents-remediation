@@ -403,7 +403,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			// Should fail because node secrets are expected to exist when referenced
 			Expect(warnings).To(BeEmpty())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("node secret 'non-existent-node-secret' not found in namespace 'test-namespace'"))
+			Expect(err.Error()).To(ContainSubstring("secret 'non-existent-node-secret' not found in namespace 'test-namespace'"))
 		})
 
 		It("should fail when NodeSecretParam duplicates a NodeParam", func() {
