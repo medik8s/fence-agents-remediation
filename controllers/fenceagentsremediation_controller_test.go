@@ -170,20 +170,20 @@ var _ = Describe("FAR Controller", func() {
 			})
 			When("default secret name is set and secret exists", func() {
 				BeforeEach(func() {
-					Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(OldDefaultSecretName))
+					Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(oldDefaultSecretName))
 					Expect(sharedSecret).ToNot(BeNil())
-					Expect(sharedSecret.GetName()).To(Equal(OldDefaultSecretName))
+					Expect(sharedSecret.GetName()).To(Equal(oldDefaultSecretName))
 				})
 				It("should keep the name", func() {
 					Eventually(func(g Gomega) {
 						Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
-						Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(OldDefaultSecretName))
+						Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(oldDefaultSecretName))
 					}, timeoutPreRemediation, pollInterval).Should(Succeed())
 				})
 			})
 			When("default secret name is set and secret does not exist", func() {
 				BeforeEach(func() {
-					Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(OldDefaultSecretName))
+					Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(oldDefaultSecretName))
 					sharedSecret = nil
 				})
 				It("should remove the name", func() {
@@ -197,12 +197,12 @@ var _ = Describe("FAR Controller", func() {
 				BeforeEach(func() {
 					underTestFAR.Spec.SharedSecretName = nil
 					Expect(sharedSecret).ToNot(BeNil())
-					Expect(sharedSecret.GetName()).To(Equal(OldDefaultSecretName))
+					Expect(sharedSecret.GetName()).To(Equal(oldDefaultSecretName))
 				})
 				It("should set the name", func() {
 					Eventually(func(g Gomega) {
 						Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
-						Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(OldDefaultSecretName))
+						Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(oldDefaultSecretName))
 					}, timeoutPreRemediation, pollInterval).Should(Succeed())
 				})
 			})
@@ -521,6 +521,9 @@ var _ = Describe("FAR Controller", func() {
 				BeforeEach(func() {
 					underTestFAR.Name = fmt.Sprintf("%s-%s", workerNode, "pseudo-random-test-sufix")
 					underTestFAR.Annotations = map[string]string{"remediation.medik8s.io/node-name": workerNode}
+
+					// test shared secret name default value workaround: existing secret should be used even when name is nil
+					underTestFAR.Spec.SharedSecretName = nil
 				})
 				It("should have finalizer and taint, while the tested pod will be deleted", testSuccessfulRemediation)
 			})

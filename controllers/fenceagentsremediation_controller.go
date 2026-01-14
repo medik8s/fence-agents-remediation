@@ -49,7 +49,7 @@ import (
 )
 
 const (
-	OldDefaultSecretName = "fence-agents-credentials-shared"
+	oldDefaultSecretName = "fence-agents-credentials-shared"
 )
 
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
@@ -132,11 +132,11 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	// Apply the shared secret default name workaround. See function description for details.
-	if applied, err := applySharedSecretDefaultNameWorkaround(ctx, far, r.Client, r.Log); err != nil {
+	if applied, err := r.applySharedSecretDefaultNameWorkaround(ctx, far); err != nil {
 		r.Log.Error(err, "Failed to apply shared secret default name workaround")
 		return emptyResult, err
 	} else if applied {
-		return requeueImmediately, nil
+		return emptyResult, nil
 	}
 
 	// Check NHC timeout annotation
@@ -388,12 +388,12 @@ func appendParamToSlice(fenceAgentParams []string, paramName v1alpha1.ParameterN
 //
 // This workaround will be removed in a future version
 // Returns true if the workaround was applied, false otherwise
-func applySharedSecretDefaultNameWorkaround(ctx context.Context, far *v1alpha1.FenceAgentsRemediation, c client.Client, log logr.Logger) (bool, error) {
+func (r *FenceAgentsRemediationReconciler) applySharedSecretDefaultNameWorkaround(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (bool, error) {
 	// Check if the secret with the old default name exists
 	secret := &corev1.Secret{}
-	secretKey := client.ObjectKey{Name: OldDefaultSecretName, Namespace: far.Namespace}
+	secretKey := client.ObjectKey{Name: oldDefaultSecretName, Namespace: far.Namespace}
 	secretExists := true
-	if err := c.Get(ctx, secretKey, secret); err != nil {
+	if err := r.Get(ctx, secretKey, secret); err != nil {
 		if !apiErrors.IsNotFound(err) {
 			return false, fmt.Errorf("failed to check for shared secret: %w", err)
 		}
@@ -402,17 +402,17 @@ func applySharedSecretDefaultNameWorkaround(ctx context.Context, far *v1alpha1.F
 
 	if far.Spec.SharedSecretName == nil && secretExists {
 		// Set the old default value when SharedSecretName is nil and the Secret exists
-		log.Info("Setting SharedSecretName to old default value as the secret exists", "secretName", OldDefaultSecretName)
-		far.Spec.SharedSecretName = ptr.To(OldDefaultSecretName)
-	} else if far.Spec.SharedSecretName != nil && *far.Spec.SharedSecretName == OldDefaultSecretName && !secretExists {
+		r.Log.Info("Setting SharedSecretName to old default value as the secret exists", "secretName", oldDefaultSecretName)
+		far.Spec.SharedSecretName = ptr.To(oldDefaultSecretName)
+	} else if far.Spec.SharedSecretName != nil && *far.Spec.SharedSecretName == oldDefaultSecretName && !secretExists {
 		// Remove the old default value when SharedSecretName equals the old default but the Secret doesn't exist
-		log.Info("Removing SharedSecretName old default value as the secret does not exist", "secretName", OldDefaultSecretName)
+		r.Log.Info("Removing SharedSecretName old default value as the secret does not exist", "secretName", oldDefaultSecretName)
 		far.Spec.SharedSecretName = nil
 	} else {
 		return false, nil
 	}
 
-	if err := c.Update(ctx, far); err != nil {
+	if err := r.Update(ctx, far); err != nil {
 		return false, fmt.Errorf("failed to update FAR with SharedSecretName workaround: %w", err)
 	}
 	return true, nil
