@@ -73,11 +73,6 @@ spec:
       - description: SharedParameters are parameters common to all nodes
         displayName: Shared Parameters
         path: sharedparameters
-      - description: StatusValidationSample configures how many nodes the status validation
-          should run for. Accepts an absolute number (e.g., 3), a percentage string
-          (e.g., "60%"), or -1 for all nodes. Optional; defaults to 100% (all nodes).
-        displayName: Status Validation Sample
-        path: statusValidationSample
       - description: Timeout is the timeout for each fencing agent execution
         displayName: Timeout
         path: timeout
@@ -103,6 +98,11 @@ spec:
         name: fenceagentsremediationtemplates
         version: v1alpha1
       specDescriptors:
+      - description: StatusValidationSample configures how many nodes the fence agent
+          status validation should run for. Accepts an absolute number (e.g., 3) or
+          a percentage string (e.g., "60%").
+        displayName: Status Validation Sample
+        path: statusValidationSample
       - description: Template defines the desired state of FenceAgentsRemediationTemplate
         displayName: Template
         path: template
@@ -148,11 +148,6 @@ spec:
       - description: SharedParameters are parameters common to all nodes
         displayName: Shared Parameters
         path: template.spec.sharedparameters
-      - description: StatusValidationSample configures how many nodes the status validation
-          should run for. Accepts an absolute number (e.g., 3), a percentage string
-          (e.g., "60%"), or -1 for all nodes. Optional; defaults to 100% (all nodes).
-        displayName: Status Validation Sample
-        path: template.spec.statusValidationSample
       - description: Timeout is the timeout for each fencing agent execution
         displayName: Timeout
         path: template.spec.timeout

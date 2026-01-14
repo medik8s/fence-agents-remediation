@@ -45,6 +45,19 @@ spec:
             description: FenceAgentsRemediationTemplateSpec defines the desired state
               of FenceAgentsRemediationTemplate
             properties:
+              statusValidationSample:
+                anyOf:
+                - type: integer
+                - type: string
+                description: |-
+                  StatusValidationSample configures how many nodes the fence agent status validation should run for.
+                  Accepts an absolute number (e.g., 3) or a percentage string (e.g., "60%").
+                x-kubernetes-int-or-string: true
+                x-kubernetes-validations:
+                - message: Value must be an integer >=0, or string between 0% and
+                    100%
+                  rule: type(self) == int && self >= 0 || type(self) == string &&
+                    self.matches('^([0-9]|[1-9][0-9]|100)%$')
               template:
                 description: Template defines the desired state of FenceAgentsRemediationTemplate
                 properties:
@@ -113,17 +126,6 @@ spec:
                         description: SharedParameters are parameters common to all
                           nodes
                         type: object
-                      statusValidationSample:
-                        anyOf:
-                        - type: integer
-                        - type: string
-                        default: 100%
-                        description: |-
-                          StatusValidationSample configures how many nodes the status validation should run for.
-                          Accepts an absolute number (e.g., 3), a percentage string (e.g., "60%"), or -1 for all nodes.
-                          Optional; defaults to 100% (all nodes).
-                        pattern: ^((100|[0-9]{1,2})%|-1|[0-9]+)$
-                        x-kubernetes-int-or-string: true
                       timeout:
                         default: 60s
                         description: Timeout is the timeout for each fencing agent
@@ -146,7 +148,7 @@ spec:
               conditions:
                 description: |-
                   Represents the observations of a FenceAgentsRemediationTemplate's current state.
-                  Known .status.conditions.type: "ParametersValidation".
+                  Known .status.conditions.type: "FenceAgentStatusValidationSucceeded".
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -205,10 +207,10 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
-              validationFailures:
+              validationFailed:
                 additionalProperties:
                   type: string
-                description: ValidationFailures maps node name to the validation failure
+                description: ValidationFailed maps node name to the validation failure
                   message.
                 type: object
               validationPassed:

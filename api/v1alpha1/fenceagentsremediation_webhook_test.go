@@ -121,7 +121,8 @@ func getTestFAR(agentName string) *FenceAgentsRemediation {
 func getFAR(agentName string, strategy RemediationStrategyType) *FenceAgentsRemediation {
 	return &FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-" + agentName,
+			Name:      "test-far",
+			Namespace: metav1.NamespaceDefault,
 		},
 		Spec: FenceAgentsRemediationSpec{
 			Agent:               agentName,

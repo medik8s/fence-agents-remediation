@@ -11,6 +11,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -624,7 +626,118 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		})
 
 	})
+
+	Context("validating StatusValidationSample", func() {
+
+		var fart *FenceAgentsRemediationTemplate
+
+		BeforeEach(func() {
+			fart = getTestFART()
+		})
+
+		AfterEach(func() {
+			_ = k8sClient.Delete(context.Background(), fart)
+			Eventually(func() bool {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: fart.Name, Namespace: fart.Namespace}, fart); apierrors.IsNotFound(err) {
+					return true
+				}
+				return false
+			}).Should(BeTrue())
+		})
+
+		When("StatusValidationSample is nil", func() {
+			It("should be accepted", func() {
+				fart.Spec.StatusValidationSample = nil
+				Expect(k8sClient.Create(context.Background(), fart)).To(Succeed())
+			})
+		})
+
+		When("StatusValidationSample is a number string without percentage", func() {
+			It("should be rejected", func() {
+				fart.Spec.StatusValidationSample = ptr.To(intstr.IntOrString{Type: intstr.String, StrVal: "10"})
+				Expect(k8sClient.Create(context.Background(), fart)).ToNot(Succeed())
+			})
+		})
+
+		When("StatusValidationSample is a percentage with leading 0", func() {
+			It("should be rejected", func() {
+				fart.Spec.StatusValidationSample = ptr.To(intstr.IntOrString{Type: intstr.String, StrVal: "05%"})
+				Expect(k8sClient.Create(context.Background(), fart)).ToNot(Succeed())
+			})
+		})
+
+		When("StatusValidationSample is a random string", func() {
+			It("should be rejected", func() {
+				fart.Spec.StatusValidationSample = ptr.To(intstr.IntOrString{Type: intstr.String, StrVal: "string"})
+				Expect(k8sClient.Create(context.Background(), fart)).ToNot(Succeed())
+			})
+		})
+
+		When("StatusValidationSample is a negative percentage", func() {
+			It("should be rejected", func() {
+				fart.Spec.StatusValidationSample = ptr.To(intstr.IntOrString{Type: intstr.String, StrVal: "-42%"})
+				Expect(k8sClient.Create(context.Background(), fart)).ToNot(Succeed())
+			})
+		})
+
+		When("StatusValidationSample is valid 1 digit percentage", func() {
+			It("should be accepted", func() {
+				fart.Spec.StatusValidationSample = ptr.To(intstr.IntOrString{Type: intstr.String, StrVal: "5%"})
+				Expect(k8sClient.Create(context.Background(), fart)).To(Succeed())
+			})
+		})
+
+		When("StatusValidationSample is valid 2 digit percentage", func() {
+			It("should be accepted", func() {
+				fart.Spec.StatusValidationSample = ptr.To(intstr.IntOrString{Type: intstr.String, StrVal: "55%"})
+				Expect(k8sClient.Create(context.Background(), fart)).To(Succeed())
+			})
+		})
+
+		When("StatusValidationSample is valid 3 digit percentage", func() {
+			It("should be accepted", func() {
+				fart.Spec.StatusValidationSample = ptr.To(intstr.IntOrString{Type: intstr.String, StrVal: "100%"})
+				Expect(k8sClient.Create(context.Background(), fart)).To(Succeed())
+			})
+		})
+
+		When("StatusValidationSample is invalid 3 digit percentage", func() {
+			It("should be rejected", func() {
+				fart.Spec.StatusValidationSample = ptr.To(intstr.IntOrString{Type: intstr.String, StrVal: "101%"})
+				Expect(k8sClient.Create(context.Background(), fart)).ToNot(Succeed())
+			})
+		})
+
+		When("StatusValidationSample is a negative int", func() {
+			It("should be rejected", func() {
+				fart.Spec.StatusValidationSample = ptr.To(intstr.IntOrString{Type: intstr.Int, IntVal: -5})
+				Expect(k8sClient.Create(context.Background(), fart)).ToNot(Succeed())
+			})
+		})
+
+		When("StatusValidationSample is a 0", func() {
+			It("should be accepted", func() {
+				fart.Spec.StatusValidationSample = ptr.To(intstr.IntOrString{Type: intstr.Int, IntVal: 0})
+				Expect(k8sClient.Create(context.Background(), fart)).To(Succeed())
+			})
+		})
+
+		When("StatusValidationSample is a positive int", func() {
+			It("should be accepted", func() {
+				fart.Spec.StatusValidationSample = ptr.To(intstr.IntOrString{Type: intstr.Int, IntVal: 105})
+				Expect(k8sClient.Create(context.Background(), fart)).To(Succeed())
+			})
+		})
+	})
 })
+
+func getTestFART() *FenceAgentsRemediationTemplate {
+	return &FenceAgentsRemediationTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-fart",
+			Namespace: metav1.NamespaceDefault,
+		}, Spec: FenceAgentsRemediationTemplateSpec{Template: FenceAgentsRemediationTemplateResource{getTestFAR(validAgentName).Spec}}}
+}
 
 func getFARTemplate(agentName string, strategy RemediationStrategyType) *FenceAgentsRemediationTemplate {
 	return &FenceAgentsRemediationTemplate{

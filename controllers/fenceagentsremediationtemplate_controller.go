@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	commonEvents "github.com/medik8s/common/pkg/events"
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -40,6 +41,7 @@ import (
 
 	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
+	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 )
 
 // FenceAgentsRemediationTemplateReconciler reconciles a FenceAgentsRemediationTemplate object
@@ -58,8 +60,8 @@ type ParameterValidationResult struct {
 }
 
 const (
-	parameterActionStatusValue    = "status"
-	ConditionParametersValidation = "ParametersValidation"
+	parameterActionStatusValue                   = "status"
+	ConditionFenceAgentStatusValidationSucceeded = "FenceAgentStatusValidationSucceeded"
 
 	ReasonValidationInProgress = "ValidationInProgress"
 	ReasonValidationSucceeded  = "ValidationSucceeded"
@@ -115,7 +117,14 @@ func (r *FenceAgentsRemediationTemplateReconciler) Reconcile(ctx context.Context
 
 // validateFenceStatusForTemplate contains the template validation logic (extracted from Reconcile)
 func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplate(ctx context.Context, req ctrl.Request, fart *v1alpha1.FenceAgentsRemediationTemplate) (ctrl.Result, error) {
-	if !r.isValidationRequired(fart) {
+	validationStatusCondition := meta.FindStatusCondition(fart.Status.Conditions, ConditionFenceAgentStatusValidationSucceeded)
+	// validation finished when status is set and not unknown
+	validationFinished := validationStatusCondition != nil && validationStatusCondition.Status != metav1.ConditionUnknown
+	// we need to start new validation when it didn't start yet or spec was changed
+	needsNewValidation := validationStatusCondition == nil || fart.GetGeneration() != validationStatusCondition.ObservedGeneration
+
+	if validationFinished && !needsNewValidation {
+		// validation done and no changes in spec
 		return ctrl.Result{}, nil
 	}
 
@@ -128,29 +137,35 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 	sort.Strings(nodeNames)
 
 	// Determine sampled nodes (optional) via spec.StatusValidationSample
-	size, sampleErr := calculateSampleSize(len(nodeNames), spec.StatusValidationSample)
-	if sampleErr != nil {
-		r.Log.Error(sampleErr, "status validation failed, invalid value of StatusValidationSample", "StatusValidationSample", spec.StatusValidationSample)
+	size, err := r.calculateSampleSize(len(nodeNames), fart)
+	if err != nil {
+		r.Log.Error(err, "status validation failed, invalid value of StatusValidationSample", "StatusValidationSample", fart.Spec.StatusValidationSample)
+		commonEvents.WarningEvent(r.Recorder, fart, utils.EventReasonInvalidStatusValidationSample, utils.EventMessageInvalidStatusValidationSample)
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
-			Type:               ConditionParametersValidation,
+			Type:               ConditionFenceAgentStatusValidationSucceeded,
 			Status:             metav1.ConditionFalse,
 			Reason:             ReasonValidationFailed,
-			Message:            fmt.Sprintf("parameters validation failed invalid value of StatusValidationSample: %v", spec.StatusValidationSample),
+			Message:            fmt.Sprintf("parameters validation failed invalid value of StatusValidationSample: %v", fart.Spec.StatusValidationSample),
 			ObservedGeneration: fart.GetGeneration(),
 		})
 		// Configuration issue so no point to return an error
 		return ctrl.Result{}, nil
 	}
-
+	if size == 0 {
+		// Treat "0 / 0%" as disabled validation; clear any previous results.
+		meta.RemoveStatusCondition(&fart.Status.Conditions, ConditionFenceAgentStatusValidationSucceeded)
+		fart.Status.ValidationFailed = nil
+		fart.Status.ValidationPassed = nil
+		r.Log.Info("status validation skipped, StatusValidationSample is zero or undefined")
+		return ctrl.Result{}, nil
+	}
 	selectedNodes := nodeNames[:size]
 
-	cond := meta.FindStatusCondition(fart.Status.Conditions, ConditionParametersValidation)
-	// Restart the validation if: 1. it's the first 2.Previous validation was completed and another is triggered by a user change 3.User change occurred when a validation was in progress
-	if cond == nil || cond.Reason != ReasonValidationInProgress || cond.ObservedGeneration != fart.GetGeneration() {
-		fart.Status.ValidationFailures = map[string]string{}
+	if needsNewValidation {
+		fart.Status.ValidationFailed = map[string]string{}
 		fart.Status.ValidationPassed = map[string]string{}
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
-			Type:               ConditionParametersValidation,
+			Type:               ConditionFenceAgentStatusValidationSucceeded,
 			Status:             metav1.ConditionUnknown,
 			Reason:             ReasonValidationInProgress,
 			Message:            fmt.Sprintf("validating parameters for %d node(s)", len(selectedNodes)),
@@ -158,15 +173,15 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 		})
 	}
 
-	if fart.Status.ValidationFailures == nil {
-		fart.Status.ValidationFailures = map[string]string{}
+	if fart.Status.ValidationFailed == nil {
+		fart.Status.ValidationFailed = map[string]string{}
 	}
 	if fart.Status.ValidationPassed == nil {
 		fart.Status.ValidationPassed = map[string]string{}
 	}
 
 	for _, n := range selectedNodes {
-		if _, done := fart.Status.ValidationFailures[n]; done {
+		if _, done := fart.Status.ValidationFailed[n]; done {
 			continue
 		}
 		if _, done := fart.Status.ValidationPassed[n]; done {
@@ -178,13 +193,13 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 		}
 		params, _, err := v1alpha1.BuildFenceAgentParams(ctx, r.Client, tempFAR)
 		if err != nil {
-			fart.Status.ValidationFailures[n] = err.Error()
+			fart.Status.ValidationFailed[n] = err.Error()
 			return ctrl.Result{Requeue: true}, nil
 		}
 
 		res := r.runFenceStatus(ctx, spec.Agent, params)
 		if !res.IsSuccessful {
-			fart.Status.ValidationFailures[n] = res.Message
+			fart.Status.ValidationFailed[n] = res.Message
 		} else {
 			fart.Status.ValidationPassed[n] = "Success"
 		}
@@ -195,10 +210,10 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 	// Clear ValidationPassed; it was only used for tracking during reconciliation.
 	// In case validation didn't pass we keep the failures reports only
 	fart.Status.ValidationPassed = map[string]string{}
-	allOK := len(fart.Status.ValidationFailures) == 0
+	allOK := len(fart.Status.ValidationFailed) == 0
 	if allOK {
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
-			Type:               ConditionParametersValidation,
+			Type:               ConditionFenceAgentStatusValidationSucceeded,
 			Status:             metav1.ConditionTrue,
 			Reason:             ReasonValidationSucceeded,
 			Message:            "parameters validation succeeded",
@@ -206,42 +221,33 @@ func (r *FenceAgentsRemediationTemplateReconciler) validateFenceStatusForTemplat
 		})
 	} else {
 		meta.SetStatusCondition(&fart.Status.Conditions, metav1.Condition{
-			Type:               ConditionParametersValidation,
+			Type:               ConditionFenceAgentStatusValidationSucceeded,
 			Status:             metav1.ConditionFalse,
 			Reason:             ReasonValidationFailed,
-			Message:            fmt.Sprintf("parameters validation failed for %d node(s)", len(fart.Status.ValidationFailures)),
+			Message:            fmt.Sprintf("parameters validation failed for %d node(s)", len(fart.Status.ValidationFailed)),
 			ObservedGeneration: fart.GetGeneration(),
 		})
 	}
 	return ctrl.Result{}, nil
 }
 
-func (r *FenceAgentsRemediationTemplateReconciler) isValidationRequired(fart *v1alpha1.FenceAgentsRemediationTemplate) bool {
-	validationStatus := meta.FindStatusCondition(fart.Status.Conditions, ConditionParametersValidation)
-	if validationStatus == nil || validationStatus.Status == metav1.ConditionUnknown {
-		return true
+func (r *FenceAgentsRemediationTemplateReconciler) calculateSampleSize(totalNumberOfNodes int, fart *v1alpha1.FenceAgentsRemediationTemplate) (int, error) {
+	sample := fart.Spec.StatusValidationSample
+	if sample == nil {
+		return 0, nil
 	}
-	// If false, then condition isn't  validated for this spec
-	return validationStatus.ObservedGeneration != fart.GetGeneration()
-}
 
-func calculateSampleSize(total int, sample *intstr.IntOrString) (int, error) {
-	if sample == nil || total == 0 {
-		return total, nil
-	}
-	// Treat -1 or lower (int) as all
-	if sample.Type == intstr.Int && sample.IntVal < 0 {
-		return total, nil
-	}
 	// Use k8s helper to scale int-or-percent
-	scaled, err := intstr.GetScaledValueFromIntOrPercent(sample, total, true)
+	scaled, err := intstr.GetScaledValueFromIntOrPercent(sample, totalNumberOfNodes, true)
 	if err != nil {
 		return 0, err
 	}
-	if scaled < 0 || scaled > total {
-		return 0, fmt.Errorf("invalid value for StatusValidationSample: %v", sample)
+	// user may use a fixed (non percentage) value which exceeds the number of nodes
+	if scaled > totalNumberOfNodes {
+		scaled = totalNumberOfNodes
+		r.Log.Info("StatusValidationSample value exceeds number of nodes, capped to total nodes", "StatusValidationSample", fart.Spec.StatusValidationSample, "totalNodes", totalNumberOfNodes, "sample", scaled)
+		commonEvents.WarningEvent(r.Recorder, fart, utils.EventReasonStatusValidationSampleExceedsNodes, fmt.Sprintf("%s: requested %v, capped to %d nodes", utils.EventMessageStatusValidationSampleExceedsNodes, fart.Spec.StatusValidationSample, totalNumberOfNodes))
 	}
-
 	return scaled, nil
 }
 
