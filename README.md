@@ -25,23 +25,34 @@ FAR supports an `--action` parameter, which defines how the node should be remed
 
 ## How does FAR work?
 
-The operator watches for new or deleted CRs called `FenceAgentsRemediation` (or `far`) which trigger remediation for the node, based on the CR's name. When the CR name doesn't match a node in the cluster, then the CR won't trigger any remediation by FAR. Remediation includes adding a taint on the node, rebooting the node by fence agent, and at last deleting the remaining workloads.
+The operator watches for new or deleted CRs called `FenceAgentsRemediation` (or `far`) which trigger remediation for the node, based on the CR's name. When the CR name doesn't match a node in the cluster, then the CR won't trigger any remediation by FAR. Remediation consists of 3 steps: cordoning the node, fencing the node, and accelerating rescheduling of the workloads:
 
-FAR adds a unique taint, `remediation.medik8s.io/fence-agents-remediation`, with [NoSchedule effect](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/#taint-based-evictions), so any new pods can't be scheduled on the unhealthy node as long as the taint remains (the taint is removed on far CR deletion).
+### Cordoning the Node
+
+FAR adds a unique taint, `remediation.medik8s.io/fence-agents-remediation:NoSchedule`, with [NoSchedule effect](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/#taint-based-evictions), to prevent scheduling of pods on the unhealthy node as long as the taint remains (the taint is removed on far CR deletion), unless the pods can tolerate it.
+
+### Fencing the Node
 
 FAR remediates by executing a fence agent action, `reboot` or `off`, on the unhealthy node, and safely reschedule any remaining workloads to other nodes, so they can continue running and be isolated from the unhealthy node.
 
-### Reboot-based remediation
+#### Reboot-based Remediation
 
-The reboot is done by executing a fence agent for the unhealthy node.
+(default behavior) If you choose the `reboot` action, then FAR reboots the unhealthy node by executing a fence agent.
 
-### Power-off-based remediation
+#### Power-off-based Remediation
 
 If you choose the `off` action, then FAR powers off the unhealthy node using the fence agent. Unlike `reboot`, the node does not automatically return to service. It remains powered off until manually recovered by an administrator.
 
-### Remediation Strategy
-After the fence agent was executed, then the operator will manually (and forcefully) delete workloads or append the [out-of-service taint](https://kubernetes.io/docs/concepts/cluster-administration/node-shutdown/#non-graceful-node-shutdown) (based on the remediationStrategy).
-Deleting the workloads is done to speed up Kubernetes rescheduling of the remaining pods (most likely [stateful pods](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#using-statefulsets)), that are not running anymore.
+### Accelerating Rescheduling of Workloads
+After the fence agent was executed, then the operator will try to accelerate Kubernetes rescheduling of remaining workloads (mostly for [stateful pods](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#using-statefulsets)) by one of two remediation strategies (defined by `remediationStrategy` field): `ResourceDeletion` or `OutOfServiceTaint`.
+
+#### ResourceDeletion
+
+The default strategy which forcefully deletes workloads
+
+#### OutOfServiceTaint
+
+Append the [well known taint](https://kubernetes.io/docs/concepts/cluster-administration/node-shutdown/#non-graceful-node-shutdown), `"node.kubernetes.io/out-of-service=nodeshutdown:NoExecute"` which is supported for clusters with k8s version 1.26+ or OCP/OKD version 4.13+. This taint will result in forcefully deletion of workloads that don't tolerate the `out-of-service` taint and then immediately detaching volume operation for such pods.
 
 ### FenceAgentsRemediationTemplate (fartemplate)
 
