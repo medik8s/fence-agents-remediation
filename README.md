@@ -33,7 +33,7 @@ FAR adds a unique taint, `remediation.medik8s.io/fence-agents-remediation:NoSche
 
 ### Fencing the Node
 
-FAR remediates by executing a fence agent action, `reboot` or `off`, on the unhealthy node, and safely reschedule any remaining workloads to other nodes, so they can continue running and be isolated from the unhealthy node.
+FAR remediates by executing a fence agent action, `reboot` or `off`, on the unhealthy node, and safely reschedules any remaining workloads to other nodes, so they can continue running and be isolated from the unhealthy node.
 
 #### Reboot-based Remediation
 
