@@ -176,8 +176,8 @@ var _ = Describe("FAR Controller", func() {
 				})
 				It("should keep the name", func() {
 					Eventually(func(g Gomega) {
-						Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
-						Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(v1alpha1.OldDefaultSecretName))
+						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
+						g.Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(v1alpha1.OldDefaultSecretName))
 					}, timeoutPreRemediation, pollInterval).Should(Succeed())
 				})
 			})
@@ -188,8 +188,8 @@ var _ = Describe("FAR Controller", func() {
 				})
 				It("should remove the name", func() {
 					Eventually(func(g Gomega) {
-						Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
-						Expect(underTestFAR.Spec.SharedSecretName).To(BeNil())
+						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
+						g.Expect(underTestFAR.Spec.SharedSecretName).To(BeNil())
 					}, timeoutPreRemediation, pollInterval).Should(Succeed())
 				})
 			})
@@ -201,8 +201,8 @@ var _ = Describe("FAR Controller", func() {
 				})
 				It("should set the name", func() {
 					Eventually(func(g Gomega) {
-						Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
-						Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(v1alpha1.OldDefaultSecretName))
+						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
+						g.Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(v1alpha1.OldDefaultSecretName))
 					}, timeoutPreRemediation, pollInterval).Should(Succeed())
 				})
 			})
@@ -213,8 +213,8 @@ var _ = Describe("FAR Controller", func() {
 				})
 				It("should not set the name", func() {
 					Eventually(func(g Gomega) {
-						Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
-						Expect(underTestFAR.Spec.SharedSecretName).To(BeNil())
+						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
+						g.Expect(underTestFAR.Spec.SharedSecretName).To(BeNil())
 					}, timeoutPreRemediation, pollInterval).Should(Succeed())
 				})
 			})

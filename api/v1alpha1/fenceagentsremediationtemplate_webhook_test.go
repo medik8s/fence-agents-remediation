@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -39,15 +40,6 @@ func getFuncNodeSecretIpConflict() func(ctx context.Context, key client.ObjectKe
 }
 
 var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
-
-	var (
-		mockValidatorClient = &mockClient{}
-
-		validator = &customValidator{
-			Client: mockValidatorClient,
-		}
-		ctx = context.Background()
-	)
 
 	Context("creating FenceAgentsRemediationTemplate", func() {
 
@@ -311,12 +303,34 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			})
 
 			When("old template has old default name and new template still has a non-empty SharedSecretName", func() {
+
+				const otherSecretName = "some-other-secret"
+
+				BeforeEach(func() {
+					originalGetFunc := mockValidatorClient.GetFunc
+					DeferCleanup(func() {
+						mockValidatorClient.GetFunc = originalGetFunc
+					})
+					mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+						if key.Name == otherSecretName {
+							if secret, ok := obj.(*corev1.Secret); ok {
+								secret.ObjectMeta = metav1.ObjectMeta{
+									Name:      otherSecretName,
+									Namespace: testNs,
+								}
+								return nil
+							}
+						}
+						return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
+					}
+				})
+
 				It("should be allowed", func() {
 					oldTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
 					oldTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(OldDefaultSecretName)
 
 					newTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
-					newTemplate.Spec.Template.Spec.SharedSecretName = ptr.To("new-secret-name")
+					newTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(otherSecretName)
 
 					_, err := validator.ValidateUpdate(ctx, oldTemplate, newTemplate)
 					Expect(err).NotTo(HaveOccurred())
@@ -427,7 +441,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					})
 					mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 						if key.Name == OldDefaultSecretName {
-							return apierrors.NewInternalError(nil)
+							return apierrors.NewInternalError(fmt.Errorf("unexpected error"))
 						}
 						return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
 					}
@@ -515,6 +529,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 	Context("validating parameter validation functionality", func() {
 		BeforeEach(func() {
+			originalGetFunc := mockValidatorClient.GetFunc
+			DeferCleanup(func() {
+				mockValidatorClient.GetFunc = originalGetFunc
+			})
 			// Set up default secret behavior for tests that need it
 			mockValidatorClient.GetFunc = getFuncNodeSecretIpConflict()
 		})
@@ -611,7 +629,8 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 func getFARTemplate(agentName string, strategy RemediationStrategyType) *FenceAgentsRemediationTemplate {
 	return &FenceAgentsRemediationTemplate{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-" + agentName + "-template",
+			Name:      "test-" + agentName + "-template",
+			Namespace: testNs,
 		},
 		Spec: FenceAgentsRemediationTemplateSpec{
 			Template: FenceAgentsRemediationTemplateResource{
