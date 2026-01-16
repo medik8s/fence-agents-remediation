@@ -30,6 +30,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -59,6 +60,9 @@ var (
 	testEnv   *envtest.Environment
 	ctx       context.Context
 	cancel    context.CancelFunc
+
+	mockValidatorClient *mockClient
+	validator           *customValidator
 )
 
 // mockClient for testing
@@ -110,11 +114,22 @@ var _ = BeforeSuite(func() {
 	err = admissionv1beta1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = corev1.AddToScheme(scheme)
+	Expect(err).NotTo(HaveOccurred())
+
 	//+kubebuilder:scaffold:scheme
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
+
+	mockValidatorClient = &mockClient{
+		Client: k8sClient,
+	}
+
+	validator = &customValidator{
+		Client: mockValidatorClient,
+	}
 
 	// initalize webhook agentValidator with a dummy function to check if agents name match the validAgentName
 	agentValidator = validation.NewCustomAgentValidator(func(agent string) (bool, error) {

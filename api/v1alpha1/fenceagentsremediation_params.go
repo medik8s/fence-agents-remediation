@@ -46,6 +46,8 @@ const (
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR parameter, parameter name: %s"
 	errorMissingParams             = "invalid spec: mandatory parameters are missing"
 	ErrorUnsupportedAction         = "FAR doesn't support any other action than `reboot` or `off`"
+
+	OldDefaultSecretName = "fence-agents-credentials-shared"
 )
 
 var (
@@ -74,7 +76,41 @@ func (v *customValidator) ValidateCreate(ctx context.Context, obj runtime.Object
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
 func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object, new runtime.Object) (admission.Warnings, error) {
-	return v.validate(ctx, new)
+	warnings, err := v.validate(ctx, new)
+	aggregated := utilErrors.NewAggregate([]error{
+		err,
+		v.validateTemplateForSharedSecretDefaultName(ctx, old, new),
+	})
+	return warnings, aggregated
+}
+
+func (v *customValidator) validateTemplateForSharedSecretDefaultName(ctx context.Context, old, new runtime.Object) error {
+	// prevent removing the default shared secret name while such a secret exists
+	oldTemplate, ok := old.(*FenceAgentsRemediationTemplate)
+	if !ok ||
+		oldTemplate.Spec.Template.Spec.SharedSecretName == nil ||
+		*oldTemplate.Spec.Template.Spec.SharedSecretName != OldDefaultSecretName {
+		return nil
+	}
+
+	newTemplate, ok := new.(*FenceAgentsRemediationTemplate)
+	if !ok ||
+		newTemplate.Spec.Template.Spec.SharedSecretName != nil &&
+			*newTemplate.Spec.Template.Spec.SharedSecretName != "" {
+		return nil
+	}
+
+	// old default name was removed, checking if secret exists
+	secret := &corev1.Secret{}
+	secretKey := client.ObjectKey{Name: OldDefaultSecretName, Namespace: newTemplate.Namespace}
+	if err := v.Get(ctx, secretKey, secret); err != nil {
+		if apiErrors.IsNotFound(err) {
+			// this is fine
+			return nil
+		}
+		return fmt.Errorf("failed to check if the default shared secret exists, please retry")
+	}
+	return fmt.Errorf("shared secret with the deprecated default name %q exists, please delete the secret before removing the name from the FenceAgentsRemediationTemplate CR", OldDefaultSecretName)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
@@ -345,7 +381,7 @@ func collectAllSecretParams(ctx context.Context, k8sClient client.Client, far *F
 
 	// collect secret params from shared secret
 	if sharedSecretName != nil {
-		sharedSecretParams, err := collectSecretParams(ctx, k8sClient, *sharedSecretName, namespace, true) // true = isSharedSecret
+		sharedSecretParams, err := collectSecretParams(ctx, k8sClient, *sharedSecretName, namespace)
 		if err != nil {
 			return SecretParams{}, err
 		}
@@ -365,7 +401,7 @@ func collectAllSecretParams(ctx context.Context, k8sClient client.Client, far *F
 	// collect secret params from the node's secret
 	nodeSecretName, isFound := nodeSecretNames[NodeName(nodeName)]
 	if isFound {
-		nodeSecretParams, err := collectSecretParams(ctx, k8sClient, nodeSecretName, namespace, false) // false = isSharedSecret
+		nodeSecretParams, err := collectSecretParams(ctx, k8sClient, nodeSecretName, namespace)
 		if err != nil {
 			return SecretParams{}, err
 		}
@@ -377,24 +413,15 @@ func collectAllSecretParams(ctx context.Context, k8sClient client.Client, far *F
 }
 
 // collectSecretParams reads and adds the secret params if they are available
-// For shared secrets, IsNotFound errors are ignored (returns empty map)
-// For node secrets, IsNotFound errors are returned as errors
-func collectSecretParams(ctx context.Context, k8sClient client.Client, secretName, namespace string, isSharedSecret bool) (map[string]string, error) {
+func collectSecretParams(ctx context.Context, k8sClient client.Client, secretName, namespace string) (map[string]string, error) {
 	secretParams := make(map[string]string)
 	secret := &corev1.Secret{}
 	secretKeyObj := client.ObjectKey{Name: secretName, Namespace: namespace}
 
 	if err := k8sClient.Get(ctx, secretKeyObj, secret); err != nil {
 		if apiErrors.IsNotFound(err) {
-			if isSharedSecret {
-				// For shared secrets, IsNotFound is OK - return empty params
-				paramsLog.Info("shared secret not found, continuing with empty params", "secret name", secretName, "namespace", namespace)
-				return secretParams, nil
-			}
-			// For node secrets, IsNotFound is an error
-			paramsLog.Error(err, "node secret not found", "secret name", secretName, "namespace", namespace)
-			return nil, fmt.Errorf("node secret '%s' not found in namespace '%s': %w", secretName, namespace, err)
-
+			paramsLog.Error(err, "secret not found", "secret name", secretName, "namespace", namespace)
+			return nil, fmt.Errorf("secret '%s' not found in namespace '%s': %w", secretName, namespace, err)
 		}
 		// For any other error, always return it
 		paramsLog.Error(err, "failed to get secret", "secret name", secretName, "namespace", namespace)
