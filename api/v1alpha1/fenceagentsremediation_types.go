@@ -27,7 +27,7 @@ const (
 	// FARFinalizer is a finalizer for a FenceAgentsRemediation CR deletion
 	FARFinalizer string = "fence-agents-remediation.medik8s.io/far-finalizer"
 	// Taints
-	FARNoExecuteTaintKey = "medik8s.io/fence-agents-remediation"
+	FARNoScheduleTaintKey = "remediation.medik8s.io/fence-agents-remediation"
 )
 
 // ConditionsChangeReason represents the reason of updating the some or all the conditions
