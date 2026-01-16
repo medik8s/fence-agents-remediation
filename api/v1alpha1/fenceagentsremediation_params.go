@@ -46,6 +46,8 @@ const (
 	errorParamDefinedMultipleTimes = "invalid multiple definition of FAR parameter, parameter name: %s"
 	errorMissingParams             = "invalid spec: mandatory parameters are missing"
 	ErrorUnsupportedAction         = "FAR doesn't support any other action than `reboot` or `off`"
+
+	OldDefaultSecretName = "fence-agents-credentials-shared"
 )
 
 var (
@@ -74,7 +76,41 @@ func (v *customValidator) ValidateCreate(ctx context.Context, obj runtime.Object
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
 func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object, new runtime.Object) (admission.Warnings, error) {
-	return v.validate(ctx, new)
+	warnings, err := v.validate(ctx, new)
+	aggregated := utilErrors.NewAggregate([]error{
+		err,
+		v.validateTemplateForSharedSecretDefaultName(ctx, old, new),
+	})
+	return warnings, aggregated
+}
+
+func (v *customValidator) validateTemplateForSharedSecretDefaultName(ctx context.Context, old, new runtime.Object) error {
+	// prevent removing the default shared secret name while such a secret exists
+	oldTemplate, ok := old.(*FenceAgentsRemediationTemplate)
+	if !ok ||
+		oldTemplate.Spec.Template.Spec.SharedSecretName == nil ||
+		*oldTemplate.Spec.Template.Spec.SharedSecretName != OldDefaultSecretName {
+		return nil
+	}
+
+	newTemplate, ok := new.(*FenceAgentsRemediationTemplate)
+	if !ok ||
+		newTemplate.Spec.Template.Spec.SharedSecretName != nil &&
+			*newTemplate.Spec.Template.Spec.SharedSecretName != "" {
+		return nil
+	}
+
+	// old default name was removed, checking if secret exists
+	secret := &corev1.Secret{}
+	secretKey := client.ObjectKey{Name: OldDefaultSecretName, Namespace: newTemplate.Namespace}
+	if err := v.Get(ctx, secretKey, secret); err != nil {
+		if apiErrors.IsNotFound(err) {
+			// this is fine
+			return nil
+		}
+		return fmt.Errorf("failed to check if the default shared secret exists, please retry")
+	}
+	return fmt.Errorf("shared secret with the deprecated default name %q exists, please delete the secret before removing the name from the FenceAgentsRemediationTemplate CR", OldDefaultSecretName)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type

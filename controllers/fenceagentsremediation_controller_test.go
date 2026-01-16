@@ -170,20 +170,20 @@ var _ = Describe("FAR Controller", func() {
 			})
 			When("default secret name is set and secret exists", func() {
 				BeforeEach(func() {
-					Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(oldDefaultSecretName))
+					Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(v1alpha1.OldDefaultSecretName))
 					Expect(sharedSecret).ToNot(BeNil())
-					Expect(sharedSecret.GetName()).To(Equal(oldDefaultSecretName))
+					Expect(sharedSecret.GetName()).To(Equal(v1alpha1.OldDefaultSecretName))
 				})
 				It("should keep the name", func() {
 					Eventually(func(g Gomega) {
 						Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
-						Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(oldDefaultSecretName))
+						Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(v1alpha1.OldDefaultSecretName))
 					}, timeoutPreRemediation, pollInterval).Should(Succeed())
 				})
 			})
 			When("default secret name is set and secret does not exist", func() {
 				BeforeEach(func() {
-					Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(oldDefaultSecretName))
+					Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(v1alpha1.OldDefaultSecretName))
 					sharedSecret = nil
 				})
 				It("should remove the name", func() {
@@ -197,12 +197,12 @@ var _ = Describe("FAR Controller", func() {
 				BeforeEach(func() {
 					underTestFAR.Spec.SharedSecretName = nil
 					Expect(sharedSecret).ToNot(BeNil())
-					Expect(sharedSecret.GetName()).To(Equal(oldDefaultSecretName))
+					Expect(sharedSecret.GetName()).To(Equal(v1alpha1.OldDefaultSecretName))
 				})
 				It("should set the name", func() {
 					Eventually(func(g Gomega) {
 						Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
-						Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(oldDefaultSecretName))
+						Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(v1alpha1.OldDefaultSecretName))
 					}, timeoutPreRemediation, pollInterval).Should(Succeed())
 				})
 			})

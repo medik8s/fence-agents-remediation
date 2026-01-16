@@ -48,10 +48,6 @@ import (
 	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 )
 
-const (
-	oldDefaultSecretName = "fence-agents-credentials-shared"
-)
-
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
 type FenceAgentsRemediationReconciler struct {
 	client.Client
@@ -391,7 +387,7 @@ func appendParamToSlice(fenceAgentParams []string, paramName v1alpha1.ParameterN
 func (r *FenceAgentsRemediationReconciler) applySharedSecretDefaultNameWorkaround(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (bool, error) {
 	// Check if the secret with the old default name exists
 	secret := &corev1.Secret{}
-	secretKey := client.ObjectKey{Name: oldDefaultSecretName, Namespace: far.Namespace}
+	secretKey := client.ObjectKey{Name: v1alpha1.OldDefaultSecretName, Namespace: far.Namespace}
 	secretExists := true
 	if err := r.Get(ctx, secretKey, secret); err != nil {
 		if !apiErrors.IsNotFound(err) {
@@ -402,11 +398,11 @@ func (r *FenceAgentsRemediationReconciler) applySharedSecretDefaultNameWorkaroun
 
 	if far.Spec.SharedSecretName == nil && secretExists {
 		// Set the old default value when SharedSecretName is nil and the Secret exists
-		r.Log.Info("Setting SharedSecretName to old default value as the secret exists", "secretName", oldDefaultSecretName)
-		far.Spec.SharedSecretName = ptr.To(oldDefaultSecretName)
-	} else if far.Spec.SharedSecretName != nil && *far.Spec.SharedSecretName == oldDefaultSecretName && !secretExists {
+		r.Log.Info("Setting SharedSecretName to old default value as the secret exists", "secretName", v1alpha1.OldDefaultSecretName)
+		far.Spec.SharedSecretName = ptr.To(v1alpha1.OldDefaultSecretName)
+	} else if far.Spec.SharedSecretName != nil && *far.Spec.SharedSecretName == v1alpha1.OldDefaultSecretName && !secretExists {
 		// Remove the old default value when SharedSecretName equals the old default but the Secret doesn't exist
-		r.Log.Info("Removing SharedSecretName old default value as the secret does not exist", "secretName", oldDefaultSecretName)
+		r.Log.Info("Removing SharedSecretName old default value as the secret does not exist", "secretName", v1alpha1.OldDefaultSecretName)
 		far.Spec.SharedSecretName = nil
 	} else {
 		return false, nil
