@@ -378,11 +378,11 @@ func appendParamToSlice(fenceAgentParams []string, paramName v1alpha1.ParameterN
 //   - updates of the default value are challenging and can result in backwards compatibility issues
 //
 // - because of that we decided to
-//   - remove the default value, so the field wil stay empty for new CRs when it's empty
+//   - remove the default value, so the field will stay empty for new CRs when it's empty
 //   - however, as a workaround, set the old default value on the CR in code when such a Secret exists
 //   - and remove the value on existing CRs when no such Secret exists
 //
-// This workaround will be removed in a future version
+// TODO: This workaround will be removed in a future version
 // Returns true if the workaround was applied, false otherwise
 func (r *FenceAgentsRemediationReconciler) applySharedSecretDefaultNameWorkaround(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (bool, error) {
 	// Check if the secret with the old default name exists
