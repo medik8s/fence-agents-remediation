@@ -1,8 +1,6 @@
 package v1alpha1
 
 import (
-	"context"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -10,12 +8,6 @@ import (
 )
 
 var _ = Describe("FenceAgentsRemediation Validation", func() {
-	var (
-		validator = &customValidator{
-			Client: &mockClient{},
-		}
-		ctx = context.Background()
-	)
 
 	Context("creating FenceAgentsRemediation", func() {
 

@@ -38,6 +38,7 @@ import (
 	utilErrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -124,6 +125,14 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		utils.UpdateConditions(utils.RemediationFinishedNodeNotFound, far, r.Log)
 		commonEvents.WarningEvent(r.Recorder, far, utils.EventReasonCrNodeNotFound, utils.EventMessageCrNodeNotFound)
 		return emptyResult, err
+	}
+
+	// Apply the shared secret default name workaround. See function description for details.
+	if applied, err := r.applySharedSecretDefaultNameWorkaround(ctx, far); err != nil {
+		r.Log.Error(err, "Failed to apply shared secret default name workaround")
+		return emptyResult, err
+	} else if applied {
+		return emptyResult, nil
 	}
 
 	// Check NHC timeout annotation
@@ -356,4 +365,51 @@ func appendParamToSlice(fenceAgentParams []string, paramName v1alpha1.ParameterN
 		fenceAgentParams = append(fenceAgentParams, stringParam)
 	}
 	return fenceAgentParams
+}
+
+// applySharedSecretDefaultNameWorkaround applies a workaround for the shared secret name default value:
+// - in the first version of FAR which introduced the usage of secrets, we added the new API field "SharedSecretName"
+// - like every new API field, it has to be optional, to be backwards compatible
+// - however, we also set a default value "fence-agents-credentials-shared" via API
+//
+// - that introduced issues:
+//   - with that default value there is no chance to correctly validate the field,
+//     because we don't know if it was set by the user (meaning the Secret should exist) or not
+//   - updates of the default value are challenging and can result in backwards compatibility issues
+//
+// - because of that we decided to
+//   - remove the default value, so the field will stay empty for new CRs when it's empty
+//   - however, as a workaround, set the old default value on the CR in code when such a Secret exists
+//   - and remove the value on existing CRs when no such Secret exists
+//
+// TODO: This workaround will be removed in a future version
+// Returns true if the workaround was applied, false otherwise
+func (r *FenceAgentsRemediationReconciler) applySharedSecretDefaultNameWorkaround(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) (bool, error) {
+	// Check if the secret with the old default name exists
+	secret := &corev1.Secret{}
+	secretKey := client.ObjectKey{Name: v1alpha1.OldDefaultSecretName, Namespace: far.Namespace}
+	secretExists := true
+	if err := r.Get(ctx, secretKey, secret); err != nil {
+		if !apiErrors.IsNotFound(err) {
+			return false, fmt.Errorf("failed to check for shared secret: %w", err)
+		}
+		secretExists = false
+	}
+
+	if far.Spec.SharedSecretName == nil && secretExists {
+		// Set the old default value when SharedSecretName is nil and the Secret exists
+		r.Log.Info("Setting SharedSecretName to old default value as the secret exists", "secretName", v1alpha1.OldDefaultSecretName)
+		far.Spec.SharedSecretName = ptr.To(v1alpha1.OldDefaultSecretName)
+	} else if far.Spec.SharedSecretName != nil && *far.Spec.SharedSecretName == v1alpha1.OldDefaultSecretName && !secretExists {
+		// Remove the old default value when SharedSecretName equals the old default but the Secret doesn't exist
+		r.Log.Info("Removing SharedSecretName old default value as the secret does not exist", "secretName", v1alpha1.OldDefaultSecretName)
+		far.Spec.SharedSecretName = nil
+	} else {
+		return false, nil
+	}
+
+	if err := r.Update(ctx, far); err != nil {
+		return false, fmt.Errorf("failed to update FAR with SharedSecretName workaround: %w", err)
+	}
+	return true, nil
 }
