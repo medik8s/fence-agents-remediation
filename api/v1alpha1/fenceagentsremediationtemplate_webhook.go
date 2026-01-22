@@ -17,11 +17,15 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
+	"fmt"
+
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 var (
@@ -35,6 +39,7 @@ func (farTemplate *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr c
 		WithValidator(&customValidator{
 			Client: mgr.GetClient(),
 		}).
+		WithDefaulter(&FARTemplateDefaulter{}).
 		Complete()
 }
 
@@ -42,10 +47,16 @@ func (farTemplate *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr c
 
 // +kubebuilder:webhook:path=/mutate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate,mutating=true,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=create;update,versions=v1alpha1,name=mfenceagentsremediationtemplate.kb.io,admissionReviewVersions=v1
 
-var _ webhook.Defaulter = &FenceAgentsRemediationTemplate{}
+type FARTemplateDefaulter struct{}
+
+var _ admission.CustomDefaulter = &FARTemplateDefaulter{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
-func (farTemplate *FenceAgentsRemediationTemplate) Default() {
+func (d *FARTemplateDefaulter) Default(ctx context.Context, obj runtime.Object) error {
+	farTemplate, ok := obj.(*FenceAgentsRemediationTemplate)
+	if !ok {
+		return fmt.Errorf("expected a FenceAgentsRemediationTemplate but got %T", obj)
+	}
 	webhookFARTemplateLog.Info("default", "name", farTemplate.Name)
 	if farTemplate.GetAnnotations() == nil {
 		farTemplate.Annotations = make(map[string]string)
@@ -53,4 +64,5 @@ func (farTemplate *FenceAgentsRemediationTemplate) Default() {
 	if _, isSameKindAnnotationSet := farTemplate.GetAnnotations()[commonAnnotations.MultipleTemplatesSupportedAnnotation]; !isSameKindAnnotationSet {
 		farTemplate.Annotations[commonAnnotations.MultipleTemplatesSupportedAnnotation] = "true"
 	}
+	return nil
 }
