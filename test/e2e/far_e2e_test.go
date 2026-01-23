@@ -2,8 +2,10 @@ package e2e
 
 import (
 	"context"
+	"maps"
 	"math/rand"
 	"os"
+	"slices"
 	"time"
 
 	commonConditions "github.com/medik8s/common/pkg/conditions"
@@ -17,6 +19,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -106,6 +110,12 @@ var _ = Describe("FAR E2e", func() {
 			nodeBootTimeBefore, err = e2eUtils.GetBootTime(clientSet, nodeName, testNsName, log)
 			Expect(err).ToNot(HaveOccurred(), "failed to get boot time of the node")
 
+			// Release the node back to the pool if remediation is skipped
+			DeferCleanup(func() {
+				if skipRemediationCreation && selectedNode != nil {
+					availableWorkerNodes.Items = append(availableWorkerNodes.Items, *selectedNode)
+				}
+			})
 		})
 		JustBeforeEach(func() {
 			if skipRemediationCreation {
@@ -128,6 +138,76 @@ var _ = Describe("FAR E2e", func() {
 				DeferCleanup(powerOnNodeAndWaitUntilReady, far, selectedNode)
 			}
 		})
+
+		When("creating a valid FART to validate fence agent parameters", func() {
+			BeforeEach(func() {
+				// since we test here the validation we are skipping remediation creation
+				skipRemediationCreation = true
+				testShareParam = addSecretsToSharedParams(testShareParam)
+			})
+			It("should validate the fence agent parameters and set the validation condition", func() {
+				validFARSpec := v1alpha1.FenceAgentsRemediationSpec{
+					Agent:               fenceAgent,
+					SharedParameters:    testShareParam,
+					NodeParameters:      testNodeParam,
+					RemediationStrategy: v1alpha1.OutOfServiceTaintRemediationStrategy,
+					RetryCount:          10,
+					RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
+					Timeout:             metav1.Duration{Duration: 60 * time.Second},
+				}
+				By("About to create FenceAgentsRemediationTemplate")
+				fart := &v1alpha1.FenceAgentsRemediationTemplate{
+					ObjectMeta: metav1.ObjectMeta{Name: "valid-fart-validation-test", Namespace: operatorNsName},
+					Spec:       v1alpha1.FenceAgentsRemediationTemplateSpec{StatusValidationSample: ptr.To(intstr.FromString("100%")), Template: v1alpha1.FenceAgentsRemediationTemplateResource{Spec: validFARSpec}},
+				}
+				log.Info("Creating FenceAgentsRemediationTemplate", "template", fart.Name, "namespace", operatorNsName, "sharedParamsKeys", slices.Collect(maps.Keys(testShareParam)), "nodeParamsKeys", slices.Collect(maps.Keys(testNodeParam)), "remediationStrategy", fart.Spec.Template.Spec.RemediationStrategy)
+				Expect(k8sClient.Create(context.Background(), fart)).To(Succeed(), "create valid fart should succeed")
+				DeferCleanup(func() {
+					Expect(k8sClient.Delete(context.Background(), fart)).To(Succeed())
+				})
+
+				By("checking that FenceAgentStatusValidationSucceeded condition is set and validation completes")
+				verifyFARTValidationCondition(fart.Name, operatorNsName)
+			})
+		})
+
+		When("creating a FART with invalid fence agent parameters", func() {
+			BeforeEach(func() {
+				// since we test here the validation we are skipping remediation creation
+				skipRemediationCreation = true
+				testShareParam = addSecretsToSharedParams(testShareParam)
+				// Override the platform-specific parameter (--plug for AWS, --ipport for BareMetal, etc..)
+				// of the selected node to use an invalid value that has no fence agent configured
+				invalidValue := "invalid-node-identifier-12345" // Value that has no fence agent configured
+				// Use the platform-specific parameter name (nodeIdentifierPrefix is set based on platform)
+				testNodeParam[v1alpha1.ParameterName(nodeIdentifierPrefix)][v1alpha1.NodeName(selectedNode.Name)] = invalidValue
+			})
+			It("should fail validation when fence agent status check fails", func() {
+				invalidFARSpec := v1alpha1.FenceAgentsRemediationSpec{
+					Agent:               fenceAgent,
+					SharedParameters:    testShareParam,
+					NodeParameters:      testNodeParam,
+					RemediationStrategy: v1alpha1.OutOfServiceTaintRemediationStrategy,
+					RetryCount:          10,
+					RetryInterval:       metav1.Duration{Duration: 20 * time.Second},
+					Timeout:             metav1.Duration{Duration: 60 * time.Second},
+				}
+				By("About to create FenceAgentsRemediationTemplate with invalid IP")
+				fart := &v1alpha1.FenceAgentsRemediationTemplate{
+					ObjectMeta: metav1.ObjectMeta{Name: "invalid-fart-validation-test", Namespace: operatorNsName},
+					Spec:       v1alpha1.FenceAgentsRemediationTemplateSpec{StatusValidationSample: ptr.To(intstr.FromString("100%")), Template: v1alpha1.FenceAgentsRemediationTemplateResource{Spec: invalidFARSpec}},
+				}
+				log.Info("Creating FenceAgentsRemediationTemplate with invalid validation", "template", fart.Name, "namespace", operatorNsName)
+				Expect(k8sClient.Create(context.Background(), fart)).To(Succeed(), "create invalid fart should succeed")
+				DeferCleanup(func() {
+					Expect(k8sClient.Delete(context.Background(), fart)).To(Succeed())
+				})
+
+				By("checking that FenceAgentStatusValidationSucceeded condition is set to failed")
+				verifyFARTValidationFailedCondition(fart.Name, operatorNsName)
+			})
+		})
+
 		When("running FAR to remediate a node with secrets in shared parameters (legacy)", func() {
 			BeforeEach(func() {
 				testShareParam = addSecretsToSharedParams(testShareParam)
@@ -483,6 +563,42 @@ func verifyStatusCondition(nodeName, conditionType string, conditionStatus *meta
 			g.Expect(condition.Status).To(Equal(*conditionStatus), "expected condition %v to have status %v", conditionType, *conditionStatus)
 		}
 	}, timeoutForRemediationChecks, pollForRemediationChecks).Should(Succeed())
+}
+
+// verifyFARTValidationCondition checks if the FenceAgentStatusValidationSucceeded condition on a FART is set and has the expected status
+func verifyFARTValidationCondition(fartName, namespace string) {
+	fart := &v1alpha1.FenceAgentsRemediationTemplate{}
+	fartNamespacedName := client.ObjectKey{Name: fartName, Namespace: namespace}
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(context.Background(), fartNamespacedName, fart)).To(Succeed())
+		condition := meta.FindStatusCondition(fart.Status.Conditions, "FenceAgentStatusValidationSucceeded")
+		g.Expect(condition).ToNot(BeNil(), "expected FenceAgentStatusValidationSucceeded condition to be set")
+		g.Expect(condition.Status).To(Equal(metav1.ConditionTrue), "expected FenceAgentStatusValidationSucceeded condition to have status %v, but got %v", metav1.ConditionTrue, condition.Status)
+		g.Expect(condition.Reason).To(Equal("ValidationSucceeded"), "expected validation to succeed")
+		g.Expect(len(fart.Status.ValidationFailed)).To(Equal(0), "expected no validation failures")
+	}, "2m0s", "2s").Should(Succeed())
+	log.Info("FART validation condition verified", "fart name", fartName, "status", metav1.ConditionTrue)
+}
+
+// verifyFARTValidationFailedCondition checks if the FenceAgentStatusValidationSucceeded condition on a FART is set to failed
+func verifyFARTValidationFailedCondition(fartName, namespace string) {
+	fart := &v1alpha1.FenceAgentsRemediationTemplate{}
+	fartNamespacedName := client.ObjectKey{Name: fartName, Namespace: namespace}
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(context.Background(), fartNamespacedName, fart)).To(Succeed())
+		condition := meta.FindStatusCondition(fart.Status.Conditions, "FenceAgentStatusValidationSucceeded")
+		g.Expect(condition).ToNot(BeNil(), "expected FenceAgentStatusValidationSucceeded condition to be set")
+		g.Expect(condition.Status).To(Equal(metav1.ConditionFalse), "expected FenceAgentStatusValidationSucceeded condition to have status %v, but got %v", metav1.ConditionFalse, condition.Status)
+		g.Expect(condition.Reason).To(Equal("ValidationFailed"), "expected validation to fail")
+		g.Expect(fart.Status.ValidationFailed).ToNot(BeNil(), "expected ValidationFailed to be set")
+		g.Expect(len(fart.Status.ValidationFailed)).To(Equal(1), "expected exactly one validation failure")
+		// Verify the failure message indicates fence agent command failed
+		for _, failureMsg := range fart.Status.ValidationFailed {
+			// not validating for the content of the fail message as it might change depending on the fence agent
+			g.Expect(failureMsg).ToNot(BeEmpty(), "expected validation to fail")
+		}
+	}, "2m0s", "2s").Should(Succeed())
+	log.Info("FART validation failed condition verified", "fart name", fartName, "status", metav1.ConditionFalse)
 }
 
 // checkRemediation verify whether the node was remediated

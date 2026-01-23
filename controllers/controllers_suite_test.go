@@ -149,6 +149,16 @@ var _ = BeforeSuite(func() {
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
 
+	templateExecutor := cli.NewFakeExecuter(k8sClient, cli.ControlTemplateRunner, fakeRecorder)
+	err = (&FenceAgentsRemediationTemplateReconciler{
+		Client:   k8sClient,
+		Log:      k8sManager.GetLogger().WithName("test fart reconciler"),
+		Scheme:   k8sManager.GetScheme(),
+		Recorder: fakeRecorder,
+		Executor: templateExecutor,
+	}).SetupWithManager(k8sManager)
+	Expect(err).NotTo(HaveOccurred())
+
 	go func() {
 		// https://github.com/kubernetes-sigs/controller-runtime/issues/1571
 		ctx, cancel = context.WithCancel(ctrl.SetupSignalHandler())

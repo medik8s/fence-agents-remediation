@@ -98,6 +98,11 @@ spec:
         name: fenceagentsremediationtemplates
         version: v1alpha1
       specDescriptors:
+      - description: StatusValidationSample configures how many nodes the fence agent
+          status validation should run for. Accepts an absolute number (e.g., 3) or
+          a percentage string (e.g., "60%").
+        displayName: Status Validation Sample
+        path: statusValidationSample
       - description: Template defines the desired state of FenceAgentsRemediationTemplate
         displayName: Template
         path: template

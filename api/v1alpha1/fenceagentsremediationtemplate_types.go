@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -29,8 +30,13 @@ type FenceAgentsRemediationTemplateResource struct {
 
 // FenceAgentsRemediationTemplateSpec defines the desired state of FenceAgentsRemediationTemplate
 type FenceAgentsRemediationTemplateSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// StatusValidationSample configures how many nodes the fence agent status validation should run for.
+	// Accepts an absolute number (e.g., 3) or a percentage string (e.g., "60%").
+	// +optional
+	// +kubebuilder:validation:XIntOrString
+	// +kubebuilder:validation:XValidation:message="Value must be an integer >=0, or string between 0% and 100%",rule="type(self) == int && self >= 0 || type(self) == string && self.matches('^([0-9]|[1-9][0-9]|100)%$')"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	StatusValidationSample *intstr.IntOrString `json:"statusValidationSample,omitempty"`
 
 	// Template defines the desired state of FenceAgentsRemediationTemplate
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
@@ -39,8 +45,20 @@ type FenceAgentsRemediationTemplateSpec struct {
 
 // FenceAgentsRemediationTemplateStatus defines the observed state of FenceAgentsRemediationTemplate
 type FenceAgentsRemediationTemplateStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Represents the observations of a FenceAgentsRemediationTemplate's current state.
+	// Known .status.conditions.type: "FenceAgentStatusValidationSucceeded".
+	// +listType=map
+	// +listMapKey=type
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// ValidationFailed maps node name to the validation failure message.
+	// +optional
+	ValidationFailed map[string]string `json:"validationFailed,omitempty"`
+
+	// ValidationPassed marks nodes that have passed validation in the current round.
+	// +optional
+	ValidationPassed map[string]string `json:"validationPassed,omitempty"`
 }
 
 // +kubebuilder:object:root=true

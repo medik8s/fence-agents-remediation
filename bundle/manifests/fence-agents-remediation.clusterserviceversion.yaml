@@ -182,6 +182,11 @@ spec:
         name: fenceagentsremediationtemplates
         version: v1alpha1
       specDescriptors:
+      - description: StatusValidationSample configures how many nodes the fence agent
+          status validation should run for. Accepts an absolute number (e.g., 3) or
+          a percentage string (e.g., "60%").
+        displayName: Status Validation Sample
+        path: statusValidationSample
       - description: Template defines the desired state of FenceAgentsRemediationTemplate
         displayName: Template
         path: template
@@ -294,6 +299,7 @@ spec:
           - fence-agents-remediation.medik8s.io
           resources:
           - fenceagentsremediations
+          - fenceagentsremediationtemplates
           verbs:
           - create
           - delete
@@ -306,12 +312,14 @@ spec:
           - fence-agents-remediation.medik8s.io
           resources:
           - fenceagentsremediations/finalizers
+          - fenceagentsremediationtemplates/finalizers
           verbs:
           - update
         - apiGroups:
           - fence-agents-remediation.medik8s.io
           resources:
           - fenceagentsremediations/status
+          - fenceagentsremediationtemplates/status
           verbs:
           - get
           - patch
