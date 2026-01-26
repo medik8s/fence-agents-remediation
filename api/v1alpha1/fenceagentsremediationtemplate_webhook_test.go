@@ -1,20 +1,29 @@
 package v1alpha1
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
+
+	var validator admission.CustomValidator
+
+	BeforeEach(func() {
+		validator = &FARTemplateValidator{}
+	})
 
 	Context("creating FenceAgentsRemediationTemplate", func() {
 
 		When("agent name match format and binary", func() {
 			It("should be accepted", func() {
 				farTemplate := getTestFARTemplate(validAgentName)
-				Expect(farTemplate.ValidateCreate()).Error().NotTo(HaveOccurred())
+				Expect(validator.ValidateCreate(context.Background(), farTemplate)).Error().ToNot(HaveOccurred())
 			})
 		})
 
@@ -29,7 +38,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				// Explicitly ensure no node parameters
 				farTemplate.Spec.Template.Spec.NodeParameters = nil
 
-				warnings, err := farTemplate.ValidateCreate()
+				warnings, err := validator.ValidateCreate(context.Background(), farTemplate)
 				Expect(err).NotTo(HaveOccurred())
 				// No warnings expected about node-specific parameters since there are none
 				Expect(warnings).To(BeEmpty())
@@ -39,7 +48,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		When("agent name was not found ", func() {
 			It("should be rejected", func() {
 				farTemplate := getTestFARTemplate(invalidAgentName)
-				warnings, err := farTemplate.ValidateCreate()
+				warnings, err := validator.ValidateCreate(context.Background(), farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
 			})
@@ -60,7 +69,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					isOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
-					Expect(outOfServiceStrategy.ValidateCreate()).Error().NotTo(HaveOccurred())
+					Expect(validator.ValidateCreate(context.Background(), outOfServiceStrategy)).Error().ToNot(HaveOccurred())
 				})
 			})
 
@@ -69,7 +78,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					isOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
-					warnings, err := outOfServiceStrategy.ValidateCreate()
+					warnings, err := validator.ValidateCreate(context.Background(), outOfServiceStrategy)
 					ExpectWithOffset(1, warnings).To(BeEmpty())
 					Expect(err).To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
 				})
@@ -85,7 +94,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			})
 			It("should be accepted", func() {
 				farTemplate := getTestFARTemplate(validAgentName)
-				Expect(farTemplate.ValidateUpdate(oldFARTemplate)).Error().NotTo(HaveOccurred())
+				Expect(validator.ValidateUpdate(context.Background(), oldFARTemplate, farTemplate)).Error().ToNot(HaveOccurred())
 			})
 		})
 
@@ -95,7 +104,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			})
 			It("should be rejected", func() {
 				farTemplate := getTestFARTemplate(invalidAgentName)
-				warnings, err := farTemplate.ValidateUpdate(oldFARTemplate)
+				warnings, err := validator.ValidateUpdate(context.Background(), oldFARTemplate, farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
 			})
@@ -118,7 +127,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					isOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
-					Expect(outOfServiceStrategy.ValidateUpdate(resourceDeletionStrategy)).Error().NotTo(HaveOccurred())
+					Expect(validator.ValidateUpdate(context.Background(), resourceDeletionStrategy, outOfServiceStrategy)).Error().ToNot(HaveOccurred())
 				})
 			})
 
@@ -127,7 +136,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					isOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
-					warnings, err := outOfServiceStrategy.ValidateUpdate(resourceDeletionStrategy)
+					warnings, err := validator.ValidateUpdate(context.Background(), resourceDeletionStrategy, outOfServiceStrategy)
 					ExpectWithOffset(1, warnings).To(BeEmpty())
 					Expect(err).To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
 				})
@@ -159,7 +168,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			}
 
 			// Validate and expect aggregated errors
-			warnings, err := farTemplate.ValidateCreate()
+			warnings, err := validator.ValidateCreate(context.Background(), farTemplate)
 			Expect(warnings).To(BeEmpty())
 			Expect(err).To(HaveOccurred())
 
@@ -192,7 +201,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				},
 			}
 
-			warnings, err := farTemplate.ValidateCreate()
+			warnings, err := validator.ValidateCreate(context.Background(), farTemplate)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(warnings).To(BeEmpty())
 		})
