@@ -17,13 +17,13 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/medik8s/fence-agents-remediation/pkg/template"
@@ -39,9 +39,10 @@ var (
 	isOutOfServiceTaintSupported bool
 )
 
-func (r *FenceAgentsRemediation) SetupWebhookWithManager(mgr ctrl.Manager) error {
+func (far *FenceAgentsRemediation) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+		For(far).
+		WithValidator(&FARValidator{}).
 		Complete()
 }
 
@@ -50,24 +51,38 @@ func (r *FenceAgentsRemediation) SetupWebhookWithManager(mgr ctrl.Manager) error
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
 // +kubebuilder:webhook:path=/validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediation,mutating=false,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations,verbs=create;update,versions=v1alpha1,name=vfenceagentsremediation.kb.io,admissionReviewVersions=v1
 
-var _ webhook.Validator = &FenceAgentsRemediation{}
+type FARValidator struct{}
+
+var _ admission.CustomValidator = &FARValidator{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (far *FenceAgentsRemediation) ValidateCreate() (admission.Warnings, error) {
+func (v *FARValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+	far, ok := obj.(*FenceAgentsRemediation)
+	if !ok {
+		return nil, fmt.Errorf("expected a FenceAgentsRemediation but got a %T", obj)
+	}
 	webhookFARLog.Info("validate create", "name", far.Name)
 	return validateFAR(&far.Spec)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (far *FenceAgentsRemediation) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
+func (v *FARValidator) ValidateUpdate(_ context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
+	far, ok := newObj.(*FenceAgentsRemediation)
+	if !ok {
+		return nil, fmt.Errorf("expected a FenceAgentsRemediation but got a %T", newObj)
+	}
 	webhookFARLog.Info("validate update", "name", far.Name)
 	return validateFAR(&far.Spec)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (far *FenceAgentsRemediation) ValidateDelete() (admission.Warnings, error) {
-	webhookFARLog.Info("validate delete", "name", far.Name)
-	return nil, nil
+func (v *FARValidator) ValidateDelete(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+	farTemplate, ok := obj.(*FenceAgentsRemediation)
+	if !ok {
+		return nil, fmt.Errorf("expected a FenceAgentsRemediation but got a %T", obj)
+	} // unused for now, add "delete" when needed to verbs in the kubebuilder annotation above
+	webhookFARLog.Info("validate delete", "name", farTemplate.Name)
+	return admission.Warnings{}, nil
 }
 
 func validateFAR(farSpec *FenceAgentsRemediationSpec) (admission.Warnings, error) {

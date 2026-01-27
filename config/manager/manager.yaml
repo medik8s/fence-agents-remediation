@@ -17,6 +17,11 @@ spec:
     matchLabels:
       control-plane: controller-manager
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   template:
     metadata:
       annotations:
@@ -69,19 +74,11 @@ spec:
             memory: 64Mi
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                  - key: control-plane
-                    operator: In
-                    values:
-                      - controller-manager
-                  - key: app.kubernetes.io/name
-                    operator: In
-                    values:
-                      - fence-agents-remediation-operator
-              topologyKey: "kubernetes.io/hostname"
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: "kubernetes.io/hostname"
+          whenUnsatisfiable: "DoNotSchedule"
+          labelSelector:
+            matchLabels:
+              control-plane: controller-manager
+              app.kubernetes.io/name: fence-agents-remediation-operator

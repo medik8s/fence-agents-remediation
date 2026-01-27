@@ -30,15 +30,14 @@ metadata:
                 "worker-2": "6235"
               }
             },
-            "remediationStrategy": "ResourceDeletion",
+            "remediationStrategy": "OutOfServiceTaint",
             "retrycount": 5,
             "retryinterval": "5s",
             "sharedSecretName": "fence-agents-credentials-shared",
             "sharedparameters": {
               "--action": "reboot",
               "--ip": "192.168.111.1",
-              "--lanplus": "",
-              "--username": "admin"
+              "--lanplus": ""
             },
             "timeout": "60s"
           }
@@ -71,15 +70,14 @@ metadata:
                     "worker-2": "6235"
                   }
                 },
-                "remediationStrategy": "ResourceDeletion",
+                "remediationStrategy": "OutOfServiceTaint",
                 "retrycount": 5,
                 "retryinterval": "5s",
                 "sharedSecretName": "fence-agents-credentials-shared",
                 "sharedparameters": {
                   "--action": "reboot",
                   "--ip": "192.168.111.1",
-                  "--lanplus": "",
-                  "--username": "admin"
+                  "--lanplus": ""
                 },
                 "timeout": "60s"
               }
@@ -97,7 +95,7 @@ metadata:
     olm.skipRange: '>=0.0.1'
     operatorframework.io/suggested-namespace: openshift-workload-availability
     operatorframework.io/suggested-namespace-template: '{"kind":"Namespace","apiVersion":"v1","metadata":{"name":"openshift-workload-availability","annotations":{"openshift.io/node-selector":""}}}'
-    operators.operatorframework.io/builder: operator-sdk-v1.32.0
+    operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/medik8s/fence-agents-remediation
     support: Medik8s
@@ -117,8 +115,9 @@ spec:
         name: fenceagentsremediations
         version: v1alpha1
       specDescriptors:
-      - description: Agent is the name of fence agent that will be used. It should
-          have a fence_ prefix.
+      - description: |-
+          Agent is the name of fence agent that will be used.
+          It should have a fence_ prefix.
         displayName: Agent
         path: agent
       - description: NodeSecretNames maps the node name to the Secret name which contains
@@ -129,14 +128,12 @@ spec:
           node that is fenced, since they are node specific
         displayName: Node Parameters
         path: nodeparameters
-      - description: RemediationStrategy is the remediation method for unhealthy nodes.
+      - description: |-
+          RemediationStrategy is the remediation method for unhealthy nodes.
           Currently, it could be either "OutOfServiceTaint" or "ResourceDeletion".
-          ResourceDeletion will iterate over all pods related to the unhealthy node
-          and delete them. OutOfServiceTaint will add the out-of-service taint which
-          is a new well-known taint "node.kubernetes.io/out-of-service" that enables
-          automatic deletion of pv-attached pods on failed nodes, "out-of-service"
-          taint is only supported on clusters with k8s version 1.26+ or OCP/OKD version
-          4.13+.
+          ResourceDeletion will iterate over all pods related to the unhealthy node and delete them.
+          OutOfServiceTaint will add the out-of-service taint which is a new well-known taint "node.kubernetes.io/out-of-service"
+          that enables automatic deletion of pv-attached pods on failed nodes, "out-of-service" taint is only supported on clusters with k8s version 1.26+ or OCP/OKD version 4.13+.
         displayName: Remediation Strategy
         path: remediationStrategy
       - description: RetryCount is the number of times the fencing agent will be executed
@@ -145,9 +142,9 @@ spec:
       - description: RetryInterval is the interval between each fencing agent execution
         displayName: Retry Interval
         path: retryinterval
-      - description: SharedSecretName is the name of the Secret which will contain
-          params needed for FAR in order to remediate any node. Using this Secret
-          is optional.
+      - description: |-
+          SharedSecretName is the name of the Secret which will contain params needed for FAR in order to remediate any node.
+          Using this Secret is optional.
         displayName: Shared Secret Name
         path: sharedSecretName
       - description: SharedParameters are parameters common to all nodes
@@ -157,9 +154,9 @@ spec:
         displayName: Timeout
         path: timeout
       statusDescriptors:
-      - description: 'Represents the observations of a FenceAgentsRemediation''s current
-          state. Known .status.conditions.type are: "Processing", "FenceAgentActionSucceeded",
-          and "Succeeded".'
+      - description: |-
+          Represents the observations of a FenceAgentsRemediation's current state.
+          Known .status.conditions.type are: "Processing", "FenceAgentActionSucceeded", and "Succeeded".
         displayName: conditions
         path: conditions
         x-descriptors:
@@ -181,8 +178,9 @@ spec:
       - description: Template defines the desired state of FenceAgentsRemediationTemplate
         displayName: Template
         path: template
-      - description: Agent is the name of fence agent that will be used. It should
-          have a fence_ prefix.
+      - description: |-
+          Agent is the name of fence agent that will be used.
+          It should have a fence_ prefix.
         displayName: Agent
         path: template.spec.agent
       - description: NodeSecretNames maps the node name to the Secret name which contains
@@ -193,14 +191,12 @@ spec:
           node that is fenced, since they are node specific
         displayName: Node Parameters
         path: template.spec.nodeparameters
-      - description: RemediationStrategy is the remediation method for unhealthy nodes.
+      - description: |-
+          RemediationStrategy is the remediation method for unhealthy nodes.
           Currently, it could be either "OutOfServiceTaint" or "ResourceDeletion".
-          ResourceDeletion will iterate over all pods related to the unhealthy node
-          and delete them. OutOfServiceTaint will add the out-of-service taint which
-          is a new well-known taint "node.kubernetes.io/out-of-service" that enables
-          automatic deletion of pv-attached pods on failed nodes, "out-of-service"
-          taint is only supported on clusters with k8s version 1.26+ or OCP/OKD version
-          4.13+.
+          ResourceDeletion will iterate over all pods related to the unhealthy node and delete them.
+          OutOfServiceTaint will add the out-of-service taint which is a new well-known taint "node.kubernetes.io/out-of-service"
+          that enables automatic deletion of pv-attached pods on failed nodes, "out-of-service" taint is only supported on clusters with k8s version 1.26+ or OCP/OKD version 4.13+.
         displayName: Remediation Strategy
         path: template.spec.remediationStrategy
       - description: RetryCount is the number of times the fencing agent will be executed
@@ -209,9 +205,9 @@ spec:
       - description: RetryInterval is the interval between each fencing agent execution
         displayName: Retry Interval
         path: template.spec.retryinterval
-      - description: SharedSecretName is the name of the Secret which will contain
-          params needed for FAR in order to remediate any node. Using this Secret
-          is optional.
+      - description: |-
+          SharedSecretName is the name of the Secret which will contain params needed for FAR in order to remediate any node.
+          Using this Secret is optional.
         displayName: Shared Secret Name
         path: template.spec.sharedSecretName
       - description: SharedParameters are parameters common to all nodes
@@ -339,7 +335,11 @@ spec:
             matchLabels:
               app.kubernetes.io/name: fence-agents-remediation-operator
               control-plane: controller-manager
-          strategy: {}
+          strategy:
+            rollingUpdate:
+              maxSurge: 0
+              maxUnavailable: 1
+            type: RollingUpdate
           template:
             metadata:
               annotations:
@@ -348,22 +348,6 @@ spec:
                 app.kubernetes.io/name: fence-agents-remediation-operator
                 control-plane: controller-manager
             spec:
-              affinity:
-                podAntiAffinity:
-                  preferredDuringSchedulingIgnoredDuringExecution:
-                  - podAffinityTerm:
-                      labelSelector:
-                        matchExpressions:
-                        - key: control-plane
-                          operator: In
-                          values:
-                          - controller-manager
-                        - key: app.kubernetes.io/name
-                          operator: In
-                          values:
-                          - fence-agents-remediation-operator
-                      topologyKey: kubernetes.io/hostname
-                    weight: 100
               containers:
               - args:
                 - --secure-listen-address=0.0.0.0:8443
@@ -433,6 +417,14 @@ spec:
                   type: RuntimeDefault
               serviceAccountName: fence-agents-remediation-controller-manager
               terminationGracePeriodSeconds: 10
+              topologySpreadConstraints:
+              - labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: fence-agents-remediation-operator
+                    control-plane: controller-manager
+                maxSkew: 1
+                topologyKey: kubernetes.io/hostname
+                whenUnsatisfiable: DoNotSchedule
       permissions:
       - rules:
         - apiGroups:

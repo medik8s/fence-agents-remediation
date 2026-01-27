@@ -17,12 +17,14 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
+	"fmt"
+
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -31,9 +33,11 @@ var (
 	webhookFARTemplateLog = logf.Log.WithName("fenceagentsremediationtemplate-resource")
 )
 
-func (r *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr ctrl.Manager) error {
+func (farTemplate *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+		For(farTemplate).
+		WithValidator(&FARTemplateValidator{}).
+		WithDefaulter(&FARTemplateDefaulter{}).
 		Complete()
 }
 
@@ -41,10 +45,16 @@ func (r *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr ctrl.Manage
 
 // +kubebuilder:webhook:path=/mutate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate,mutating=true,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=create;update,versions=v1alpha1,name=mfenceagentsremediationtemplate.kb.io,admissionReviewVersions=v1
 
-var _ webhook.Defaulter = &FenceAgentsRemediationTemplate{}
+type FARTemplateDefaulter struct{}
+
+var _ admission.CustomDefaulter = &FARTemplateDefaulter{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
-func (farTemplate *FenceAgentsRemediationTemplate) Default() {
+func (d *FARTemplateDefaulter) Default(ctx context.Context, obj runtime.Object) error {
+	farTemplate, ok := obj.(*FenceAgentsRemediationTemplate)
+	if !ok {
+		return fmt.Errorf("expected a FenceAgentsRemediationTemplate but got %T", obj)
+	}
 	webhookFARTemplateLog.Info("default", "name", farTemplate.Name)
 	if farTemplate.GetAnnotations() == nil {
 		farTemplate.Annotations = make(map[string]string)
@@ -52,27 +62,42 @@ func (farTemplate *FenceAgentsRemediationTemplate) Default() {
 	if _, isSameKindAnnotationSet := farTemplate.GetAnnotations()[commonAnnotations.MultipleTemplatesSupportedAnnotation]; !isSameKindAnnotationSet {
 		farTemplate.Annotations[commonAnnotations.MultipleTemplatesSupportedAnnotation] = "true"
 	}
+	return nil
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
 // +kubebuilder:webhook:path=/validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate,mutating=false,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=create;update,versions=v1alpha1,name=vfenceagentsremediationtemplate.kb.io,admissionReviewVersions=v1
 
-var _ webhook.Validator = &FenceAgentsRemediationTemplate{}
+type FARTemplateValidator struct{}
+
+var _ admission.CustomValidator = &FARTemplateValidator{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (farTemplate *FenceAgentsRemediationTemplate) ValidateCreate() (admission.Warnings, error) {
+func (v *FARTemplateValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+	farTemplate, ok := obj.(*FenceAgentsRemediationTemplate)
+	if !ok {
+		return nil, fmt.Errorf("expected a FenceAgentsRemediationTemplate but got a %T", obj)
+	}
 	webhookFARTemplateLog.Info("validate create", "name", farTemplate.Name)
 	return validateFAR(&farTemplate.Spec.Template.Spec)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (farTemplate *FenceAgentsRemediationTemplate) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
+func (v *FARTemplateValidator) ValidateUpdate(_ context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
+	farTemplate, ok := newObj.(*FenceAgentsRemediationTemplate)
+	if !ok {
+		return nil, fmt.Errorf("expected a FenceAgentsRemediationTemplate but got a %T", newObj)
+	}
 	webhookFARTemplateLog.Info("validate update", "name", farTemplate.Name)
 	return validateFAR(&farTemplate.Spec.Template.Spec)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (farTemplate *FenceAgentsRemediationTemplate) ValidateDelete() (admission.Warnings, error) {
+func (v *FARTemplateValidator) ValidateDelete(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+	farTemplate, ok := obj.(*FenceAgentsRemediationTemplate)
+	if !ok {
+		return nil, fmt.Errorf("expected a FenceAgentsRemediationTemplate but got a %T", obj)
+	} // unused for now, add "delete" when needed to verbs in the kubebuilder annotation above
 	webhookFARTemplateLog.Info("validate delete", "name", farTemplate.Name)
-	return nil, nil
+	return admission.Warnings{}, nil
 }
