@@ -1,27 +1,36 @@
 package v1alpha1
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 var _ = Describe("FenceAgentsRemediation Validation", func() {
+
+	var validator admission.CustomValidator
+
+	BeforeEach(func() {
+		validator = &FARValidator{}
+	})
 
 	Context("creating FenceAgentsRemediation", func() {
 
 		When("agent name match format and binary", func() {
 			It("should be accepted", func() {
 				far := getTestFAR(validAgentName)
-				Expect(far.ValidateCreate()).Error().NotTo(HaveOccurred())
+				Expect(validator.ValidateCreate(context.Background(), far)).Error().ToNot(HaveOccurred())
 			})
 		})
 
 		When("agent name was not found ", func() {
 			It("should be rejected", func() {
 				far := getTestFAR(invalidAgentName)
-				warnings, err := far.ValidateCreate()
+				warnings, err := validator.ValidateCreate(context.Background(), far)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
 			})
@@ -41,7 +50,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 					isOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
-					Expect(outOfServiceStrategy.ValidateCreate()).Error().NotTo(HaveOccurred())
+					Expect(validator.ValidateCreate(context.Background(), outOfServiceStrategy)).Error().ToNot(HaveOccurred())
 				})
 			})
 			When("out of service taint is not supported", func() {
@@ -49,7 +58,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 					isOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
-					warnings, err := outOfServiceStrategy.ValidateCreate()
+					warnings, err := validator.ValidateCreate(context.Background(), outOfServiceStrategy)
 					ExpectWithOffset(1, warnings).To(BeEmpty())
 					Expect(err).To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
 				})
@@ -65,7 +74,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 			})
 			It("should be accepted", func() {
 				far := getTestFAR(validAgentName)
-				Expect(far.ValidateUpdate(oldFAR)).Error().NotTo(HaveOccurred())
+				Expect(validator.ValidateUpdate(context.Background(), oldFAR, far)).Error().ToNot(HaveOccurred())
 			})
 		})
 
@@ -75,7 +84,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 			})
 			It("should be rejected", func() {
 				far := getTestFAR(invalidAgentName)
-				warnings, err := far.ValidateUpdate(oldFAR)
+				warnings, err := validator.ValidateUpdate(context.Background(), oldFAR, far)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
 			})
@@ -97,7 +106,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 					isOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
-					Expect(outOfServiceStrategy.ValidateUpdate(resourceDeletionStrategy)).Error().NotTo(HaveOccurred())
+					Expect(validator.ValidateUpdate(context.Background(), resourceDeletionStrategy, outOfServiceStrategy)).Error().ToNot(HaveOccurred())
 				})
 			})
 			When("out of service taint is not supported", func() {
@@ -105,7 +114,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 					isOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
-					warnings, err := outOfServiceStrategy.ValidateUpdate(resourceDeletionStrategy)
+					warnings, err := validator.ValidateUpdate(context.Background(), resourceDeletionStrategy, outOfServiceStrategy)
 					ExpectWithOffset(1, warnings).To(BeEmpty())
 					Expect(err).To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
 				})
