@@ -101,6 +101,11 @@ func (d *farTemplateDefaulter) Default(ctx context.Context, obj runtime.Object) 
 // error message if the secret still exists.
 // On both CREATE and UPDATE, we remove the old default value when the secret doesn't exist.
 func applySharedSecretDefaultNameToSpec(ctx context.Context, k8sClient client.Client, spec *FenceAgentsRemediationSpec, namespace string, isCreate bool) error {
+	// Nothing to do when SharedSecretName is a custom value (not the old default)
+	if spec.SharedSecretName != nil && *spec.SharedSecretName != OldDefaultSecretName {
+		return nil
+	}
+
 	// Check if the secret with the old default name exists
 	secret := &corev1.Secret{}
 	secretKey := client.ObjectKey{Name: OldDefaultSecretName, Namespace: namespace}
