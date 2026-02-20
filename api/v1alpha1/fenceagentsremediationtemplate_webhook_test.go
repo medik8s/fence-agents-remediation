@@ -803,6 +803,37 @@ var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 			})
 		})
 
+		When("SharedSecretName is nil and the old default secret exists on update", func() {
+			BeforeEach(func() {
+				originalGetFunc := mockValidatorClient.GetFunc
+				DeferCleanup(func() {
+					mockValidatorClient.GetFunc = originalGetFunc
+				})
+				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					if key.Name == OldDefaultSecretName {
+						if secret, ok := obj.(*corev1.Secret); ok {
+							secret.ObjectMeta = metav1.ObjectMeta{
+								Name:      OldDefaultSecretName,
+								Namespace: testNs,
+							}
+							return nil
+						}
+					}
+					return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
+				}
+			})
+
+			It("should not set SharedSecretName", func() {
+				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+				farTemplate.CreationTimestamp = metav1.Now() // simulate update
+				farTemplate.Spec.Template.Spec.SharedSecretName = nil
+
+				err := defaulter.Default(ctx, farTemplate)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(farTemplate.Spec.Template.Spec.SharedSecretName).To(BeNil())
+			})
+		})
+
 		When("SharedSecretName is the old default and the secret does not exist", func() {
 			BeforeEach(func() {
 				originalGetFunc := mockValidatorClient.GetFunc
@@ -816,6 +847,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 
 			It("should remove SharedSecretName", func() {
 				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+				farTemplate.CreationTimestamp = metav1.Now() // simulate update
 				farTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(OldDefaultSecretName)
 
 				err := defaulter.Default(ctx, farTemplate)
