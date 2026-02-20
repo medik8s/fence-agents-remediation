@@ -741,10 +741,10 @@ func getTestFART() *FenceAgentsRemediationTemplate {
 
 var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 
-	var defaulter *FARTemplateDefaulter
+	var defaulter *farTemplateDefaulter
 
 	BeforeEach(func() {
-		defaulter = &FARTemplateDefaulter{
+		defaulter = &farTemplateDefaulter{
 			Client: mockValidatorClient,
 		}
 	})
