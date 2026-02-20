@@ -43,7 +43,7 @@ func (farTemplate *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr c
 		WithValidator(&customValidator{
 			Client: mgr.GetClient(),
 		}).
-		WithDefaulter(&FARTemplateDefaulter{
+		WithDefaulter(&farTemplateDefaulter{
 			Client: mgr.GetClient(),
 		}).
 		Complete()
@@ -51,14 +51,14 @@ func (farTemplate *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr c
 
 // +kubebuilder:webhook:path=/mutate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate,mutating=true,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=create;update,versions=v1alpha1,name=mfenceagentsremediationtemplate.kb.io,admissionReviewVersions=v1
 
-type FARTemplateDefaulter struct {
+type farTemplateDefaulter struct {
 	client.Client
 }
 
-var _ admission.CustomDefaulter = &FARTemplateDefaulter{}
+var _ admission.CustomDefaulter = &farTemplateDefaulter{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
-func (d *FARTemplateDefaulter) Default(ctx context.Context, obj runtime.Object) error {
+func (d *farTemplateDefaulter) Default(ctx context.Context, obj runtime.Object) error {
 	farTemplate, ok := obj.(*FenceAgentsRemediationTemplate)
 	if !ok {
 		return fmt.Errorf("expected a FenceAgentsRemediationTemplate but got %T", obj)
@@ -70,13 +70,13 @@ func (d *FARTemplateDefaulter) Default(ctx context.Context, obj runtime.Object) 
 	if _, isSameKindAnnotationSet := farTemplate.GetAnnotations()[commonAnnotations.MultipleTemplatesSupportedAnnotation]; !isSameKindAnnotationSet {
 		farTemplate.Annotations[commonAnnotations.MultipleTemplatesSupportedAnnotation] = "true"
 	}
-	if err := d.applySharedSecretDefaultName(ctx, farTemplate); err != nil {
+	if err := applySharedSecretDefaultNameToSpec(ctx, d.Client, &farTemplate.Spec.Template.Spec, farTemplate.Namespace); err != nil {
 		return err
 	}
 	return nil
 }
 
-// applySharedSecretDefaultName applies a workaround for the shared secret name default value:
+// applySharedSecretDefaultNameToSpec applies a workaround for the shared secret name default value:
 // - in the first version of FAR which introduced the usage of secrets, we added the new API field "SharedSecretName"
 // - like every new API field, it has to be optional, to be backwards compatible
 // - however, we also set a default value "fence-agents-credentials-shared" via API
@@ -92,26 +92,26 @@ func (d *FARTemplateDefaulter) Default(ctx context.Context, obj runtime.Object) 
 //   - and remove the value on existing CRs when no such Secret exists
 //
 // TODO: This workaround will be removed in a future version
-func (d *FARTemplateDefaulter) applySharedSecretDefaultName(ctx context.Context, farTemplate *FenceAgentsRemediationTemplate) error {
+func applySharedSecretDefaultNameToSpec(ctx context.Context, k8sClient client.Client, spec *FenceAgentsRemediationSpec, namespace string) error {
 	// Check if the secret with the old default name exists
 	secret := &corev1.Secret{}
-	secretKey := client.ObjectKey{Name: OldDefaultSecretName, Namespace: farTemplate.Namespace}
+	secretKey := client.ObjectKey{Name: OldDefaultSecretName, Namespace: namespace}
 	secretExists := true
-	if err := d.Get(ctx, secretKey, secret); err != nil {
+	if err := k8sClient.Get(ctx, secretKey, secret); err != nil {
 		if !apiErrors.IsNotFound(err) {
 			return fmt.Errorf("failed to check for shared secret: %w", err)
 		}
 		secretExists = false
 	}
 
-	if farTemplate.Spec.Template.Spec.SharedSecretName == nil && secretExists {
+	if spec.SharedSecretName == nil && secretExists {
 		// Set the old default value when SharedSecretName is nil and the Secret exists
 		webhookFARTemplateLog.Info("Setting SharedSecretName to old default value as the secret exists", "secretName", OldDefaultSecretName)
-		farTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(OldDefaultSecretName)
-	} else if farTemplate.Spec.Template.Spec.SharedSecretName != nil && *farTemplate.Spec.Template.Spec.SharedSecretName == OldDefaultSecretName && !secretExists {
+		spec.SharedSecretName = ptr.To(OldDefaultSecretName)
+	} else if spec.SharedSecretName != nil && *spec.SharedSecretName == OldDefaultSecretName && !secretExists {
 		// Remove the old default value when SharedSecretName equals the old default but the Secret doesn't exist
 		webhookFARTemplateLog.Info("Removing SharedSecretName old default value as the secret does not exist", "secretName", OldDefaultSecretName)
-		farTemplate.Spec.Template.Spec.SharedSecretName = nil
+		spec.SharedSecretName = nil
 	}
 	return nil
 }
