@@ -62,7 +62,8 @@ func (d *farDefaulter) Default(ctx context.Context, obj runtime.Object) error {
 		return fmt.Errorf("expected a FenceAgentsRemediation but got %T", obj)
 	}
 	webhookFARLog.Info("default", "name", far.Name)
-	return applySharedSecretDefaultNameToSpec(ctx, d.Client, &far.Spec, far.Namespace)
+	isCreate := far.CreationTimestamp.IsZero()
+	return applySharedSecretDefaultNameToSpec(ctx, d.Client, &far.Spec, far.Namespace, isCreate)
 }
 
 func InitOutOfServiceTaintSupportedFlag(outOfServiceTaintSupported bool) {

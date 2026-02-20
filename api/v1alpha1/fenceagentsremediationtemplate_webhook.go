@@ -70,7 +70,8 @@ func (d *farTemplateDefaulter) Default(ctx context.Context, obj runtime.Object) 
 	if _, isSameKindAnnotationSet := farTemplate.GetAnnotations()[commonAnnotations.MultipleTemplatesSupportedAnnotation]; !isSameKindAnnotationSet {
 		farTemplate.Annotations[commonAnnotations.MultipleTemplatesSupportedAnnotation] = "true"
 	}
-	if err := applySharedSecretDefaultNameToSpec(ctx, d.Client, &farTemplate.Spec.Template.Spec, farTemplate.Namespace); err != nil {
+	isCreate := farTemplate.CreationTimestamp.IsZero()
+	if err := applySharedSecretDefaultNameToSpec(ctx, d.Client, &farTemplate.Spec.Template.Spec, farTemplate.Namespace, isCreate); err != nil {
 		return err
 	}
 	return nil
@@ -92,7 +93,14 @@ func (d *farTemplateDefaulter) Default(ctx context.Context, obj runtime.Object) 
 //   - and remove the value on existing CRs when no such Secret exists
 //
 // TODO: This workaround will be removed in a future version
-func applySharedSecretDefaultNameToSpec(ctx context.Context, k8sClient client.Client, spec *FenceAgentsRemediationSpec, namespace string) error {
+//
+// isCreate indicates whether this is a CREATE (true) or UPDATE (false) operation.
+// On CREATE, we set the old default value when the secret exists. On UPDATE, we don't,
+// because the user might have explicitly removed it. The validating webhook
+// (validateTemplateForSharedSecretDefaultName) will reject the update with a helpful
+// error message if the secret still exists.
+// On both CREATE and UPDATE, we remove the old default value when the secret doesn't exist.
+func applySharedSecretDefaultNameToSpec(ctx context.Context, k8sClient client.Client, spec *FenceAgentsRemediationSpec, namespace string, isCreate bool) error {
 	// Check if the secret with the old default name exists
 	secret := &corev1.Secret{}
 	secretKey := client.ObjectKey{Name: OldDefaultSecretName, Namespace: namespace}
@@ -104,8 +112,8 @@ func applySharedSecretDefaultNameToSpec(ctx context.Context, k8sClient client.Cl
 		secretExists = false
 	}
 
-	if spec.SharedSecretName == nil && secretExists {
-		// Set the old default value when SharedSecretName is nil and the Secret exists
+	if isCreate && spec.SharedSecretName == nil && secretExists {
+		// Set the old default value when SharedSecretName is nil and the Secret exists (only on create)
 		webhookFARTemplateLog.Info("Setting SharedSecretName to old default value as the secret exists", "secretName", OldDefaultSecretName)
 		spec.SharedSecretName = ptr.To(OldDefaultSecretName)
 	} else if spec.SharedSecretName != nil && *spec.SharedSecretName == OldDefaultSecretName && !secretExists {
