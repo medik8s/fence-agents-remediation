@@ -163,62 +163,6 @@ var _ = Describe("FAR Controller", func() {
 			// Sleep for a second to ensure dummy reconciliation has begun running before the unit tests
 			time.Sleep(1 * time.Second)
 		})
-		Context("Verify shared secret default name workaround", func() {
-			BeforeEach(func() {
-				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
-				node = utils.GetNode("", workerNode)
-			})
-			When("default secret name is set and secret exists", func() {
-				BeforeEach(func() {
-					Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(v1alpha1.OldDefaultSecretName))
-					Expect(sharedSecret).ToNot(BeNil())
-					Expect(sharedSecret.GetName()).To(Equal(v1alpha1.OldDefaultSecretName))
-				})
-				It("should keep the name", func() {
-					Eventually(func(g Gomega) {
-						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
-						g.Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(v1alpha1.OldDefaultSecretName))
-					}, timeoutPreRemediation, pollInterval).Should(Succeed())
-				})
-			})
-			When("default secret name is set and secret does not exist", func() {
-				BeforeEach(func() {
-					Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(v1alpha1.OldDefaultSecretName))
-					sharedSecret = nil
-				})
-				It("should remove the name", func() {
-					Eventually(func(g Gomega) {
-						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
-						g.Expect(underTestFAR.Spec.SharedSecretName).To(BeNil())
-					}, timeoutPreRemediation, pollInterval).Should(Succeed())
-				})
-			})
-			When("default secret name is not set and secret exists", func() {
-				BeforeEach(func() {
-					underTestFAR.Spec.SharedSecretName = nil
-					Expect(sharedSecret).ToNot(BeNil())
-					Expect(sharedSecret.GetName()).To(Equal(v1alpha1.OldDefaultSecretName))
-				})
-				It("should set the name", func() {
-					Eventually(func(g Gomega) {
-						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
-						g.Expect(*underTestFAR.Spec.SharedSecretName).To(Equal(v1alpha1.OldDefaultSecretName))
-					}, timeoutPreRemediation, pollInterval).Should(Succeed())
-				})
-			})
-			When("default secret name is not set and secret does not exist", func() {
-				BeforeEach(func() {
-					underTestFAR.Spec.SharedSecretName = nil
-					sharedSecret = nil
-				})
-				It("should not set the name", func() {
-					Eventually(func(g Gomega) {
-						g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
-						g.Expect(underTestFAR.Spec.SharedSecretName).To(BeNil())
-					}, timeoutPreRemediation, pollInterval).Should(Succeed())
-				})
-			})
-		})
 		Context("Verify correct params", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
@@ -730,6 +674,7 @@ var _ = Describe("FAR Controller", func() {
 				node = utils.GetNode("", workerNode)
 				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.OutOfServiceTaintRemediationStrategy)
 				underTestFAR.Spec.NodeSecretNames = nil
+				underTestFAR.Spec.SharedSecretName = nil
 			})
 
 			It("should have finalizer, both remediation taint and out-of-service taint, and at the end they will be deleted", func() {
