@@ -592,6 +592,28 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			Expect(err.Error()).To(ContainSubstring("secret 'non-existent-node-secret' not found in namespace 'test-namespace'"))
 		})
 
+		It("should fail when template references a missing shared secret", func() {
+			farTemplate := &FenceAgentsRemediationTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "missing-shared-secret-template",
+					Namespace: testNs,
+				},
+				Spec: FenceAgentsRemediationTemplateSpec{
+					Template: FenceAgentsRemediationTemplateResource{
+						Spec: FenceAgentsRemediationSpec{
+							Agent:            validAgentName,
+							SharedSecretName: ptr.To("non-existent-shared-secret"),
+						},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, farTemplate)
+			Expect(warnings).To(BeEmpty())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("secret 'non-existent-shared-secret' not found in namespace 'test-namespace'"))
+		})
+
 		It("should fail when NodeSecretParam duplicates a NodeParam", func() {
 			farTemplate := &FenceAgentsRemediationTemplate{
 				ObjectMeta: metav1.ObjectMeta{
