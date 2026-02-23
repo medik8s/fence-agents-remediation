@@ -534,6 +534,26 @@ spec:
     containerPort: 443
     deploymentName: fence-agents-remediation-controller-manager
     failurePolicy: Fail
+    generateName: mfenceagentsremediation.kb.io
+    rules:
+    - apiGroups:
+      - fence-agents-remediation.medik8s.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - fenceagentsremediations
+    sideEffects: None
+    targetPort: 9443
+    type: MutatingAdmissionWebhook
+    webhookPath: /mutate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediation
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: fence-agents-remediation-controller-manager
+    failurePolicy: Fail
     generateName: mfenceagentsremediationtemplate.kb.io
     rules:
     - apiGroups:

@@ -1,10 +1,18 @@
 package v1alpha1
 
 import (
+	"context"
+	"fmt"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("FenceAgentsRemediation Validation", func() {
@@ -110,6 +118,194 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 					Expect(err).To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
 				})
 			})
+		})
+	})
+})
+
+var _ = Describe("FenceAgentsRemediation Defaulting", func() {
+
+	var defaulter *farDefaulter
+
+	BeforeEach(func() {
+		defaulter = &farDefaulter{
+			Client: mockValidatorClient,
+		}
+	})
+
+	Context("applySharedSecretDefaultName", func() {
+		When("SharedSecretName is nil and the old default secret exists", func() {
+			BeforeEach(func() {
+				originalGetFunc := mockValidatorClient.GetFunc
+				DeferCleanup(func() {
+					mockValidatorClient.GetFunc = originalGetFunc
+				})
+				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					if key.Name == OldDefaultSecretName {
+						if secret, ok := obj.(*corev1.Secret); ok {
+							secret.ObjectMeta = metav1.ObjectMeta{
+								Name:      OldDefaultSecretName,
+								Namespace: testNs,
+							}
+							return nil
+						}
+					}
+					return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
+				}
+			})
+
+			It("should set SharedSecretName to the old default name", func() {
+				far := getFAR(validAgentName, ResourceDeletionRemediationStrategy)
+				far.Namespace = testNs
+				far.Spec.SharedSecretName = nil
+
+				err := defaulter.Default(ctx, far)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(far.Spec.SharedSecretName).NotTo(BeNil())
+				Expect(*far.Spec.SharedSecretName).To(Equal(OldDefaultSecretName))
+			})
+		})
+
+		When("SharedSecretName is nil and the old default secret exists on update", func() {
+			BeforeEach(func() {
+				originalGetFunc := mockValidatorClient.GetFunc
+				DeferCleanup(func() {
+					mockValidatorClient.GetFunc = originalGetFunc
+				})
+				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					if key.Name == OldDefaultSecretName {
+						if secret, ok := obj.(*corev1.Secret); ok {
+							secret.ObjectMeta = metav1.ObjectMeta{
+								Name:      OldDefaultSecretName,
+								Namespace: testNs,
+							}
+							return nil
+						}
+					}
+					return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
+				}
+			})
+
+			It("should not set SharedSecretName", func() {
+				far := getFAR(validAgentName, ResourceDeletionRemediationStrategy)
+				far.Namespace = testNs
+				far.CreationTimestamp = metav1.Now() // simulate update
+				far.Spec.SharedSecretName = nil
+
+				err := defaulter.Default(ctx, far)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(far.Spec.SharedSecretName).To(BeNil())
+			})
+		})
+
+		When("SharedSecretName is the old default and the secret does not exist", func() {
+			BeforeEach(func() {
+				originalGetFunc := mockValidatorClient.GetFunc
+				DeferCleanup(func() {
+					mockValidatorClient.GetFunc = originalGetFunc
+				})
+				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
+				}
+			})
+
+			It("should remove SharedSecretName", func() {
+				far := getFAR(validAgentName, ResourceDeletionRemediationStrategy)
+				far.Namespace = testNs
+				far.CreationTimestamp = metav1.Now() // simulate update
+				far.Spec.SharedSecretName = ptr.To(OldDefaultSecretName)
+
+				err := defaulter.Default(ctx, far)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(far.Spec.SharedSecretName).To(BeNil())
+			})
+		})
+
+		When("SharedSecretName is nil and the secret does not exist", func() {
+			BeforeEach(func() {
+				originalGetFunc := mockValidatorClient.GetFunc
+				DeferCleanup(func() {
+					mockValidatorClient.GetFunc = originalGetFunc
+				})
+				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
+				}
+			})
+
+			It("should not modify SharedSecretName", func() {
+				far := getFAR(validAgentName, ResourceDeletionRemediationStrategy)
+				far.Namespace = testNs
+				far.Spec.SharedSecretName = nil
+
+				err := defaulter.Default(ctx, far)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(far.Spec.SharedSecretName).To(BeNil())
+			})
+		})
+
+		When("SharedSecretName is a custom name and the old default secret exists", func() {
+			BeforeEach(func() {
+				originalGetFunc := mockValidatorClient.GetFunc
+				DeferCleanup(func() {
+					mockValidatorClient.GetFunc = originalGetFunc
+				})
+				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					if key.Name == OldDefaultSecretName {
+						if secret, ok := obj.(*corev1.Secret); ok {
+							secret.ObjectMeta = metav1.ObjectMeta{
+								Name:      OldDefaultSecretName,
+								Namespace: testNs,
+							}
+							return nil
+						}
+					}
+					return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
+				}
+			})
+
+			It("should not modify SharedSecretName", func() {
+				far := getFAR(validAgentName, ResourceDeletionRemediationStrategy)
+				far.Namespace = testNs
+				far.Spec.SharedSecretName = ptr.To("my-custom-secret")
+
+				err := defaulter.Default(ctx, far)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(far.Spec.SharedSecretName).NotTo(BeNil())
+				Expect(*far.Spec.SharedSecretName).To(Equal("my-custom-secret"))
+			})
+		})
+
+		When("fetching the secret fails with an unexpected error", func() {
+			BeforeEach(func() {
+				originalGetFunc := mockValidatorClient.GetFunc
+				DeferCleanup(func() {
+					mockValidatorClient.GetFunc = originalGetFunc
+				})
+				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					if key.Name == OldDefaultSecretName {
+						return apierrors.NewInternalError(fmt.Errorf("unexpected error"))
+					}
+					return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
+				}
+			})
+
+			It("should return an error", func() {
+				far := getFAR(validAgentName, ResourceDeletionRemediationStrategy)
+				far.Namespace = testNs
+				far.Spec.SharedSecretName = nil
+
+				err := defaulter.Default(ctx, far)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to check for shared secret"))
+			})
+		})
+	})
+
+	Context("with wrong object type", func() {
+		It("should return an error", func() {
+			farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+			err := defaulter.Default(ctx, farTemplate)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("expected a FenceAgentsRemediation"))
 		})
 	})
 })

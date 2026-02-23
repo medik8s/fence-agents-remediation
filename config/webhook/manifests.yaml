@@ -10,6 +10,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /mutate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediation
+  failurePolicy: Fail
+  name: mfenceagentsremediation.kb.io
+  rules:
+  - apiGroups:
+    - fence-agents-remediation.medik8s.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - fenceagentsremediations
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /mutate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate
   failurePolicy: Fail
   name: mfenceagentsremediationtemplate.kb.io
