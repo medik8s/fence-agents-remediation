@@ -17,12 +17,22 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
+	"fmt"
+
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 var (
 	// isOutOfServiceTaintSupported will be set to true in case out-of-service taint is supported (k8s 1.26 or higher)
 	isOutOfServiceTaintSupported bool
+
+	// webhookFARLog is for logging in this package.
+	webhookFARLog = logf.Log.WithName("fenceagentsremediation-resource")
 )
 
 func (r *FenceAgentsRemediation) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -31,7 +41,29 @@ func (r *FenceAgentsRemediation) SetupWebhookWithManager(mgr ctrl.Manager) error
 		WithValidator(&customValidator{
 			Client: mgr.GetClient(),
 		}).
+		WithDefaulter(&farDefaulter{
+			Client: mgr.GetClient(),
+		}).
 		Complete()
+}
+
+// +kubebuilder:webhook:path=/mutate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediation,mutating=true,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations,verbs=create;update,versions=v1alpha1,name=mfenceagentsremediation.kb.io,admissionReviewVersions=v1
+
+type farDefaulter struct {
+	client.Client
+}
+
+var _ admission.CustomDefaulter = &farDefaulter{}
+
+// Default implements webhook.Defaulter so a webhook will be registered for the type
+func (d *farDefaulter) Default(ctx context.Context, obj runtime.Object) error {
+	far, ok := obj.(*FenceAgentsRemediation)
+	if !ok {
+		return fmt.Errorf("expected a FenceAgentsRemediation but got %T", obj)
+	}
+	webhookFARLog.Info("default", "name", far.Name)
+	isCreate := far.CreationTimestamp.IsZero()
+	return applySharedSecretDefaultNameToSpec(ctx, d.Client, &far.Spec, far.Namespace, isCreate)
 }
 
 func InitOutOfServiceTaintSupportedFlag(outOfServiceTaintSupported bool) {
