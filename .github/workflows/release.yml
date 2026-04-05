@@ -41,7 +41,7 @@ jobs:
           echo "OCP version (optional): ${OCP_VERSION}."
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -51,7 +51,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Log in to Quay.io
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
@@ -60,35 +60,35 @@ jobs:
       - name: Build and push versioned CSV and images
         run: VERSION=$VERSION PREVIOUS_VERSION=$PREVIOUS_VERSION make container-build-and-push-community
 
+      - name: Compress bundle manifests
+        run: tar czf bundle.tar.gz bundle/
+
       - name: Create release with manifests
-        # https://github.com/marketplace/actions/github-release-create-update-and-upload-assets
-        uses: meeDamian/github-release@2.0
+        uses: softprops/action-gh-release@v2
         with:
-          tag: v${{ inputs.version }}
+          tag_name: v${{ inputs.version }}
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
           body: |
             # Fence Agents Remediation v${{ inputs.version }}
-            
+
             ## Notable Changes
-            
+
             * TODO
-            
+
             ## Release Artifacts
-            
+
             ### Images
             * Operator: quay.io/medik8s/fence-agents-remediation-operator:v${{ inputs.version }}
             * Bundle: quay.io/medik8s/fence-agents-remediation-operator-bundle:v${{ inputs.version }}
             * Catalog aka Index: quay.io/medik8s/fence-agents-remediation-operator-catalog:v${{ inputs.version }}
-            
+
             ### Source code and OLM manifests
             Please find the source code and the OLM manifests in the `Assets` section below.
-          gzip: folders
-          files: >
-            Manifests:bundle/
+          files: bundle.tar.gz
   create_k8s_release_pr:
     if: inputs.operation == 'create_k8s_release_pr'
-    uses: medik8s/.github/.github/workflows/release_community_bundle_parametric.yaml@main
+    uses: medik8s/.github/.github/workflows/release_community_bundle.yaml@main
     secrets: inherit
     with:
       version: ${{ inputs.version }}
@@ -96,7 +96,7 @@ jobs:
       make_targets: "bundle-community-k8s"
   create_okd_release_pr:
     if: inputs.operation == 'create_okd_release_pr'
-    uses: medik8s/.github/.github/workflows/release_community_bundle_parametric.yaml@main
+    uses: medik8s/.github/.github/workflows/release_community_bundle.yaml@main
     secrets: inherit
     with:
       version: ${{ inputs.version }}
