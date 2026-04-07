@@ -20,6 +20,10 @@ on:
      ocp_version:
        description: "The target OCP version for the release (mandatory for create_okd_release_pr option)"
        required: false
+     checkout_ref:
+       description: 'Override the ref to checkout (defaults to the triggering ref)'
+       required: false
+       default: ''
 
 permissions:
   contents: write
@@ -44,6 +48,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ inputs.checkout_ref || github.ref }}
 
       - name: Set up Go
         uses: actions/setup-go@v6
