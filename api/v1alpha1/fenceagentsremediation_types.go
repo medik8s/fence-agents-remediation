@@ -48,7 +48,6 @@ const (
 	AutomaticRemediationStrategy         = RemediationStrategyType("Automatic")
 	ResourceDeletionRemediationStrategy  = RemediationStrategyType("ResourceDeletion")
 	OutOfServiceTaintRemediationStrategy = RemediationStrategyType("OutOfServiceTaint")
-	DefaultRemediationStrategy           = AutomaticRemediationStrategy
 )
 
 type ParameterName string
