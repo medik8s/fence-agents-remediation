@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
@@ -43,7 +44,7 @@ import (
 
 	//+kubebuilder:scaffold:imports
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
-	"github.com/medik8s/fence-agents-remediation/pkg/validation"
+	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 	"github.com/medik8s/fence-agents-remediation/version"
 )
 
@@ -107,15 +108,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	outOfServiceTaintValidator, err := validation.NewOutOfServiceTaintValidator(mgr.GetConfig())
-	if err != nil {
-		setupLog.Error(err, "unable to verify Kubernetes version for indicating the out-of-service taint support. out-of-service taint isn't supported")
+	// Initialize OutOfService taint flags for runtime strategy selection and webhook validation
+	if err := utils.InitOutOfServiceTaintFlagsWithRetry(context.Background(), mgr.GetConfig()); err != nil {
+		setupLog.Error(err, "unable to verify out-of-service taint support. out-of-service taint isn't supported")
 	}
-	isOutOfServiceTaintSupported := outOfServiceTaintValidator.IsOutOfServiceTaintSupported()
-	if isOutOfServiceTaintSupported {
-		setupLog.Info("out-of-service taint is supported on this cluster")
-	}
-	fenceagentsremediationv1alpha1.InitOutOfServiceTaintSupportedFlag(isOutOfServiceTaintSupported)
+	fenceagentsremediationv1alpha1.InitOutOfServiceTaintSupportedFlag(utils.IsOutOfServiceTaintSupported)
 
 	executer, err := cli.NewExecuter(mgr.GetClient(), mgr.GetEventRecorderFor(farControllerName+"-executer"))
 	if err != nil {

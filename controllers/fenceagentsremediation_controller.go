@@ -211,7 +211,8 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		// - try to remove workloads
 		// - clean up Executor routine
 
-		switch far.Spec.RemediationStrategy {
+		strategy := r.getRuntimeStrategy(far)
+		switch strategy {
 		case v1alpha1.ResourceDeletionRemediationStrategy, "":
 			// Basically RemediationStrategy should be set to ResourceDeletion strategy as the default strategy.
 			// However, it will be empty when the CS was created when ResourceDeletion strategy was the only strategy.
@@ -254,7 +255,8 @@ func (r *FenceAgentsRemediationReconciler) handleFARDeletion(ctx context.Context
 	emptyResult := ctrl.Result{}
 
 	// remove out-of-service taint when using OutOfServiceTaint remediation
-	if far.Spec.RemediationStrategy == v1alpha1.OutOfServiceTaintRemediationStrategy {
+	strategy := r.getRuntimeStrategy(far)
+	if strategy == v1alpha1.OutOfServiceTaintRemediationStrategy {
 		r.Log.Info("Removing out-of-service taint", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
 		taint := utils.CreateOutOfServiceTaint()
 		if err := utils.RemoveTaint(r.Client, node.Name, taint); err != nil {
@@ -356,4 +358,22 @@ func appendParamToSlice(fenceAgentParams []string, paramName v1alpha1.ParameterN
 		fenceAgentParams = append(fenceAgentParams, stringParam)
 	}
 	return fenceAgentParams
+}
+
+// getRuntimeStrategy returns the actual remediation strategy to use at runtime.
+// If the strategy is Automatic, it selects the appropriate strategy based on k8s version.
+func (r *FenceAgentsRemediationReconciler) getRuntimeStrategy(far *v1alpha1.FenceAgentsRemediation) v1alpha1.RemediationStrategyType {
+	strategy := far.Spec.RemediationStrategy
+	if strategy != v1alpha1.AutomaticRemediationStrategy {
+		return strategy
+	}
+
+	remediationStrategy := v1alpha1.ResourceDeletionRemediationStrategy
+	if utils.IsOutOfServiceTaintGA {
+		remediationStrategy = v1alpha1.OutOfServiceTaintRemediationStrategy
+	}
+
+	r.Log.Info(fmt.Sprintf("Remediating with %s Remediation strategy (auto-selected)", remediationStrategy))
+
+	return remediationStrategy
 }
