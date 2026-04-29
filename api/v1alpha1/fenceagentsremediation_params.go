@@ -24,6 +24,7 @@ import (
 	"slices"
 
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
+	commonTaints "github.com/medik8s/common/pkg/taints"
 
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -168,7 +169,7 @@ func (v *customValidator) validateAgentName(agent string) error {
 }
 
 func (v *customValidator) validateStrategy(farRemStrategy RemediationStrategyType) error {
-	if farRemStrategy == OutOfServiceTaintRemediationStrategy && !isOutOfServiceTaintSupported {
+	if farRemStrategy == OutOfServiceTaintRemediationStrategy && !commonTaints.OutOfServiceInfo.Supported {
 		return fmt.Errorf("%s remediation strategy is not supported at kubernetes version lower than 1.26, please use a different remediation strategy", OutOfServiceTaintRemediationStrategy)
 	}
 	return nil

@@ -28,9 +28,6 @@ import (
 )
 
 var (
-	// isOutOfServiceTaintSupported will be set to true in case out-of-service taint is supported (k8s 1.26 or higher)
-	isOutOfServiceTaintSupported bool
-
 	// webhookFARLog is for logging in this package.
 	webhookFARLog = logf.Log.WithName("fenceagentsremediation-resource")
 )
@@ -64,8 +61,4 @@ func (d *farDefaulter) Default(ctx context.Context, obj runtime.Object) error {
 	webhookFARLog.Info("default", "name", far.Name)
 	isCreate := far.CreationTimestamp.IsZero()
 	return applySharedSecretDefaultNameToSpec(ctx, d.Client, &far.Spec, far.Namespace, isCreate)
-}
-
-func InitOutOfServiceTaintSupportedFlag(outOfServiceTaintSupported bool) {
-	isOutOfServiceTaintSupported = outOfServiceTaintSupported
 }

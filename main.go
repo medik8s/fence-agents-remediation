@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	commonTaints "github.com/medik8s/common/pkg/taints"
 	"go.uber.org/zap/zapcore"
 
 	pkgruntime "k8s.io/apimachinery/pkg/runtime"
@@ -44,7 +45,6 @@ import (
 
 	//+kubebuilder:scaffold:imports
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
-	"github.com/medik8s/fence-agents-remediation/pkg/utils"
 	"github.com/medik8s/fence-agents-remediation/version"
 )
 
@@ -109,10 +109,9 @@ func main() {
 	}
 
 	// Initialize OutOfService taint flags for runtime strategy selection and webhook validation
-	if err := utils.InitOutOfServiceTaintFlagsWithRetry(context.Background(), mgr.GetConfig()); err != nil {
+	if err := commonTaints.InitOutOfServiceTaintFlagsWithRetry(context.Background(), mgr.GetConfig()); err != nil {
 		setupLog.Error(err, "unable to verify out-of-service taint support. out-of-service taint isn't supported")
 	}
-	fenceagentsremediationv1alpha1.InitOutOfServiceTaintSupportedFlag(utils.IsOutOfServiceTaintSupported)
 
 	executer, err := cli.NewExecuter(mgr.GetClient(), mgr.GetEventRecorderFor(farControllerName+"-executer"))
 	if err != nil {

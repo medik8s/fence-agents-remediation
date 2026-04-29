@@ -10,6 +10,7 @@ import (
 
 	commonConditions "github.com/medik8s/common/pkg/conditions"
 	medik8sLabels "github.com/medik8s/common/pkg/labels"
+	commonTaints "github.com/medik8s/common/pkg/taints"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -469,7 +470,7 @@ func wasTaintAdded(taint corev1.Taint, nodeName string) {
 		node, err = utils.GetNodeWithName(k8sClient, nodeName)
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(node).ToNot(BeNil())
-		return utils.TaintExists(node.Spec.Taints, &taint)
+		return commonTaints.TaintExists(node.Spec.Taints, &taint)
 	}, timeoutTaint, pollTaint).Should(BeTrue())
 	log.Info("Taint was added", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
 }
@@ -617,7 +618,7 @@ func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, pod *corev1
 
 	if strategy == v1alpha1.OutOfServiceTaintRemediationStrategy {
 		By("Check if out-of-service taint was added")
-		wasTaintAdded(utils.CreateOutOfServiceTaint(), nodeName)
+		wasTaintAdded(commonTaints.CreateOutOfServiceTaint(), nodeName)
 	}
 
 	By("checking if old pod has been deleted")

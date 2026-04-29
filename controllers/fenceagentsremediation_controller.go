@@ -29,6 +29,7 @@ import (
 	commonConditions "github.com/medik8s/common/pkg/conditions"
 	commonEvents "github.com/medik8s/common/pkg/events"
 	commonResources "github.com/medik8s/common/pkg/resources"
+	commonTaints "github.com/medik8s/common/pkg/taints"
 
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -169,7 +170,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return r.handleFARDeletion(ctx, far, node)
 	}
 	// Add FAR (medik8s) remediation taint
-	taintAdded, err := utils.AppendTaint(r.Client, node.Name, utils.CreateRemediationTaint())
+	taintAdded, err := commonTaints.AppendTaintToNode(ctx, r.Client, node, utils.CreateRemediationTaint())
 	if err != nil {
 		return emptyResult, err
 	} else if taintAdded {
@@ -225,7 +226,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			}
 		case v1alpha1.OutOfServiceTaintRemediationStrategy:
 			r.Log.Info("Remediation strategy is OutOfServiceTaint which implicitly deletes resources - adding out-of-service taint", "Node Name", req.Name)
-			taintAdded, err := utils.AppendTaint(r.Client, node.Name, utils.CreateOutOfServiceTaint())
+			taintAdded, err := commonTaints.AppendTaintToNode(ctx, r.Client, node, commonTaints.CreateOutOfServiceTaint())
 			if err != nil {
 				r.Log.Error(err, "Failed to add out-of-service taint", "CR's Name", node.Name)
 				return emptyResult, err
@@ -258,8 +259,9 @@ func (r *FenceAgentsRemediationReconciler) handleFARDeletion(ctx context.Context
 	strategy := r.getRuntimeStrategy(far)
 	if strategy == v1alpha1.OutOfServiceTaintRemediationStrategy {
 		r.Log.Info("Removing out-of-service taint", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
-		taint := utils.CreateOutOfServiceTaint()
-		if err := utils.RemoveTaint(r.Client, node.Name, taint); err != nil {
+		taint := commonTaints.CreateOutOfServiceTaint()
+		removed, err := commonTaints.RemoveTaintFromNode(ctx, r.Client, node, taint)
+		if err != nil {
 			if apiErrors.IsConflict(err) {
 				r.Log.Error(err, "Failed to remove taint from node due to node update, retrying... ,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
 				return ctrl.Result{RequeueAfter: time.Second}, nil
@@ -268,13 +270,16 @@ func (r *FenceAgentsRemediationReconciler) handleFARDeletion(ctx context.Context
 				return emptyResult, err
 			}
 		}
-		r.Log.Info("out-of-service taint was removed", "Node Name", node.Name)
-		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveOutOfServiceTaint, utils.EventMessageRemoveOutOfServiceTaint)
+		if removed {
+			r.Log.Info("out-of-service taint was removed", "Node Name", node.Name)
+			commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveOutOfServiceTaint, utils.EventMessageRemoveOutOfServiceTaint)
+		}
 	}
 
 	// remove node's taints
 	taint := utils.CreateRemediationTaint()
-	if err := utils.RemoveTaint(r.Client, node.Name, taint); err != nil {
+	removed, err := commonTaints.RemoveTaintFromNode(ctx, r.Client, node, taint)
+	if err != nil {
 		if apiErrors.IsConflict(err) {
 			r.Log.Info("Failed to remove taint from node due to node update, retrying... ,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
 			return ctrl.Result{RequeueAfter: time.Second}, nil
@@ -285,8 +290,10 @@ func (r *FenceAgentsRemediationReconciler) handleFARDeletion(ctx context.Context
 		}
 	}
 
-	r.Log.Info("FAR remediation taint was removed", "Node Name", node.Name)
-	commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveRemediationTaint, utils.EventMessageRemoveRemediationTaint)
+	if removed {
+		r.Log.Info("FAR remediation taint was removed", "Node Name", node.Name)
+		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveRemediationTaint, utils.EventMessageRemoveRemediationTaint)
+	}
 
 	// remove finalizer
 	controllerutil.RemoveFinalizer(far, v1alpha1.FARFinalizer)
@@ -369,7 +376,7 @@ func (r *FenceAgentsRemediationReconciler) getRuntimeStrategy(far *v1alpha1.Fenc
 	}
 
 	remediationStrategy := v1alpha1.ResourceDeletionRemediationStrategy
-	if utils.IsOutOfServiceTaintGA {
+	if commonTaints.OutOfServiceInfo.GA {
 		remediationStrategy = v1alpha1.OutOfServiceTaintRemediationStrategy
 	}
 
