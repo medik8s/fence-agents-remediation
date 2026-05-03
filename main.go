@@ -112,6 +112,7 @@ func main() {
 	taintInfo, err := commonTaints.DetectOutOfServiceTaintInfoWithRetry(context.Background(), mgr.GetConfig())
 	if err != nil {
 		setupLog.Error(err, "unable to detect out-of-service taint support")
+		os.Exit(1)
 	}
 	fenceagentsremediationv1alpha1.OutOfServiceInfo = taintInfo
 
