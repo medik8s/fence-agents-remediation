@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"time"
 
@@ -36,8 +37,6 @@ type OutOfServiceTaintInfo struct {
 var (
 	loggerTaint   = ctrl.Log.WithName("taints")
 	leadingDigits = regexp.MustCompile(`^(\d+)`)
-
-	OutOfServiceInfo OutOfServiceTaintInfo
 )
 
 // TaintExists checks if the given taint exists in list of taints. Returns true if exists false otherwise.
@@ -50,19 +49,18 @@ func TaintExists(taints []corev1.Taint, taintToFind *corev1.Taint) bool {
 	return false
 }
 
-// FilterOutTaint returns a new taint slice without taints matching the given taintToDelete by key and effect.
-// Also returns true if any taints were filtered out, false otherwise.
-func FilterOutTaint(taints []corev1.Taint, taintToDelete *corev1.Taint) ([]corev1.Taint, bool) {
-	var newTaints []corev1.Taint
-	deleted := false
-	for _, taint := range taints {
-		if taint.MatchTaint(taintToDelete) {
-			deleted = true
-			continue
-		}
-		newTaints = append(newTaints, taint)
-	}
-	return newTaints, deleted
+// Filter removes a taint from the taints slice.
+// Since a taint's identity in Kubernetes is uniquely defined by its key and effect,
+// this function filters out the unique instance of such a taint matching those fields.
+// It returns the updated slice and a boolean indicating if the taint was found and removed.
+func Filter(taints []corev1.Taint, taint *corev1.Taint) ([]corev1.Taint, bool) {
+	originalLen := len(taints)
+
+	newTaints := slices.DeleteFunc(taints, func(t corev1.Taint) bool {
+		return t.MatchTaint(taint)
+	})
+
+	return newTaints, len(newTaints) < originalLen
 }
 
 // CreateOutOfServiceTaint returns an OutOfService taint.
@@ -75,15 +73,15 @@ func CreateOutOfServiceTaint() corev1.Taint {
 	}
 }
 
-// AppendTaintToNode adds the given taint to the node and patches it.
+// AddTaintToNode adds the given taint to the node and patches it.
 // Returns true if the taint was added, false if it already existed.
 // Sets TimeAdded to the current time when adding the taint.
-func AppendTaintToNode(ctx context.Context, c client.Client, node *corev1.Node, taint corev1.Taint) (bool, error) {
+func AddTaintToNode(ctx context.Context, c client.Client, node *corev1.Node, taint corev1.Taint) (bool, error) {
 	if TaintExists(node.Spec.Taints, &taint) {
 		return false, nil
 	}
 
-	patch := client.MergeFrom(node.DeepCopy())
+	patch := client.StrategicMergeFrom(node.DeepCopy())
 	now := metav1.Now()
 	taint.TimeAdded = &now
 	node.Spec.Taints = append(node.Spec.Taints, taint)
@@ -97,12 +95,12 @@ func AppendTaintToNode(ctx context.Context, c client.Client, node *corev1.Node, 
 // RemoveTaintFromNode removes the given taint from the node and patches it.
 // Returns true if the taint was removed, false if it didn't exist.
 func RemoveTaintFromNode(ctx context.Context, c client.Client, node *corev1.Node, taint corev1.Taint) (bool, error) {
-	newTaints, removed := FilterOutTaint(node.Spec.Taints, &taint)
+	newTaints, removed := Filter(node.Spec.Taints, &taint)
 	if !removed {
 		return false, nil
 	}
 
-	patch := client.MergeFrom(node.DeepCopy())
+	patch := client.StrategicMergeFrom(node.DeepCopy())
 	node.Spec.Taints = newTaints
 
 	if err := c.Patch(ctx, node, patch); err != nil {
@@ -111,15 +109,16 @@ func RemoveTaintFromNode(ctx context.Context, c client.Client, node *corev1.Node
 	return true, nil
 }
 
-// InitOutOfServiceTaintFlagsWithRetry tries to initialize the OutOfService taint info based on k8s version, in case it fails (potentially due to network issues) it will retry for a limited time period.
-func InitOutOfServiceTaintFlagsWithRetry(ctx context.Context, config *rest.Config) error {
+// DetectOutOfServiceTaintInfoWithRetry detects out-of-service taint support based on k8s version, in case it fails (potentially due to network issues) it will retry for a limited time period.
+func DetectOutOfServiceTaintInfoWithRetry(ctx context.Context, config *rest.Config) (OutOfServiceTaintInfo, error) {
+	var info OutOfServiceTaintInfo
 	var err error
 	interval := 2 * time.Second // retry every 2 seconds
 	timeout := 10 * time.Second // for a period of 10 seconds
 
-	// Using wait.PollUntilContextTimeout to retry initOutOfServiceTaintFlags in case there is a temporary network issue.
+	// Using wait.PollUntilContextTimeout to retry detection in case there is a temporary network issue.
 	pollErr := wait.PollUntilContextTimeout(ctx, interval, timeout, true, func(ctx context.Context) (bool, error) {
-		if err = initOutOfServiceTaintFlags(config); err != nil {
+		if info, err = detectOutOfServiceTaintInfo(config); err != nil {
 			return false, nil // Keep retrying
 		}
 		return true, nil // Success
@@ -127,20 +126,21 @@ func InitOutOfServiceTaintFlagsWithRetry(ctx context.Context, config *rest.Confi
 
 	// Respect context cancellation - return poll error so caller knows operation was cancelled
 	if pollErr != nil && (errors.Is(pollErr, context.Canceled) || errors.Is(pollErr, context.DeadlineExceeded)) {
-		return pollErr
+		return info, pollErr
 	}
-	// Return internal error: nil on success, or last failure on timeout (more specific than generic timeout)
-	return err
+	// Return info and internal error: nil on success, or last failure on timeout (more specific than generic timeout)
+	return info, err
 }
 
-func initOutOfServiceTaintFlags(config *rest.Config) error {
+func detectOutOfServiceTaintInfo(config *rest.Config) (OutOfServiceTaintInfo, error) {
+	var info OutOfServiceTaintInfo
 	cs, err := kubernetes.NewForConfig(config)
 	if err != nil || cs == nil {
 		if err == nil {
 			err = fmt.Errorf("k8s client set is nil")
 		}
 		loggerTaint.Error(err, "couldn't retrieve k8s client")
-		return err
+		return info, err
 	}
 
 	k8sVersion, err := cs.Discovery().ServerVersion()
@@ -149,27 +149,28 @@ func initOutOfServiceTaintFlags(config *rest.Config) error {
 			err = fmt.Errorf("k8s server version is nil")
 		}
 		loggerTaint.Error(err, "couldn't retrieve k8s server version")
-		return err
+		return info, err
 	}
 
-	return setOutOfTaintFlags(k8sVersion)
+	return getOutOfServiceTaintInfo(k8sVersion)
 }
 
-func setOutOfTaintFlags(version *version.Info) error {
+func getOutOfServiceTaintInfo(version *version.Info) (OutOfServiceTaintInfo, error) {
+	var info OutOfServiceTaintInfo
 	var majorVer, minorVer int
 	var err error
 	if majorVer, err = strconv.Atoi(version.Major); err != nil {
 		loggerTaint.Error(err, "couldn't parse k8s major version", "major version", version.Major)
-		return err
+		return info, err
 	}
 	if minorVer, err = strconv.Atoi(leadingDigits.FindString(version.Minor)); err != nil {
 		loggerTaint.Error(err, "couldn't parse k8s minor version", "minor version", version.Minor)
-		return err
+		return info, err
 	}
 
-	OutOfServiceInfo.Supported = majorVer > minK8sMajorVersionOutOfServiceTaint || (majorVer == minK8sMajorVersionOutOfServiceTaint && minorVer >= minK8sMinorVersionSupportingOutOfServiceTaint)
-	loggerTaint.Info("out of service taint strategy", "isSupported", OutOfServiceInfo.Supported, "k8sMajorVersion", majorVer, "k8sMinorVersion", minorVer)
-	OutOfServiceInfo.GA = majorVer > minK8sMajorVersionOutOfServiceTaint || (majorVer == minK8sMajorVersionOutOfServiceTaint && minorVer >= minK8sMinorVersionGAOutOfServiceTaint)
-	loggerTaint.Info("out of service taint strategy", "isGA", OutOfServiceInfo.GA, "k8sMajorVersion", majorVer, "k8sMinorVersion", minorVer)
-	return nil
+	info.Supported = majorVer > minK8sMajorVersionOutOfServiceTaint || (majorVer == minK8sMajorVersionOutOfServiceTaint && minorVer >= minK8sMinorVersionSupportingOutOfServiceTaint)
+	loggerTaint.Info("out of service taint strategy", "isSupported", info.Supported, "k8sMajorVersion", majorVer, "k8sMinorVersion", minorVer)
+	info.GA = majorVer > minK8sMajorVersionOutOfServiceTaint || (majorVer == minK8sMajorVersionOutOfServiceTaint && minorVer >= minK8sMinorVersionGAOutOfServiceTaint)
+	loggerTaint.Info("out of service taint strategy", "isGA", info.GA, "k8sMajorVersion", majorVer, "k8sMinorVersion", minorVer)
+	return info, nil
 }
