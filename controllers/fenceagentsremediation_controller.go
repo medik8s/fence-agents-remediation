@@ -170,7 +170,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return r.handleFARDeletion(ctx, far, node)
 	}
 	// Add FAR (medik8s) remediation taint
-	taintAdded, err := commonTaints.AppendTaintToNode(ctx, r.Client, node, utils.CreateRemediationTaint())
+	taintAdded, err := commonTaints.AddTaintToNode(ctx, r.Client, node, utils.CreateRemediationTaint())
 	if err != nil {
 		return emptyResult, err
 	} else if taintAdded {
@@ -226,7 +226,7 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 			}
 		case v1alpha1.OutOfServiceTaintRemediationStrategy:
 			r.Log.Info("Remediation strategy is OutOfServiceTaint which implicitly deletes resources - adding out-of-service taint", "Node Name", req.Name)
-			taintAdded, err := commonTaints.AppendTaintToNode(ctx, r.Client, node, commonTaints.CreateOutOfServiceTaint())
+			taintAdded, err := commonTaints.AddTaintToNode(ctx, r.Client, node, commonTaints.CreateOutOfServiceTaint())
 			if err != nil {
 				r.Log.Error(err, "Failed to add out-of-service taint", "CR's Name", node.Name)
 				return emptyResult, err
@@ -376,7 +376,7 @@ func (r *FenceAgentsRemediationReconciler) getRuntimeStrategy(far *v1alpha1.Fenc
 	}
 
 	remediationStrategy := v1alpha1.ResourceDeletionRemediationStrategy
-	if commonTaints.OutOfServiceInfo.GA {
+	if v1alpha1.OutOfServiceInfo.GA {
 		remediationStrategy = v1alpha1.OutOfServiceTaintRemediationStrategy
 	}
 

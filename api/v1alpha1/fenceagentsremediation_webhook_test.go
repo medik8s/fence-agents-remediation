@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	commonTaints "github.com/medik8s/common/pkg/taints"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -40,14 +39,14 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 			var outOfServiceStrategy *FenceAgentsRemediation
 
 			BeforeEach(func() {
-				orgValue := commonTaints.OutOfServiceInfo.Supported
-				DeferCleanup(func() { commonTaints.OutOfServiceInfo.Supported = orgValue })
+				orgValue := OutOfServiceInfo.Supported
+				DeferCleanup(func() { OutOfServiceInfo.Supported = orgValue })
 
 				outOfServiceStrategy = getFAR(validAgentName, OutOfServiceTaintRemediationStrategy)
 			})
 			When("out of service taint is supported", func() {
 				BeforeEach(func() {
-					commonTaints.OutOfServiceInfo.Supported = true
+					OutOfServiceInfo.Supported = true
 				})
 				It("should be allowed", func() {
 					Expect(validator.ValidateCreate(ctx, outOfServiceStrategy)).Error().NotTo(HaveOccurred())
@@ -55,7 +54,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 			})
 			When("out of service taint is not supported", func() {
 				BeforeEach(func() {
-					commonTaints.OutOfServiceInfo.Supported = false
+					OutOfServiceInfo.Supported = false
 				})
 				It("should be denied", func() {
 					warnings, err := validator.ValidateCreate(ctx, outOfServiceStrategy)
@@ -95,15 +94,15 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 			var resourceDeletionStrategy *FenceAgentsRemediation
 
 			BeforeEach(func() {
-				orgValue := commonTaints.OutOfServiceInfo.Supported
-				DeferCleanup(func() { commonTaints.OutOfServiceInfo.Supported = orgValue })
+				orgValue := OutOfServiceInfo.Supported
+				DeferCleanup(func() { OutOfServiceInfo.Supported = orgValue })
 
 				outOfServiceStrategy = getFAR(validAgentName, OutOfServiceTaintRemediationStrategy)
 				resourceDeletionStrategy = getFAR(validAgentName, ResourceDeletionRemediationStrategy)
 			})
 			When("out of service taint is supported", func() {
 				BeforeEach(func() {
-					commonTaints.OutOfServiceInfo.Supported = true
+					OutOfServiceInfo.Supported = true
 				})
 				It("should be allowed", func() {
 					Expect(validator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)).Error().NotTo(HaveOccurred())
@@ -111,7 +110,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 			})
 			When("out of service taint is not supported", func() {
 				BeforeEach(func() {
-					commonTaints.OutOfServiceInfo.Supported = false
+					OutOfServiceInfo.Supported = false
 				})
 				It("should be denied", func() {
 					warnings, err := validator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)

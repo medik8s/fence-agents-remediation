@@ -108,10 +108,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize OutOfService taint flags for runtime strategy selection and webhook validation
-	if err := commonTaints.InitOutOfServiceTaintFlagsWithRetry(context.Background(), mgr.GetConfig()); err != nil {
-		setupLog.Error(err, "unable to verify out-of-service taint support. out-of-service taint isn't supported")
+	// Detect OutOfService taint support for runtime strategy selection and webhook validation
+	taintInfo, err := commonTaints.DetectOutOfServiceTaintInfoWithRetry(context.Background(), mgr.GetConfig())
+	if err != nil {
+		setupLog.Error(err, "unable to detect out-of-service taint support")
 	}
+	fenceagentsremediationv1alpha1.OutOfServiceInfo = taintInfo
 
 	executer, err := cli.NewExecuter(mgr.GetClient(), mgr.GetEventRecorderFor(farControllerName+"-executer"))
 	if err != nil {

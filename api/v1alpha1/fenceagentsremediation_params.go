@@ -39,6 +39,8 @@ import (
 	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 )
 
+var OutOfServiceInfo commonTaints.OutOfServiceTaintInfo
+
 const (
 	parameterRebootActionValue     = "reboot"
 	parameterOffActionValue        = "off"
@@ -169,7 +171,7 @@ func (v *customValidator) validateAgentName(agent string) error {
 }
 
 func (v *customValidator) validateStrategy(farRemStrategy RemediationStrategyType) error {
-	if farRemStrategy == OutOfServiceTaintRemediationStrategy && !commonTaints.OutOfServiceInfo.Supported {
+	if farRemStrategy == OutOfServiceTaintRemediationStrategy && !OutOfServiceInfo.Supported {
 		return fmt.Errorf("%s remediation strategy is not supported at kubernetes version lower than 1.26, please use a different remediation strategy", OutOfServiceTaintRemediationStrategy)
 	}
 	return nil
