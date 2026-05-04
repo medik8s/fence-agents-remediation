@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	commonTaints "github.com/medik8s/common/pkg/taints"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -174,15 +175,15 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			var outOfServiceStrategy *FenceAgentsRemediationTemplate
 
 			BeforeEach(func() {
-				orgValue := OutOfServiceInfo.Supported
-				DeferCleanup(func() { OutOfServiceInfo.Supported = orgValue })
+				orgValue := GetOutOfServiceInfo()
+				DeferCleanup(func() { InitOutOfServiceInfo(orgValue) })
 
 				outOfServiceStrategy = getFARTemplate(validAgentName, OutOfServiceTaintRemediationStrategy)
 			})
 
 			When("out of service taint is supported", func() {
 				BeforeEach(func() {
-					OutOfServiceInfo.Supported = true
+					InitOutOfServiceInfo(commonTaints.OutOfServiceTaintInfo{Supported: true})
 				})
 				It("should be allowed", func() {
 					_, err := validator.ValidateCreate(ctx, outOfServiceStrategy)
@@ -192,7 +193,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 			When("out of service taint is not supported", func() {
 				BeforeEach(func() {
-					OutOfServiceInfo.Supported = false
+					InitOutOfServiceInfo(commonTaints.OutOfServiceTaintInfo{Supported: false})
 				})
 				It("should be denied", func() {
 					warnings, err := validator.ValidateCreate(ctx, outOfServiceStrategy)
@@ -248,8 +249,8 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			var resourceDeletionStrategy *FenceAgentsRemediationTemplate
 
 			BeforeEach(func() {
-				orgValue := OutOfServiceInfo.Supported
-				DeferCleanup(func() { OutOfServiceInfo.Supported = orgValue })
+				orgValue := GetOutOfServiceInfo()
+				DeferCleanup(func() { InitOutOfServiceInfo(orgValue) })
 
 				outOfServiceStrategy = getFARTemplate(validAgentName, OutOfServiceTaintRemediationStrategy)
 				resourceDeletionStrategy = getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
@@ -257,7 +258,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 			When("out of service taint is supported", func() {
 				BeforeEach(func() {
-					OutOfServiceInfo.Supported = true
+					InitOutOfServiceInfo(commonTaints.OutOfServiceTaintInfo{Supported: true})
 				})
 				It("should be allowed", func() {
 					_, err := validator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)
@@ -267,7 +268,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 			When("out of service taint is not supported", func() {
 				BeforeEach(func() {
-					OutOfServiceInfo.Supported = false
+					InitOutOfServiceInfo(commonTaints.OutOfServiceTaintInfo{Supported: false})
 				})
 				It("should be denied", func() {
 					warnings, err := validator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)

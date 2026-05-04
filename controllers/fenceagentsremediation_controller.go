@@ -376,7 +376,7 @@ func (r *FenceAgentsRemediationReconciler) getRuntimeStrategy(far *v1alpha1.Fenc
 	}
 
 	remediationStrategy := v1alpha1.ResourceDeletionRemediationStrategy
-	if v1alpha1.OutOfServiceInfo.GA {
+	if v1alpha1.GetOutOfServiceInfo().GA {
 		remediationStrategy = v1alpha1.OutOfServiceTaintRemediationStrategy
 	}
 
