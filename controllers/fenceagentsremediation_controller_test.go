@@ -493,7 +493,7 @@ var _ = Describe("FAR Controller", func() {
 
 				// If finalizer is missing, then a taint shouldn't exist
 				By("Not having remediation taint")
-				Expect(commonTaints.TaintExists(node.Spec.Taints, &farRemediationTaint)).To(BeFalse())
+				Expect(commonTaints.Contains(node.Spec.Taints, &farRemediationTaint)).To(BeFalse())
 				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonAddRemediationTaint, utils.EventMessageAddRemediationTaint)
 
 				By("Still having one test pod")
@@ -696,7 +696,7 @@ var _ = Describe("FAR Controller", func() {
 				Eventually(func(g Gomega) {
 					node := &corev1.Node{}
 					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
-					g.Expect(commonTaints.TaintExists(node.Spec.Taints, &outOfServiceTaint)).To(BeTrue(), "out-of-service taint should exist")
+					g.Expect(commonTaints.Contains(node.Spec.Taints, &outOfServiceTaint)).To(BeTrue(), "out-of-service taint should exist")
 				}, timeoutPostRemediation, pollInterval).Should(Succeed())
 
 				By("Verifying correct conditions for successful remediation")
@@ -714,7 +714,7 @@ var _ = Describe("FAR Controller", func() {
 				Eventually(func(g Gomega) {
 					node := &corev1.Node{}
 					g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: workerNode}, node)).To(Succeed())
-					g.Expect(commonTaints.TaintExists(node.Spec.Taints, &outOfServiceTaint)).To(BeFalse(), "out-of-service taint should be removed")
+					g.Expect(commonTaints.Contains(node.Spec.Taints, &outOfServiceTaint)).To(BeFalse(), "out-of-service taint should be removed")
 				}, timeoutPostRemediation, pollInterval).Should(Succeed())
 				verifyEvent(corev1.EventTypeNormal, utils.EventReasonRemoveOutOfServiceTaint, utils.EventMessageRemoveOutOfServiceTaint)
 			})
@@ -847,7 +847,7 @@ func verifyPreRemediationSucceed(underTestFAR *v1alpha1.FenceAgentsRemediation, 
 	Eventually(func(g Gomega) {
 		node := &corev1.Node{}
 		g.Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: v1alpha1.GetNodeName(underTestFAR)}, node)).To(Succeed())
-		g.Expect(commonTaints.TaintExists(node.Spec.Taints, taint)).To(BeTrue(), "remediation taint should exist")
+		g.Expect(commonTaints.Contains(node.Spec.Taints, taint)).To(BeTrue(), "remediation taint should exist")
 	}, timeoutPreRemediation, pollInterval).Should(Succeed())
 	verifyEvent(corev1.EventTypeNormal, utils.EventReasonAddRemediationTaint, utils.EventMessageAddRemediationTaint)
 

@@ -470,7 +470,7 @@ func wasTaintAdded(taint corev1.Taint, nodeName string) {
 		node, err = utils.GetNodeWithName(k8sClient, nodeName)
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(node).ToNot(BeNil())
-		return commonTaints.TaintExists(node.Spec.Taints, &taint)
+		return commonTaints.Contains(node.Spec.Taints, &taint)
 	}, timeoutTaint, pollTaint).Should(BeTrue())
 	log.Info("Taint was added", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
 }
