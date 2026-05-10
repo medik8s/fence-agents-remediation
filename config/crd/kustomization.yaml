@@ -2,8 +2,8 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- path: bases/fence-agents-remediation.medik8s.io_fenceagentsremediations.yaml
-- path: bases/fence-agents-remediation.medik8s.io_fenceagentsremediationtemplates.yaml
+- bases/fence-agents-remediation.medik8s.io_fenceagentsremediations.yaml
+- bases/fence-agents-remediation.medik8s.io_fenceagentsremediationtemplates.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patches:
@@ -21,4 +21,4 @@ patches:
 
 # the following config is for teaching kustomize how to do kustomization for CRDs.
 configurations:
-- path: kustomizeconfig.yaml
+- kustomizeconfig.yaml

@@ -61,10 +61,8 @@ spec:
       - description: |-
           SharedSecretName is the name of the Secret which contains shared fence agent parameters.
 
-
           Heads up: in an earlier version this had a default value of "fence-agents-credentials-shared".
           We removed that default to be able to differentiate during CR validation between using a Secret or not.
-
 
           As a temporary workaround this field will be set with the old default value in case a Secret with the
           old default of "fence-agents-credentials-shared" is found. Also, in case the field contains the old default
@@ -137,10 +135,8 @@ spec:
       - description: |-
           SharedSecretName is the name of the Secret which contains shared fence agent parameters.
 
-
           Heads up: in an earlier version this had a default value of "fence-agents-credentials-shared".
           We removed that default to be able to differentiate during CR validation between using a Secret or not.
-
 
           As a temporary workaround this field will be set with the old default value in case a Secret with the
           old default of "fence-agents-credentials-shared" is found. Also, in case the field contains the old default

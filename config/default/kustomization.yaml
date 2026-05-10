@@ -12,17 +12,17 @@ namePrefix: fence-agents-remediation-
 #commonLabels:
 commonLabels:
   app.kubernetes.io/name: fence-agents-remediation-operator
-bases:
-- path: ../crd
-- path: ../rbac
-- path: ../manager
+resources:
+- ../crd
+- ../rbac
+- ../manager
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
 # crd/kustomization.yaml
-- path: ../webhook
+- ../webhook
 # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER'. 'WEBHOOK' components are required.
-#- path: ../certmanager
+#- ../certmanager
 # [PROMETHEUS] To enable prometheus monitor, uncomment all sections with 'PROMETHEUS'.
-#- path: ../prometheus
+#- ../prometheus
 
 patches:
 # Protect the /metrics endpoint by putting it behind auth.
