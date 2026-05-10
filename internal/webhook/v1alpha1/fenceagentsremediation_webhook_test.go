@@ -13,6 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	remediationv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 )
 
 var _ = Describe("FenceAgentsRemediation Validation", func() {
@@ -36,17 +38,17 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 		})
 
 		Context("with OutOfServiceTaint strategy", func() {
-			var outOfServiceStrategy *FenceAgentsRemediation
+			var outOfServiceStrategy *remediationv1alpha1.FenceAgentsRemediation
 
 			BeforeEach(func() {
-				orgValue := isOutOfServiceTaintSupported
-				DeferCleanup(func() { isOutOfServiceTaintSupported = orgValue })
+				orgValue := remediationv1alpha1.IsOutOfServiceTaintSupported
+				DeferCleanup(func() { remediationv1alpha1.IsOutOfServiceTaintSupported = orgValue })
 
-				outOfServiceStrategy = getFAR(validAgentName, OutOfServiceTaintRemediationStrategy)
+				outOfServiceStrategy = getFAR(validAgentName, remediationv1alpha1.OutOfServiceTaintRemediationStrategy)
 			})
 			When("out of service taint is supported", func() {
 				BeforeEach(func() {
-					isOutOfServiceTaintSupported = true
+					remediationv1alpha1.IsOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
 					Expect(validator.ValidateCreate(ctx, outOfServiceStrategy)).Error().NotTo(HaveOccurred())
@@ -54,7 +56,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 			})
 			When("out of service taint is not supported", func() {
 				BeforeEach(func() {
-					isOutOfServiceTaintSupported = false
+					remediationv1alpha1.IsOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
 					warnings, err := validator.ValidateCreate(ctx, outOfServiceStrategy)
@@ -66,7 +68,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 	})
 
 	Context("updating FenceAgentsRemediation", func() {
-		var oldFAR *FenceAgentsRemediation
+		var oldFAR *remediationv1alpha1.FenceAgentsRemediation
 		When("agent name match format and binary", func() {
 			BeforeEach(func() {
 				oldFAR = getTestFAR(invalidAgentName)
@@ -90,19 +92,19 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 		})
 
 		Context("with OutOfServiceTaint strategy", func() {
-			var outOfServiceStrategy *FenceAgentsRemediation
-			var resourceDeletionStrategy *FenceAgentsRemediation
+			var outOfServiceStrategy *remediationv1alpha1.FenceAgentsRemediation
+			var resourceDeletionStrategy *remediationv1alpha1.FenceAgentsRemediation
 
 			BeforeEach(func() {
-				orgValue := isOutOfServiceTaintSupported
-				DeferCleanup(func() { isOutOfServiceTaintSupported = orgValue })
+				orgValue := remediationv1alpha1.IsOutOfServiceTaintSupported
+				DeferCleanup(func() { remediationv1alpha1.IsOutOfServiceTaintSupported = orgValue })
 
-				outOfServiceStrategy = getFAR(validAgentName, OutOfServiceTaintRemediationStrategy)
-				resourceDeletionStrategy = getFAR(validAgentName, ResourceDeletionRemediationStrategy)
+				outOfServiceStrategy = getFAR(validAgentName, remediationv1alpha1.OutOfServiceTaintRemediationStrategy)
+				resourceDeletionStrategy = getFAR(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 			})
 			When("out of service taint is supported", func() {
 				BeforeEach(func() {
-					isOutOfServiceTaintSupported = true
+					remediationv1alpha1.IsOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
 					Expect(validator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)).Error().NotTo(HaveOccurred())
@@ -110,7 +112,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 			})
 			When("out of service taint is not supported", func() {
 				BeforeEach(func() {
-					isOutOfServiceTaintSupported = false
+					remediationv1alpha1.IsOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
 					warnings, err := validator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)
@@ -140,10 +142,10 @@ var _ = Describe("FenceAgentsRemediation Defaulting", func() {
 					mockValidatorClient.GetFunc = originalGetFunc
 				})
 				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-					if key.Name == OldDefaultSecretName {
+					if key.Name == remediationv1alpha1.OldDefaultSecretName {
 						if secret, ok := obj.(*corev1.Secret); ok {
 							secret.ObjectMeta = metav1.ObjectMeta{
-								Name:      OldDefaultSecretName,
+								Name:      remediationv1alpha1.OldDefaultSecretName,
 								Namespace: testNs,
 							}
 							return nil
@@ -154,14 +156,14 @@ var _ = Describe("FenceAgentsRemediation Defaulting", func() {
 			})
 
 			It("should set SharedSecretName to the old default name", func() {
-				far := getFAR(validAgentName, ResourceDeletionRemediationStrategy)
+				far := getFAR(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				far.Namespace = testNs
 				far.Spec.SharedSecretName = nil
 
 				err := defaulter.Default(ctx, far)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(far.Spec.SharedSecretName).NotTo(BeNil())
-				Expect(*far.Spec.SharedSecretName).To(Equal(OldDefaultSecretName))
+				Expect(*far.Spec.SharedSecretName).To(Equal(remediationv1alpha1.OldDefaultSecretName))
 			})
 		})
 
@@ -172,10 +174,10 @@ var _ = Describe("FenceAgentsRemediation Defaulting", func() {
 					mockValidatorClient.GetFunc = originalGetFunc
 				})
 				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-					if key.Name == OldDefaultSecretName {
+					if key.Name == remediationv1alpha1.OldDefaultSecretName {
 						if secret, ok := obj.(*corev1.Secret); ok {
 							secret.ObjectMeta = metav1.ObjectMeta{
-								Name:      OldDefaultSecretName,
+								Name:      remediationv1alpha1.OldDefaultSecretName,
 								Namespace: testNs,
 							}
 							return nil
@@ -186,7 +188,7 @@ var _ = Describe("FenceAgentsRemediation Defaulting", func() {
 			})
 
 			It("should not set SharedSecretName", func() {
-				far := getFAR(validAgentName, ResourceDeletionRemediationStrategy)
+				far := getFAR(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				far.Namespace = testNs
 				far.CreationTimestamp = metav1.Now() // simulate update
 				far.Spec.SharedSecretName = nil
@@ -209,10 +211,10 @@ var _ = Describe("FenceAgentsRemediation Defaulting", func() {
 			})
 
 			It("should remove SharedSecretName", func() {
-				far := getFAR(validAgentName, ResourceDeletionRemediationStrategy)
+				far := getFAR(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				far.Namespace = testNs
 				far.CreationTimestamp = metav1.Now() // simulate update
-				far.Spec.SharedSecretName = ptr.To(OldDefaultSecretName)
+				far.Spec.SharedSecretName = ptr.To(remediationv1alpha1.OldDefaultSecretName)
 
 				err := defaulter.Default(ctx, far)
 				Expect(err).NotTo(HaveOccurred())
@@ -232,7 +234,7 @@ var _ = Describe("FenceAgentsRemediation Defaulting", func() {
 			})
 
 			It("should not modify SharedSecretName", func() {
-				far := getFAR(validAgentName, ResourceDeletionRemediationStrategy)
+				far := getFAR(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				far.Namespace = testNs
 				far.Spec.SharedSecretName = nil
 
@@ -249,10 +251,10 @@ var _ = Describe("FenceAgentsRemediation Defaulting", func() {
 					mockValidatorClient.GetFunc = originalGetFunc
 				})
 				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-					if key.Name == OldDefaultSecretName {
+					if key.Name == remediationv1alpha1.OldDefaultSecretName {
 						if secret, ok := obj.(*corev1.Secret); ok {
 							secret.ObjectMeta = metav1.ObjectMeta{
-								Name:      OldDefaultSecretName,
+								Name:      remediationv1alpha1.OldDefaultSecretName,
 								Namespace: testNs,
 							}
 							return nil
@@ -263,7 +265,7 @@ var _ = Describe("FenceAgentsRemediation Defaulting", func() {
 			})
 
 			It("should not modify SharedSecretName", func() {
-				far := getFAR(validAgentName, ResourceDeletionRemediationStrategy)
+				far := getFAR(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				far.Namespace = testNs
 				far.Spec.SharedSecretName = ptr.To("my-custom-secret")
 
@@ -281,7 +283,7 @@ var _ = Describe("FenceAgentsRemediation Defaulting", func() {
 					mockValidatorClient.GetFunc = originalGetFunc
 				})
 				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-					if key.Name == OldDefaultSecretName {
+					if key.Name == remediationv1alpha1.OldDefaultSecretName {
 						return apierrors.NewInternalError(fmt.Errorf("unexpected error"))
 					}
 					return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
@@ -289,7 +291,7 @@ var _ = Describe("FenceAgentsRemediation Defaulting", func() {
 			})
 
 			It("should return an error", func() {
-				far := getFAR(validAgentName, ResourceDeletionRemediationStrategy)
+				far := getFAR(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				far.Namespace = testNs
 				far.Spec.SharedSecretName = nil
 
@@ -302,7 +304,7 @@ var _ = Describe("FenceAgentsRemediation Defaulting", func() {
 
 	Context("with wrong object type", func() {
 		It("should return an error", func() {
-			farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+			farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 			err := defaulter.Default(ctx, farTemplate)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected a FenceAgentsRemediation"))
@@ -310,20 +312,20 @@ var _ = Describe("FenceAgentsRemediation Defaulting", func() {
 	})
 })
 
-func getTestFAR(agentName string) *FenceAgentsRemediation {
-	return getFAR(agentName, ResourceDeletionRemediationStrategy)
+func getTestFAR(agentName string) *remediationv1alpha1.FenceAgentsRemediation {
+	return getFAR(agentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 }
 
-func getFAR(agentName string, strategy RemediationStrategyType) *FenceAgentsRemediation {
-	return &FenceAgentsRemediation{
+func getFAR(agentName string, strategy remediationv1alpha1.RemediationStrategyType) *remediationv1alpha1.FenceAgentsRemediation {
+	return &remediationv1alpha1.FenceAgentsRemediation{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-far",
 			Namespace: metav1.NamespaceDefault,
 		},
-		Spec: FenceAgentsRemediationSpec{
+		Spec: remediationv1alpha1.FenceAgentsRemediationSpec{
 			Agent:               agentName,
 			RemediationStrategy: strategy,
-			NodeParameters: map[ParameterName]map[NodeName]string{
+			NodeParameters: map[remediationv1alpha1.ParameterName]map[remediationv1alpha1.NodeName]string{
 				"--ipport": {"worker-0": "6230"},
 			},
 		},

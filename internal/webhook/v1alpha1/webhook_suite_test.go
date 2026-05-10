@@ -40,9 +40,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	//+kubebuilder:scaffold:imports
 
+	remediationv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/validation"
+	//+kubebuilder:scaffold:imports
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -62,7 +63,7 @@ var (
 	cancel    context.CancelFunc
 
 	mockValidatorClient *mockClient
-	validator           *customValidator
+	validator           *remediationv1alpha1.CustomValidator
 )
 
 // mockClient for testing
@@ -94,10 +95,10 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
+		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: false,
 		WebhookInstallOptions: envtest.WebhookInstallOptions{
-			Paths: []string{filepath.Join("..", "..", "config", "webhook")},
+			Paths: []string{filepath.Join("..", "..", "..", "config", "webhook")},
 		},
 	}
 
@@ -108,7 +109,7 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 
 	scheme := runtime.NewScheme()
-	err = AddToScheme(scheme)
+	err = remediationv1alpha1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = admissionv1beta1.AddToScheme(scheme)
@@ -127,17 +128,17 @@ var _ = BeforeSuite(func() {
 		Client: k8sClient,
 	}
 
-	validator = &customValidator{
+	validator = &remediationv1alpha1.CustomValidator{
 		Client: mockValidatorClient,
 	}
 
 	// initalize webhook agentValidator with a dummy function to check if agents name match the validAgentName
-	agentValidator = validation.NewCustomAgentValidator(func(agent string) (bool, error) {
+	remediationv1alpha1.SetAgentValidator(validation.NewCustomAgentValidator(func(agent string) (bool, error) {
 		if strings.Contains(agent, validAgentName) {
 			return true, nil
 		}
 		return false, nil
-	})
+	}))
 
 	// start webhook server using Manager
 	webhookInstallOptions := &testEnv.WebhookInstallOptions
@@ -152,10 +153,10 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	err = (&FenceAgentsRemediation{}).SetupWebhookWithManager(mgr)
+	err = SetupFARWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = (&FenceAgentsRemediationTemplate{}).SetupWebhookWithManager(mgr)
+	err = SetupFARTemplateWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:webhook

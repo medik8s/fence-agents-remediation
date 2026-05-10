@@ -15,6 +15,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	remediationv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 )
 
 const testNs = "test-namespace"
@@ -47,7 +49,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 		When("agent name match format and binary", func() {
 			It("should be accepted", func() {
-				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+				farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				_, err := validator.ValidateCreate(ctx, farTemplate)
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -55,8 +57,8 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 		When("farTemplate has only shared parameters without NodeTemplate and no node parameters", func() {
 			It("should be rejected", func() {
-				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
-				farTemplate.Spec.Template.Spec.SharedParameters = map[ParameterName]string{
+				farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
+				farTemplate.Spec.Template.Spec.SharedParameters = map[remediationv1alpha1.ParameterName]string{
 					"ip":       "192.168.1.100",
 					"username": "admin",
 					"password": "secret",
@@ -73,8 +75,8 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 		When("farTemplate has only shared parameters with NodeTemplate and no node parameters", func() {
 			It("should be accepted", func() {
-				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
-				farTemplate.Spec.Template.Spec.SharedParameters = map[ParameterName]string{
+				farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
+				farTemplate.Spec.Template.Spec.SharedParameters = map[remediationv1alpha1.ParameterName]string{
 					"ip":       "192.168.1.100",
 					"username": "admin",
 					"password": "secret-{{.NodeName}}", // This contains a NodeTemplate
@@ -114,16 +116,16 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
 				}
 
-				farTemplate := &FenceAgentsRemediationTemplate{
+				farTemplate := &remediationv1alpha1.FenceAgentsRemediationTemplate{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-secret-template",
 						Namespace: testNs,
 					},
-					Spec: FenceAgentsRemediationTemplateSpec{
-						Template: FenceAgentsRemediationTemplateResource{
-							Spec: FenceAgentsRemediationSpec{
+					Spec: remediationv1alpha1.FenceAgentsRemediationTemplateSpec{
+						Template: remediationv1alpha1.FenceAgentsRemediationTemplateResource{
+							Spec: remediationv1alpha1.FenceAgentsRemediationSpec{
 								Agent:               validAgentName,
-								RemediationStrategy: ResourceDeletionRemediationStrategy,
+								RemediationStrategy: remediationv1alpha1.ResourceDeletionRemediationStrategy,
 								SharedSecretName:    ptr.To("test-shared-secret-with-template"),
 								// Explicitly ensure no node parameters or shared parameters
 								NodeParameters:   nil,
@@ -141,15 +143,15 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 		When("farTemplate has no shared parameters and no node parameters", func() {
 			It("should be rejected", func() {
-				farTemplate := &FenceAgentsRemediationTemplate{
+				farTemplate := &remediationv1alpha1.FenceAgentsRemediationTemplate{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-" + validAgentName + "-template",
 					},
-					Spec: FenceAgentsRemediationTemplateSpec{
-						Template: FenceAgentsRemediationTemplateResource{
-							Spec: FenceAgentsRemediationSpec{
+					Spec: remediationv1alpha1.FenceAgentsRemediationTemplateSpec{
+						Template: remediationv1alpha1.FenceAgentsRemediationTemplateResource{
+							Spec: remediationv1alpha1.FenceAgentsRemediationSpec{
 								Agent:               validAgentName,
-								RemediationStrategy: ResourceDeletionRemediationStrategy,
+								RemediationStrategy: remediationv1alpha1.ResourceDeletionRemediationStrategy,
 								// Explicitly no SharedParameters or NodeParameters
 							},
 						},
@@ -163,7 +165,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 		When("agent name was not found ", func() {
 			It("should be rejected", func() {
-				farTemplate := getFARTemplate(invalidAgentName, ResourceDeletionRemediationStrategy)
+				farTemplate := getFARTemplate(invalidAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				warnings, err := validator.ValidateCreate(ctx, farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
@@ -171,18 +173,18 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		})
 
 		Context("with OutOfServiceTaint strategy", func() {
-			var outOfServiceStrategy *FenceAgentsRemediationTemplate
+			var outOfServiceStrategy *remediationv1alpha1.FenceAgentsRemediationTemplate
 
 			BeforeEach(func() {
-				orgValue := isOutOfServiceTaintSupported
-				DeferCleanup(func() { isOutOfServiceTaintSupported = orgValue })
+				orgValue := remediationv1alpha1.IsOutOfServiceTaintSupported
+				DeferCleanup(func() { remediationv1alpha1.IsOutOfServiceTaintSupported = orgValue })
 
-				outOfServiceStrategy = getFARTemplate(validAgentName, OutOfServiceTaintRemediationStrategy)
+				outOfServiceStrategy = getFARTemplate(validAgentName, remediationv1alpha1.OutOfServiceTaintRemediationStrategy)
 			})
 
 			When("out of service taint is supported", func() {
 				BeforeEach(func() {
-					isOutOfServiceTaintSupported = true
+					remediationv1alpha1.IsOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
 					_, err := validator.ValidateCreate(ctx, outOfServiceStrategy)
@@ -192,7 +194,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 			When("out of service taint is not supported", func() {
 				BeforeEach(func() {
-					isOutOfServiceTaintSupported = false
+					remediationv1alpha1.IsOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
 					warnings, err := validator.ValidateCreate(ctx, outOfServiceStrategy)
@@ -204,13 +206,13 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 	})
 
 	Context("updating FenceAgentsRemediationTemplate", func() {
-		var oldFARTemplate *FenceAgentsRemediationTemplate
+		var oldFARTemplate *remediationv1alpha1.FenceAgentsRemediationTemplate
 		When("agent name match format and binary", func() {
 			BeforeEach(func() {
-				oldFARTemplate = getFARTemplate(invalidAgentName, ResourceDeletionRemediationStrategy)
+				oldFARTemplate = getFARTemplate(invalidAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 			})
 			It("should be accepted", func() {
-				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+				farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				_, err := validator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -218,10 +220,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 		When("agent name was not found ", func() {
 			BeforeEach(func() {
-				oldFARTemplate = getFARTemplate(invalidAgentName, ResourceDeletionRemediationStrategy)
+				oldFARTemplate = getFARTemplate(invalidAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 			})
 			It("should be rejected", func() {
-				farTemplate := getFARTemplate(invalidAgentName, ResourceDeletionRemediationStrategy)
+				farTemplate := getFARTemplate(invalidAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				warnings, err := validator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
@@ -230,11 +232,11 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 		When("action parameter is invalid", func() {
 			BeforeEach(func() {
-				oldFARTemplate = getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+				oldFARTemplate = getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 			})
 			It("should be rejected", func() {
-				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
-				farTemplate.Spec.Template.Spec.SharedParameters = map[ParameterName]string{
+				farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
+				farTemplate.Spec.Template.Spec.SharedParameters = map[remediationv1alpha1.ParameterName]string{
 					"action": "shutdown", // Invalid action
 				}
 				warnings, err := validator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
@@ -244,20 +246,20 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		})
 
 		Context("with OutOfServiceTaint strategy", func() {
-			var outOfServiceStrategy *FenceAgentsRemediationTemplate
-			var resourceDeletionStrategy *FenceAgentsRemediationTemplate
+			var outOfServiceStrategy *remediationv1alpha1.FenceAgentsRemediationTemplate
+			var resourceDeletionStrategy *remediationv1alpha1.FenceAgentsRemediationTemplate
 
 			BeforeEach(func() {
-				orgValue := isOutOfServiceTaintSupported
-				DeferCleanup(func() { isOutOfServiceTaintSupported = orgValue })
+				orgValue := remediationv1alpha1.IsOutOfServiceTaintSupported
+				DeferCleanup(func() { remediationv1alpha1.IsOutOfServiceTaintSupported = orgValue })
 
-				outOfServiceStrategy = getFARTemplate(validAgentName, OutOfServiceTaintRemediationStrategy)
-				resourceDeletionStrategy = getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+				outOfServiceStrategy = getFARTemplate(validAgentName, remediationv1alpha1.OutOfServiceTaintRemediationStrategy)
+				resourceDeletionStrategy = getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 			})
 
 			When("out of service taint is supported", func() {
 				BeforeEach(func() {
-					isOutOfServiceTaintSupported = true
+					remediationv1alpha1.IsOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
 					_, err := validator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)
@@ -267,7 +269,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 			When("out of service taint is not supported", func() {
 				BeforeEach(func() {
-					isOutOfServiceTaintSupported = false
+					remediationv1alpha1.IsOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
 					warnings, err := validator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)
@@ -280,10 +282,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		Context("validateTemplateForSharedSecretDefaultName", func() {
 			When("old template does not have SharedSecretName", func() {
 				It("should be allowed", func() {
-					oldTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+					oldTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					oldTemplate.Spec.Template.Spec.SharedSecretName = nil
 
-					newTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+					newTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					newTemplate.Spec.Template.Spec.SharedSecretName = nil
 
 					_, err := validator.ValidateUpdate(ctx, oldTemplate, newTemplate)
@@ -293,10 +295,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 			When("old template has SharedSecretName but not the old default name", func() {
 				It("should be allowed", func() {
-					oldTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+					oldTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					oldTemplate.Spec.Template.Spec.SharedSecretName = ptr.To("some-other-secret")
 
-					newTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+					newTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					newTemplate.Spec.Template.Spec.SharedSecretName = nil
 
 					_, err := validator.ValidateUpdate(ctx, oldTemplate, newTemplate)
@@ -328,10 +330,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				})
 
 				It("should be allowed", func() {
-					oldTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
-					oldTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(OldDefaultSecretName)
+					oldTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
+					oldTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(remediationv1alpha1.OldDefaultSecretName)
 
-					newTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+					newTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					newTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(otherSecretName)
 
 					_, err := validator.ValidateUpdate(ctx, oldTemplate, newTemplate)
@@ -351,11 +353,11 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				})
 
 				It("should be allowed", func() {
-					oldTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+					oldTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					oldTemplate.ObjectMeta.Namespace = testNs
-					oldTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(OldDefaultSecretName)
+					oldTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(remediationv1alpha1.OldDefaultSecretName)
 
-					newTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+					newTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					newTemplate.ObjectMeta.Namespace = testNs
 					newTemplate.Spec.Template.Spec.SharedSecretName = nil
 
@@ -371,10 +373,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 						mockValidatorClient.GetFunc = originalGetFunc
 					})
 					mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-						if key.Name == OldDefaultSecretName {
+						if key.Name == remediationv1alpha1.OldDefaultSecretName {
 							if secret, ok := obj.(*corev1.Secret); ok {
 								secret.ObjectMeta = metav1.ObjectMeta{
-									Name:      OldDefaultSecretName,
+									Name:      remediationv1alpha1.OldDefaultSecretName,
 									Namespace: testNs,
 								}
 								return nil
@@ -385,18 +387,18 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				})
 
 				It("should be rejected", func() {
-					oldTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+					oldTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					oldTemplate.ObjectMeta.Namespace = testNs
-					oldTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(OldDefaultSecretName)
+					oldTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(remediationv1alpha1.OldDefaultSecretName)
 
-					newTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+					newTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					newTemplate.ObjectMeta.Namespace = testNs
 					newTemplate.Spec.Template.Spec.SharedSecretName = nil
 
 					_, err := validator.ValidateUpdate(ctx, oldTemplate, newTemplate)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("shared secret with the deprecated default name"))
-					Expect(err.Error()).To(ContainSubstring(OldDefaultSecretName))
+					Expect(err.Error()).To(ContainSubstring(remediationv1alpha1.OldDefaultSecretName))
 				})
 			})
 
@@ -407,10 +409,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 						mockValidatorClient.GetFunc = originalGetFunc
 					})
 					mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-						if key.Name == OldDefaultSecretName {
+						if key.Name == remediationv1alpha1.OldDefaultSecretName {
 							if secret, ok := obj.(*corev1.Secret); ok {
 								secret.ObjectMeta = metav1.ObjectMeta{
-									Name:      OldDefaultSecretName,
+									Name:      remediationv1alpha1.OldDefaultSecretName,
 									Namespace: testNs,
 								}
 								return nil
@@ -421,11 +423,11 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				})
 
 				It("should be rejected", func() {
-					oldTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+					oldTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					oldTemplate.ObjectMeta.Namespace = testNs
-					oldTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(OldDefaultSecretName)
+					oldTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(remediationv1alpha1.OldDefaultSecretName)
 
-					newTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+					newTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					newTemplate.ObjectMeta.Namespace = testNs
 					newTemplate.Spec.Template.Spec.SharedSecretName = ptr.To("")
 
@@ -442,7 +444,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 						mockValidatorClient.GetFunc = originalGetFunc
 					})
 					mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-						if key.Name == OldDefaultSecretName {
+						if key.Name == remediationv1alpha1.OldDefaultSecretName {
 							return apierrors.NewInternalError(fmt.Errorf("unexpected error"))
 						}
 						return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
@@ -450,11 +452,11 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				})
 
 				It("should return an error asking to retry", func() {
-					oldTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+					oldTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					oldTemplate.ObjectMeta.Namespace = testNs
-					oldTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(OldDefaultSecretName)
+					oldTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(remediationv1alpha1.OldDefaultSecretName)
 
-					newTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+					newTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					newTemplate.ObjectMeta.Namespace = testNs
 					newTemplate.Spec.Template.Spec.SharedSecretName = nil
 
@@ -469,18 +471,18 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 	Context("validating template syntax", func() {
 		It("should aggregate multiple template validation errors", func() {
 			// Create a template with multiple invalid template strings
-			farTemplate := &FenceAgentsRemediationTemplate{
+			farTemplate := &remediationv1alpha1.FenceAgentsRemediationTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "invalid-template",
 					Namespace: testNs,
 				},
-				Spec: FenceAgentsRemediationTemplateSpec{
-					Template: FenceAgentsRemediationTemplateResource{
-						Spec: FenceAgentsRemediationSpec{
+				Spec: remediationv1alpha1.FenceAgentsRemediationTemplateSpec{
+					Template: remediationv1alpha1.FenceAgentsRemediationTemplateResource{
+						Spec: remediationv1alpha1.FenceAgentsRemediationSpec{
 							Agent: validAgentName,
-							SharedParameters: map[ParameterName]string{
+							SharedParameters: map[remediationv1alpha1.ParameterName]string{
 								"--systems-uri": "/redfish/v1/Systems/{{.NodeName", // Missing closing brace
-								"--hostname":    "{{.InvalidField}}",               // Unsupported name, only NodeName is supported
+								"--hostname":    "{{.InvalidField}}",               // Unsupported name, only remediationv1alpha1.NodeName is supported
 								"--port":        "{{.NodeName}}.com",               // Valid template
 								"--invalid":     "/path/{{.NodeName",               // Another missing closing brace
 							},
@@ -504,16 +506,16 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		})
 
 		It("should succeed when all templates are valid", func() {
-			farTemplate := &FenceAgentsRemediationTemplate{
+			farTemplate := &remediationv1alpha1.FenceAgentsRemediationTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "valid-template",
 					Namespace: testNs,
 				},
-				Spec: FenceAgentsRemediationTemplateSpec{
-					Template: FenceAgentsRemediationTemplateResource{
-						Spec: FenceAgentsRemediationSpec{
+				Spec: remediationv1alpha1.FenceAgentsRemediationTemplateSpec{
+					Template: remediationv1alpha1.FenceAgentsRemediationTemplateResource{
+						Spec: remediationv1alpha1.FenceAgentsRemediationSpec{
 							Agent: validAgentName,
-							SharedParameters: map[ParameterName]string{
+							SharedParameters: map[remediationv1alpha1.ParameterName]string{
 								"--systems-uri": "/redfish/v1/Systems/{{.NodeName}}",
 								"--hostname":    "{{.NodeName}}.example.com",
 								"--port":        "623", // No template, should be fine
@@ -540,16 +542,16 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		})
 
 		It("should fail when template has invalid action parameter", func() {
-			farTemplate := &FenceAgentsRemediationTemplate{
+			farTemplate := &remediationv1alpha1.FenceAgentsRemediationTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "invalid-action-template",
 					Namespace: testNs,
 				},
-				Spec: FenceAgentsRemediationTemplateSpec{
-					Template: FenceAgentsRemediationTemplateResource{
-						Spec: FenceAgentsRemediationSpec{
+				Spec: remediationv1alpha1.FenceAgentsRemediationTemplateSpec{
+					Template: remediationv1alpha1.FenceAgentsRemediationTemplateResource{
+						Spec: remediationv1alpha1.FenceAgentsRemediationSpec{
 							Agent: validAgentName,
-							SharedParameters: map[ParameterName]string{
+							SharedParameters: map[remediationv1alpha1.ParameterName]string{
 								"--ip":     "192.168.1.100",
 								"--action": "shutdown", // Invalid action - only "reboot" or "off" are supported
 							},
@@ -565,19 +567,19 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		})
 
 		It("should fail when templates reference missing node secrets", func() {
-			farTemplate := &FenceAgentsRemediationTemplate{
+			farTemplate := &remediationv1alpha1.FenceAgentsRemediationTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "missing-secrets-template",
 					Namespace: testNs,
 				},
-				Spec: FenceAgentsRemediationTemplateSpec{
-					Template: FenceAgentsRemediationTemplateResource{
-						Spec: FenceAgentsRemediationSpec{
+				Spec: remediationv1alpha1.FenceAgentsRemediationTemplateSpec{
+					Template: remediationv1alpha1.FenceAgentsRemediationTemplateResource{
+						Spec: remediationv1alpha1.FenceAgentsRemediationSpec{
 							Agent: validAgentName,
-							SharedParameters: map[ParameterName]string{
+							SharedParameters: map[remediationv1alpha1.ParameterName]string{
 								"--ip": "192.168.1.100",
 							},
-							NodeSecretNames: map[NodeName]string{
+							NodeSecretNames: map[remediationv1alpha1.NodeName]string{
 								"worker-1": "non-existent-node-secret",
 							},
 						},
@@ -593,14 +595,14 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		})
 
 		It("should fail when template references a missing shared secret", func() {
-			farTemplate := &FenceAgentsRemediationTemplate{
+			farTemplate := &remediationv1alpha1.FenceAgentsRemediationTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "missing-shared-secret-template",
 					Namespace: testNs,
 				},
-				Spec: FenceAgentsRemediationTemplateSpec{
-					Template: FenceAgentsRemediationTemplateResource{
-						Spec: FenceAgentsRemediationSpec{
+				Spec: remediationv1alpha1.FenceAgentsRemediationTemplateSpec{
+					Template: remediationv1alpha1.FenceAgentsRemediationTemplateResource{
+						Spec: remediationv1alpha1.FenceAgentsRemediationSpec{
 							Agent:            validAgentName,
 							SharedSecretName: ptr.To("non-existent-shared-secret"),
 						},
@@ -615,16 +617,16 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		})
 
 		It("should fail when NodeSecretParam duplicates a NodeParam", func() {
-			farTemplate := &FenceAgentsRemediationTemplate{
+			farTemplate := &remediationv1alpha1.FenceAgentsRemediationTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "duplicate-params-template",
 					Namespace: testNs,
 				},
-				Spec: FenceAgentsRemediationTemplateSpec{
-					Template: FenceAgentsRemediationTemplateResource{
-						Spec: FenceAgentsRemediationSpec{
+				Spec: remediationv1alpha1.FenceAgentsRemediationTemplateSpec{
+					Template: remediationv1alpha1.FenceAgentsRemediationTemplateResource{
+						Spec: remediationv1alpha1.FenceAgentsRemediationSpec{
 							Agent: validAgentName,
-							NodeParameters: map[ParameterName]map[NodeName]string{
+							NodeParameters: map[remediationv1alpha1.ParameterName]map[remediationv1alpha1.NodeName]string{
 								"--ip": {
 									"worker-1": "192.168.1.101", // This will conflict with secret
 								},
@@ -632,7 +634,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 									"worker-1": "623",
 								},
 							},
-							NodeSecretNames: map[NodeName]string{
+							NodeSecretNames: map[remediationv1alpha1.NodeName]string{
 								"worker-1": "test-node-secret-ip-conflict", // This secret contains "--ip" parameter
 							},
 						},
@@ -651,7 +653,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 
 	Context("validating StatusValidationSample", func() {
 
-		var fart *FenceAgentsRemediationTemplate
+		var fart *remediationv1alpha1.FenceAgentsRemediationTemplate
 
 		BeforeEach(func() {
 			fart = getTestFART()
@@ -753,12 +755,12 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 	})
 })
 
-func getTestFART() *FenceAgentsRemediationTemplate {
-	return &FenceAgentsRemediationTemplate{
+func getTestFART() *remediationv1alpha1.FenceAgentsRemediationTemplate {
+	return &remediationv1alpha1.FenceAgentsRemediationTemplate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-fart",
 			Namespace: metav1.NamespaceDefault,
-		}, Spec: FenceAgentsRemediationTemplateSpec{Template: FenceAgentsRemediationTemplateResource{getTestFAR(validAgentName).Spec}}}
+		}, Spec: remediationv1alpha1.FenceAgentsRemediationTemplateSpec{Template: remediationv1alpha1.FenceAgentsRemediationTemplateResource{Spec: getTestFAR(validAgentName).Spec}}}
 }
 
 var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
@@ -779,10 +781,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 					mockValidatorClient.GetFunc = originalGetFunc
 				})
 				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-					if key.Name == OldDefaultSecretName {
+					if key.Name == remediationv1alpha1.OldDefaultSecretName {
 						if secret, ok := obj.(*corev1.Secret); ok {
 							secret.ObjectMeta = metav1.ObjectMeta{
-								Name:      OldDefaultSecretName,
+								Name:      remediationv1alpha1.OldDefaultSecretName,
 								Namespace: testNs,
 							}
 							return nil
@@ -793,13 +795,13 @@ var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 			})
 
 			It("should set SharedSecretName to the old default name", func() {
-				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+				farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				farTemplate.Spec.Template.Spec.SharedSecretName = nil
 
 				err := defaulter.Default(ctx, farTemplate)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(farTemplate.Spec.Template.Spec.SharedSecretName).NotTo(BeNil())
-				Expect(*farTemplate.Spec.Template.Spec.SharedSecretName).To(Equal(OldDefaultSecretName))
+				Expect(*farTemplate.Spec.Template.Spec.SharedSecretName).To(Equal(remediationv1alpha1.OldDefaultSecretName))
 			})
 		})
 
@@ -810,10 +812,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 					mockValidatorClient.GetFunc = originalGetFunc
 				})
 				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-					if key.Name == OldDefaultSecretName {
+					if key.Name == remediationv1alpha1.OldDefaultSecretName {
 						if secret, ok := obj.(*corev1.Secret); ok {
 							secret.ObjectMeta = metav1.ObjectMeta{
-								Name:      OldDefaultSecretName,
+								Name:      remediationv1alpha1.OldDefaultSecretName,
 								Namespace: testNs,
 							}
 							return nil
@@ -824,7 +826,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 			})
 
 			It("should not set SharedSecretName", func() {
-				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+				farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				farTemplate.CreationTimestamp = metav1.Now() // simulate update
 				farTemplate.Spec.Template.Spec.SharedSecretName = nil
 
@@ -846,9 +848,9 @@ var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 			})
 
 			It("should remove SharedSecretName", func() {
-				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+				farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				farTemplate.CreationTimestamp = metav1.Now() // simulate update
-				farTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(OldDefaultSecretName)
+				farTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(remediationv1alpha1.OldDefaultSecretName)
 
 				err := defaulter.Default(ctx, farTemplate)
 				Expect(err).NotTo(HaveOccurred())
@@ -868,7 +870,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 			})
 
 			It("should not modify SharedSecretName", func() {
-				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+				farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				farTemplate.Spec.Template.Spec.SharedSecretName = nil
 
 				err := defaulter.Default(ctx, farTemplate)
@@ -884,10 +886,10 @@ var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 					mockValidatorClient.GetFunc = originalGetFunc
 				})
 				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-					if key.Name == OldDefaultSecretName {
+					if key.Name == remediationv1alpha1.OldDefaultSecretName {
 						if secret, ok := obj.(*corev1.Secret); ok {
 							secret.ObjectMeta = metav1.ObjectMeta{
-								Name:      OldDefaultSecretName,
+								Name:      remediationv1alpha1.OldDefaultSecretName,
 								Namespace: testNs,
 							}
 							return nil
@@ -898,7 +900,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 			})
 
 			It("should not modify SharedSecretName", func() {
-				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+				farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				farTemplate.Spec.Template.Spec.SharedSecretName = ptr.To("my-custom-secret")
 
 				err := defaulter.Default(ctx, farTemplate)
@@ -915,7 +917,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 					mockValidatorClient.GetFunc = originalGetFunc
 				})
 				mockValidatorClient.GetFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-					if key.Name == OldDefaultSecretName {
+					if key.Name == remediationv1alpha1.OldDefaultSecretName {
 						return apierrors.NewInternalError(fmt.Errorf("unexpected error"))
 					}
 					return apierrors.NewNotFound(schema.GroupResource{}, key.Name)
@@ -923,7 +925,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 			})
 
 			It("should return an error", func() {
-				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+				farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				farTemplate.Spec.Template.Spec.SharedSecretName = nil
 
 				err := defaulter.Default(ctx, farTemplate)
@@ -936,7 +938,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 	Context("annotations defaulting", func() {
 		When("MultipleTemplatesSupportedAnnotation is not set", func() {
 			It("should set the annotation to true", func() {
-				farTemplate := getFARTemplate(validAgentName, ResourceDeletionRemediationStrategy)
+				farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 				farTemplate.Annotations = nil
 
 				err := defaulter.Default(ctx, farTemplate)
@@ -956,19 +958,19 @@ var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 	})
 })
 
-func getFARTemplate(agentName string, strategy RemediationStrategyType) *FenceAgentsRemediationTemplate {
-	return &FenceAgentsRemediationTemplate{
+func getFARTemplate(agentName string, strategy remediationv1alpha1.RemediationStrategyType) *remediationv1alpha1.FenceAgentsRemediationTemplate {
+	return &remediationv1alpha1.FenceAgentsRemediationTemplate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-" + agentName + "-template",
 			Namespace: testNs,
 		},
-		Spec: FenceAgentsRemediationTemplateSpec{
-			Template: FenceAgentsRemediationTemplateResource{
-				Spec: FenceAgentsRemediationSpec{
+		Spec: remediationv1alpha1.FenceAgentsRemediationTemplateSpec{
+			Template: remediationv1alpha1.FenceAgentsRemediationTemplateResource{
+				Spec: remediationv1alpha1.FenceAgentsRemediationSpec{
 					Agent:               agentName,
 					RemediationStrategy: strategy,
 					// Add basic shared parameters with a template to satisfy new validation
-					SharedParameters: map[ParameterName]string{
+					SharedParameters: map[remediationv1alpha1.ParameterName]string{
 						"ip":       "192.168.1.100",
 						"username": "admin-{{.NodeName}}", // Contains NodeTemplate to satisfy validation
 					},

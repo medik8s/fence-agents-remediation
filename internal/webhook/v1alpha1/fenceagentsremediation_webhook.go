@@ -25,20 +25,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	remediationv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 )
 
 var (
-	// isOutOfServiceTaintSupported will be set to true in case out-of-service taint is supported (k8s 1.26 or higher)
-	isOutOfServiceTaintSupported bool
-
 	// webhookFARLog is for logging in this package.
 	webhookFARLog = logf.Log.WithName("fenceagentsremediation-resource")
 )
 
-func (r *FenceAgentsRemediation) SetupWebhookWithManager(mgr ctrl.Manager) error {
+func SetupFARWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
-		WithValidator(&customValidator{
+		For(&remediationv1alpha1.FenceAgentsRemediation{}).
+		WithValidator(&remediationv1alpha1.CustomValidator{
 			Client: mgr.GetClient(),
 		}).
 		WithDefaulter(&farDefaulter{
@@ -48,6 +47,7 @@ func (r *FenceAgentsRemediation) SetupWebhookWithManager(mgr ctrl.Manager) error
 }
 
 // +kubebuilder:webhook:path=/mutate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediation,mutating=true,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations,verbs=create;update,versions=v1alpha1,name=mfenceagentsremediation.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediation,mutating=false,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations,verbs=create;update,versions=v1alpha1,name=vfenceagentsremediation.kb.io,admissionReviewVersions=v1
 
 type farDefaulter struct {
 	client.Client
@@ -57,15 +57,11 @@ var _ admission.CustomDefaulter = &farDefaulter{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (d *farDefaulter) Default(ctx context.Context, obj runtime.Object) error {
-	far, ok := obj.(*FenceAgentsRemediation)
+	far, ok := obj.(*remediationv1alpha1.FenceAgentsRemediation)
 	if !ok {
 		return fmt.Errorf("expected a FenceAgentsRemediation but got %T", obj)
 	}
 	webhookFARLog.Info("default", "name", far.Name)
 	isCreate := far.CreationTimestamp.IsZero()
 	return applySharedSecretDefaultNameToSpec(ctx, d.Client, &far.Spec, far.Namespace, isCreate)
-}
-
-func InitOutOfServiceTaintSupportedFlag(outOfServiceTaintSupported bool) {
-	isOutOfServiceTaintSupported = outOfServiceTaintSupported
 }

@@ -30,6 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	remediationv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 )
 
 var (
@@ -37,10 +39,10 @@ var (
 	webhookFARTemplateLog = logf.Log.WithName("fenceagentsremediationtemplate-resource")
 )
 
-func (farTemplate *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr ctrl.Manager) error {
+func SetupFARTemplateWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(farTemplate).
-		WithValidator(&customValidator{
+		For(&remediationv1alpha1.FenceAgentsRemediationTemplate{}).
+		WithValidator(&remediationv1alpha1.CustomValidator{
 			Client: mgr.GetClient(),
 		}).
 		WithDefaulter(&farTemplateDefaulter{
@@ -50,6 +52,7 @@ func (farTemplate *FenceAgentsRemediationTemplate) SetupWebhookWithManager(mgr c
 }
 
 // +kubebuilder:webhook:path=/mutate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate,mutating=true,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=create;update,versions=v1alpha1,name=mfenceagentsremediationtemplate.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate,mutating=false,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=create;update,versions=v1alpha1,name=vfenceagentsremediationtemplate.kb.io,admissionReviewVersions=v1
 
 type farTemplateDefaulter struct {
 	client.Client
@@ -59,7 +62,7 @@ var _ admission.CustomDefaulter = &farTemplateDefaulter{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (d *farTemplateDefaulter) Default(ctx context.Context, obj runtime.Object) error {
-	farTemplate, ok := obj.(*FenceAgentsRemediationTemplate)
+	farTemplate, ok := obj.(*remediationv1alpha1.FenceAgentsRemediationTemplate)
 	if !ok {
 		return fmt.Errorf("expected a FenceAgentsRemediationTemplate but got %T", obj)
 	}
@@ -100,15 +103,15 @@ func (d *farTemplateDefaulter) Default(ctx context.Context, obj runtime.Object) 
 // (validateTemplateForSharedSecretDefaultName) will reject the update with a helpful
 // error message if the secret still exists.
 // On both CREATE and UPDATE, we remove the old default value when the secret doesn't exist.
-func applySharedSecretDefaultNameToSpec(ctx context.Context, k8sClient client.Client, spec *FenceAgentsRemediationSpec, namespace string, isCreate bool) error {
+func applySharedSecretDefaultNameToSpec(ctx context.Context, k8sClient client.Client, spec *remediationv1alpha1.FenceAgentsRemediationSpec, namespace string, isCreate bool) error {
 	// Nothing to do when SharedSecretName is a custom value (not the old default)
-	if spec.SharedSecretName != nil && *spec.SharedSecretName != OldDefaultSecretName {
+	if spec.SharedSecretName != nil && *spec.SharedSecretName != remediationv1alpha1.OldDefaultSecretName {
 		return nil
 	}
 
 	// Check if the secret with the old default name exists
 	secret := &corev1.Secret{}
-	secretKey := client.ObjectKey{Name: OldDefaultSecretName, Namespace: namespace}
+	secretKey := client.ObjectKey{Name: remediationv1alpha1.OldDefaultSecretName, Namespace: namespace}
 	secretExists := true
 	if err := k8sClient.Get(ctx, secretKey, secret); err != nil {
 		if !apiErrors.IsNotFound(err) {
@@ -119,11 +122,11 @@ func applySharedSecretDefaultNameToSpec(ctx context.Context, k8sClient client.Cl
 
 	if isCreate && spec.SharedSecretName == nil && secretExists {
 		// Set the old default value when SharedSecretName is nil and the Secret exists (only on create)
-		webhookFARTemplateLog.Info("Setting SharedSecretName to old default value as the secret exists", "secretName", OldDefaultSecretName)
-		spec.SharedSecretName = ptr.To(OldDefaultSecretName)
-	} else if spec.SharedSecretName != nil && *spec.SharedSecretName == OldDefaultSecretName && !secretExists {
+		webhookFARTemplateLog.Info("Setting SharedSecretName to old default value as the secret exists", "secretName", remediationv1alpha1.OldDefaultSecretName)
+		spec.SharedSecretName = ptr.To(remediationv1alpha1.OldDefaultSecretName)
+	} else if spec.SharedSecretName != nil && *spec.SharedSecretName == remediationv1alpha1.OldDefaultSecretName && !secretExists {
 		// Remove the old default value when SharedSecretName equals the old default but the Secret doesn't exist
-		webhookFARTemplateLog.Info("Removing SharedSecretName old default value as the secret does not exist", "secretName", OldDefaultSecretName)
+		webhookFARTemplateLog.Info("Removing SharedSecretName old default value as the secret does not exist", "secretName", remediationv1alpha1.OldDefaultSecretName)
 		spec.SharedSecretName = nil
 	}
 	return nil

@@ -39,9 +39,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	fenceagentsremediationv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
-	"github.com/medik8s/fence-agents-remediation/controllers"
+	"github.com/medik8s/fence-agents-remediation/internal/controller"
 
 	//+kubebuilder:scaffold:imports
+	webhookv1alpha1 "github.com/medik8s/fence-agents-remediation/internal/webhook/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
 	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 	"github.com/medik8s/fence-agents-remediation/version"
@@ -115,7 +116,7 @@ func main() {
 	if isOutOfServiceTaintSupported {
 		setupLog.Info("out-of-service taint is supported on this cluster")
 	}
-	fenceagentsremediationv1alpha1.InitOutOfServiceTaintSupportedFlag(isOutOfServiceTaintSupported)
+	fenceagentsremediationv1alpha1.SetOutOfServiceTaintSupported(isOutOfServiceTaintSupported)
 
 	executer, err := cli.NewExecuter(mgr.GetClient(), mgr.GetEventRecorderFor(farControllerName+"-executer"))
 	if err != nil {
@@ -123,9 +124,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.FenceAgentsRemediationReconciler{
+	if err = (&controller.FenceAgentsRemediationReconciler{
 		Client:   mgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers").WithName(farControllerName),
+		Log:      ctrl.Log.WithName("controller").WithName(farControllerName),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor(farControllerName),
 		Executor: executer,
@@ -134,17 +135,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&fenceagentsremediationv1alpha1.FenceAgentsRemediation{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = webhookv1alpha1.SetupFARWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "FenceAgentsRemediation")
 		os.Exit(1)
 	}
-	if err = (&fenceagentsremediationv1alpha1.FenceAgentsRemediationTemplate{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = webhookv1alpha1.SetupFARTemplateWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "FenceAgentsRemediationTemplate")
 		os.Exit(1)
 	}
-	if err = (&controllers.FenceAgentsRemediationTemplateReconciler{
+	if err = (&controller.FenceAgentsRemediationTemplateReconciler{
 		Client:   mgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers").WithName(fartControllerName),
+		Log:      ctrl.Log.WithName("controller").WithName(fartControllerName),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor(fartControllerName),
 		Executor: executer,
