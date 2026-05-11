@@ -25,10 +25,9 @@ resources:
 #- ../prometheus
 
 patches:
-# Protect the /metrics endpoint by putting it behind auth.
-# If you want your controller-manager to expose the /metrics
-# endpoint w/o any authn/z, please comment the following line.
-- path: manager_auth_proxy_patch.yaml
+# Configure the manager to serve metrics on port 8443 with authentication
+# and authorization via controller-runtime's FilterProvider.
+- path: manager_metrics_patch.yaml
 
 # Mount the controller config file for loading manager configurations
 # through a ComponentConfig type

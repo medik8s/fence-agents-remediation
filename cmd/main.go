@@ -36,6 +36,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	fenceagentsremediationv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
@@ -76,7 +78,7 @@ func main() {
 		enableHTTP2          bool
 		webhookOpts          webhook.Options
 	)
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8443", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
@@ -96,8 +98,22 @@ func main() {
 
 	configureWebhookOpts(&webhookOpts, enableHTTP2)
 
+	// TLS options for metrics server: disable HTTP/2 for mitigating CVEs
+	var tlsOpts []func(*tls.Config)
+	if !enableHTTP2 {
+		tlsOpts = append(tlsOpts, func(c *tls.Config) {
+			c.NextProtos = []string{"http/1.1"}
+		})
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
+		Scheme: scheme,
+		Metrics: server.Options{
+			BindAddress:    metricsAddr,
+			SecureServing:  true,
+			FilterProvider: filters.WithAuthenticationAndAuthorization,
+			TLSOpts:        tlsOpts,
+		},
 		WebhookServer:          webhook.NewServer(webhookOpts),
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
