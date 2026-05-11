@@ -56,7 +56,6 @@ spec:
           httpGet:
             path: /healthz
             port: 8081
-          initialDelaySeconds: 15
           periodSeconds: 20
         readinessProbe:
           httpGet:
@@ -64,6 +63,20 @@ spec:
             port: 8081
           initialDelaySeconds: 5
           periodSeconds: 10
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          failureThreshold: 12
+          periodSeconds: 5
+        lifecycle:
+          postStart:
+            exec:
+              command: ["/bin/true"]
+          preStop:
+            exec:
+              command: ["sleep", "5"]
+        terminationMessagePolicy: FallbackToLogsOnError
         # TODO(user): Configure the resources accordingly based on the project requirements.
         # More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
         resources:
@@ -74,7 +87,7 @@ spec:
             cpu: 10m
             memory: 64Mi
       serviceAccountName: controller-manager
-      terminationGracePeriodSeconds: 10
+      terminationGracePeriodSeconds: 15
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: "kubernetes.io/hostname"
