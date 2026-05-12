@@ -51,31 +51,41 @@ const (
 )
 
 var (
+	// IsOutOfServiceTaintSupported will be set to true in case out-of-service taint is supported (k8s 1.26 or higher)
+	IsOutOfServiceTaintSupported bool
 	// paramsLog is for logging in this package.
 	paramsLog = logf.Log.WithName("fenceagentsremediation-params")
 	// verify agent existence with os.Stat function
 	agentValidator = validation.NewAgentValidator()
 )
 
+func SetOutOfServiceTaintSupported(outOfServiceTaintSupported bool) {
+	IsOutOfServiceTaintSupported = outOfServiceTaintSupported
+}
+
+// SetAgentValidator sets the agent validator for testing purposes
+func SetAgentValidator(validator validation.AgentValidator) {
+	agentValidator = validator
+}
+
 type SecretParams struct {
 	params          map[string]string
 	hasNodeTemplate bool
 }
 
-// +kubebuilder:webhook:path=/validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediationtemplate,mutating=false,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediationtemplates,verbs=create;update,versions=v1alpha1,name=vfenceagentsremediationtemplate.kb.io,admissionReviewVersions=v1
-// +kubebuilder:webhook:path=/validate-fence-agents-remediation-medik8s-io-v1alpha1-fenceagentsremediation,mutating=false,failurePolicy=fail,sideEffects=None,groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations,verbs=create;update,versions=v1alpha1,name=vfenceagentsremediation.kb.io,admissionReviewVersions=v1
-
-type customValidator struct {
-	client.Client
+// CustomValidator implements validation for FenceAgentsRemediation and FenceAgentsRemediationTemplate
+// +kubebuilder:object:generate=false
+type CustomValidator struct {
+	Client client.Client
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
-func (v *customValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+func (v *CustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	return v.validate(ctx, obj)
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
-func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object, new runtime.Object) (admission.Warnings, error) {
+func (v *CustomValidator) ValidateUpdate(ctx context.Context, old runtime.Object, new runtime.Object) (admission.Warnings, error) {
 	warnings, err := v.validate(ctx, new)
 	aggregated := utilErrors.NewAggregate([]error{
 		err,
@@ -84,7 +94,7 @@ func (v *customValidator) ValidateUpdate(ctx context.Context, old runtime.Object
 	return warnings, aggregated
 }
 
-func (v *customValidator) validateTemplateForSharedSecretDefaultName(ctx context.Context, old, new runtime.Object) error {
+func (v *CustomValidator) validateTemplateForSharedSecretDefaultName(ctx context.Context, old, new runtime.Object) error {
 	// prevent removing the default shared secret name while such a secret exists
 	oldTemplate, ok := old.(*FenceAgentsRemediationTemplate)
 	if !ok ||
@@ -103,7 +113,7 @@ func (v *customValidator) validateTemplateForSharedSecretDefaultName(ctx context
 	// old default name was removed, checking if secret exists
 	secret := &corev1.Secret{}
 	secretKey := client.ObjectKey{Name: OldDefaultSecretName, Namespace: newTemplate.Namespace}
-	if err := v.Get(ctx, secretKey, secret); err != nil {
+	if err := v.Client.Get(ctx, secretKey, secret); err != nil {
 		if apiErrors.IsNotFound(err) {
 			// this is fine
 			return nil
@@ -114,13 +124,13 @@ func (v *customValidator) validateTemplateForSharedSecretDefaultName(ctx context
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
-func (v *customValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+func (v *CustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	metaObj, _ := obj.(metav1.Object)
 	paramsLog.Info("validate delete", "name", metaObj.GetName())
 	return nil, nil
 }
 
-func (v *customValidator) validate(ctx context.Context, new runtime.Object) (admission.Warnings, error) {
+func (v *CustomValidator) validate(ctx context.Context, new runtime.Object) (admission.Warnings, error) {
 	spec, err := v.getSpec(new)
 	if err != nil {
 		paramsLog.Error(err, "unsupported object type for validation")
@@ -140,7 +150,7 @@ func (v *customValidator) validate(ctx context.Context, new runtime.Object) (adm
 	return admission.Warnings{}, aggregated
 }
 
-func (v *customValidator) getSpec(new runtime.Object) (*FenceAgentsRemediationSpec, error) {
+func (v *CustomValidator) getSpec(new runtime.Object) (*FenceAgentsRemediationSpec, error) {
 	switch obj := new.(type) {
 	case *FenceAgentsRemediationTemplate:
 		spec := obj.Spec.Template.Spec
@@ -153,7 +163,7 @@ func (v *customValidator) getSpec(new runtime.Object) (*FenceAgentsRemediationSp
 	}
 }
 
-func (v *customValidator) validateAgentName(agent string) error {
+func (v *CustomValidator) validateAgentName(agent string) error {
 	exists, err := agentValidator.ValidateAgentName(agent)
 	if err != nil {
 		return utilErrors.NewAggregate([]error{
@@ -167,15 +177,15 @@ func (v *customValidator) validateAgentName(agent string) error {
 	return nil
 }
 
-func (v *customValidator) validateStrategy(farRemStrategy RemediationStrategyType) error {
-	if farRemStrategy == OutOfServiceTaintRemediationStrategy && !isOutOfServiceTaintSupported {
+func (v *CustomValidator) validateStrategy(farRemStrategy RemediationStrategyType) error {
+	if farRemStrategy == OutOfServiceTaintRemediationStrategy && !IsOutOfServiceTaintSupported {
 		return fmt.Errorf("%s remediation strategy is not supported at kubernetes version lower than 1.26, please use a different remediation strategy", OutOfServiceTaintRemediationStrategy)
 	}
 	return nil
 }
 
 // validateTemplateParameters validates template syntax in shared parameters and collects all errors
-func (v *customValidator) validateTemplateParameters(spec *FenceAgentsRemediationSpec) error {
+func (v *CustomValidator) validateTemplateParameters(spec *FenceAgentsRemediationSpec) error {
 	var validationErrors []error
 
 	// Validate NodeTemplate syntax in shared parameters
@@ -190,7 +200,7 @@ func (v *customValidator) validateTemplateParameters(spec *FenceAgentsRemediatio
 
 // validateFenceAgentForNodes validates fence agent parameters for all the nodes defined in the spec
 // by creating temporary FAR CRs and using BuildFenceAgentParams
-func (v *customValidator) validateFenceAgentForNodes(ctx context.Context, namespace string, spec *FenceAgentsRemediationSpec) error {
+func (v *CustomValidator) validateFenceAgentForNodes(ctx context.Context, namespace string, spec *FenceAgentsRemediationSpec) error {
 
 	// Check if spec has any parameters at all
 	hasSharedParams := len(spec.SharedParameters) > 0

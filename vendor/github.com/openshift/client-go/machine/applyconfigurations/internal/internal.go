@@ -6,7 +6,7 @@ import (
 	fmt "fmt"
 	sync "sync"
 
-	typed "sigs.k8s.io/structured-merge-diff/v4/typed"
+	typed "sigs.k8s.io/structured-merge-diff/v6/typed"
 )
 
 func Parser() *typed.Parser {
@@ -548,6 +548,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: numeric
       default: 0
+    - name: synchronizedAPI
+      type:
+        scalar: string
     - name: synchronizedGeneration
       type:
         scalar: numeric
@@ -620,6 +623,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: providerStatus
       type:
         namedType: __untyped_atomic_
+    - name: synchronizedAPI
+      type:
+        scalar: string
     - name: synchronizedGeneration
       type:
         scalar: numeric
