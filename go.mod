@@ -1,6 +1,10 @@
 module github.com/medik8s/fence-agents-remediation
 
-go 1.20
+// min version; OpenShift build-root (golang-1.25-openshift-4.21) provides Go 1.25.7
+go 1.25.0
+
+// latest downstream version for security patches
+toolchain go1.25.9
 
 require (
 	github.com/go-logr/logr v1.4.1

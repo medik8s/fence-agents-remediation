@@ -3,14 +3,14 @@
 # See https://github.com/kubernetes-sigs/kustomize for the last version
 KUSTOMIZE_VERSION ?= v4@v4.5.7
 # https://github.com/kubernetes-sigs/controller-tools/releases for the last version
-CONTROLLER_GEN_VERSION ?= v0.14.0
-# See for the last version
+CONTROLLER_GEN_VERSION ?= v0.17.3
 # Why to use the git commit sha? https://github.com/kubernetes-sigs/controller-runtime/issues/1670
-ENVTEST_VERSION ?= v0.0.0-20240112123317-48d9a7b44e54
+# setup-envtest@release-0.20 (GitHub-hosted envtest assets; legacy GCS bucket is deprecated).
+ENVTEST_VERSION ?= v0.0.0-20250517180713-32e5e9e948a5
 # See https://github.com/onsi/ginkgo/releases for the last version
 GINKGO_VERSION ?= v2.14.0
 # See https://pkg.go.dev/golang.org/x/tools/cmd/goimports?tab=versions for the last version
-GOIMPORTS_VERSION ?= v0.17.0
+GOIMPORTS_VERSION ?= v0.30.0
 # See https://github.com/slintes/sort-imports/releases for the last version
 SORT_IMPORTS_VERSION = v0.2.1
 # See https://github.com/operator-framework/operator-registry/releases for the last version
@@ -190,8 +190,8 @@ test: test-no-verify ## Generate and format code, run tests, generate manifests 
 # By default, ginkgo only randomizes the top level Describe, Context and When containers
 # --require-suite: If set, Ginkgo fails if there are ginkgo tests in a directory but no invocation of RunSpecs.
 # --vv: If set, emits with maximal verbosity - includes skipped and pending tests.
-test-no-verify: go-verify manifests generate fmt vet fix-imports envtest ginkgo # Generate and format code, and run tests
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR)/$(ENVTEST_VERSION) -p path)" \
+test-no-verify: go-verify manifests generate fmt vet fix-imports envtest-assets ginkgo # Generate and format code, and run tests
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_ASSETS_DIR) -p path)" \
 	$(GINKGO) -r --keep-going --randomize-all --require-suite --vv --coverprofile cover.out ./api/... ./pkg/... ./controllers/...
 
 .PHONY: bundle-run
@@ -310,6 +310,7 @@ $(LOCALBIN):
 KUSTOMIZE_DIR ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN_DIR ?= $(LOCALBIN)/controller-gen
 ENVTEST_DIR ?= $(LOCALBIN)/setup-envtest
+ENVTEST_ASSETS_DIR ?= $(LOCALBIN)/k8s
 GINKGO_DIR ?= $(LOCALBIN)/ginkgo
 GOIMPORTS_DIR ?= $(LOCALBIN)/goimports
 SORT_IMPORTS_DIR ?= $(LOCALBIN)/sort-imports
@@ -340,6 +341,10 @@ ifneq ($(wildcard $(ENVTEST_DIR)),)
 	chmod -R +w $(ENVTEST_DIR)
 endif
 	$(call go-install-tool,$(ENVTEST),$(ENVTEST_DIR),sigs.k8s.io/controller-runtime/tools/setup-envtest@${ENVTEST_VERSION})
+
+.PHONY: envtest-assets
+envtest-assets: envtest ## Download kube-apiserver and etcd binaries for envtest.
+	$(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_ASSETS_DIR)
 
 .PHONY: ginkgo
 ginkgo: ## Download ginkgo locally if necessary.
