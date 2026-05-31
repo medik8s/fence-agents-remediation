@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	commonAnnotations "github.com/medik8s/common/pkg/annotations"
 	commonConditions "github.com/medik8s/common/pkg/conditions"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -140,7 +141,11 @@ var _ = Describe("FAR Controller", func() {
 		JustBeforeEach(func() {
 			// Create node, and FAR CR, and at the end clean them up with DeferCleanup
 			Expect(k8sClient.Create(context.Background(), node)).To(Succeed())
-			DeferCleanup(k8sClient.Delete, context.Background(), node)
+			DeferCleanup(func() {
+				if err := k8sClient.Delete(context.Background(), node); err != nil && !apierrors.IsNotFound(err) {
+					Expect(err).NotTo(HaveOccurred())
+				}
+			})
 
 			Expect(k8sClient.Create(context.Background(), nodeSecret)).To(Succeed())
 			DeferCleanup(k8sClient.Delete, context.Background(), nodeSecret)
@@ -508,6 +513,38 @@ var _ = Describe("FAR Controller", func() {
 				verifyNoEvent(corev1.EventTypeNormal, utils.EventReasonNodeRemediationCompleted, utils.EventReasonNodeRemediationCompleted)
 			})
 		})
+		When("FAR CR is NHC-timed-out and the node is deleted (e.g. by MDR)", func() {
+			BeforeEach(func() {
+				node = utils.GetNode("", workerNode)
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+			})
+
+			It("should remove the finalizer and allow the CR deletion to complete", func() {
+				By("Waiting for the finalizer to be added (remediation has started)")
+				underTestFAR = verifyPreRemediationSucceed(underTestFAR, defaultNamespace, &farRemediationTaint)
+
+				By("Simulating NHC timeout: adding the NHC timed-out annotation")
+				Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), underTestFAR)).To(Succeed())
+				if underTestFAR.Annotations == nil {
+					underTestFAR.Annotations = map[string]string{}
+				}
+				underTestFAR.Annotations[commonAnnotations.NhcTimedOut] = time.Now().Format(time.RFC3339)
+				Expect(k8sClient.Update(context.Background(), underTestFAR)).To(Succeed())
+
+				By("Simulating MDR deleting the node")
+				Expect(k8sClient.Delete(context.Background(), node)).To(Succeed())
+
+				By("Simulating NHC deleting the FAR CR")
+				Expect(k8sClient.Delete(context.Background(), underTestFAR)).To(Succeed())
+
+				By("Expecting the finalizer to be removed and the CR deletion to complete")
+				Eventually(func() bool {
+					err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), &v1alpha1.FenceAgentsRemediation{})
+					return apierrors.IsNotFound(err)
+				}, timeoutPreRemediation, pollInterval).Should(BeTrue(), "FAR CR should have been deleted — finalizer must have been removed")
+			})
+		})
+
 		When("create FAR CR with invalid Action parameter", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)

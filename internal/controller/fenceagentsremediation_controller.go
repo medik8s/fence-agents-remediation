@@ -120,6 +120,19 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		return emptyResult, err
 	}
 	if node == nil {
+		// Node not found — it may have been deleted by MDR (or another remediator).
+		// If NHC has already timed out and is also trying to delete this CR, the
+		// finalizer would block that deletion forever since there is no node to clean up.
+		// Remove the finalizer directly so the pending deletion can complete.
+		if isTimedOutByNHC(far) && far.DeletionTimestamp != nil {
+			r.Executor.Remove(far.GetUID())
+			r.Log.Info("Node not found; removing finalizer to unblock NHC deletion of timed-out remediation", "remediation name", far.GetName())
+			controllerutil.RemoveFinalizer(far, v1alpha1.FARFinalizer)
+			if err := r.Client.Update(ctx, far); err != nil {
+				return emptyResult, fmt.Errorf("failed to remove finalizer from CR - %w", err)
+			}
+			return emptyResult, nil
+		}
 		r.Log.Error(err, "Could not find CR's target node", "CR's Name", req.Name, "Expected node name", v1alpha1.GetNodeName(far))
 		utils.UpdateConditions(utils.RemediationFinishedNodeNotFound, far, r.Log)
 		commonEvents.WarningEvent(r.Recorder, far, utils.EventReasonCrNodeNotFound, utils.EventMessageCrNodeNotFound)
