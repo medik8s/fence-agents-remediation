@@ -119,43 +119,54 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		r.Log.Error(err, "Unexpected error when validating CR's name with nodes' names", "CR's Name", req.Name)
 		return emptyResult, err
 	}
-	if node == nil {
-		// Node not found — it may have been deleted by MDR (or another remediator).
-		// If NHC has already timed out and is also trying to delete this CR, the
-		// finalizer would block that deletion forever since there is no node to clean up.
-		// Remove the finalizer directly so the pending deletion can complete.
-		if isTimedOutByNHC(far) && far.DeletionTimestamp != nil {
-			r.Executor.Remove(far.GetUID())
-			r.Log.Info("Node not found; removing finalizer to unblock NHC deletion of timed-out remediation", "remediation name", far.GetName())
-			controllerutil.RemoveFinalizer(far, v1alpha1.FARFinalizer)
-			if err := r.Client.Update(ctx, far); err != nil {
-				return emptyResult, fmt.Errorf("failed to remove finalizer from CR - %w", err)
-			}
-			return emptyResult, nil
+
+	// Handle deletion first - this is the standard reconcile pattern
+	// Check if CR is being deleted (has DeletionTimestamp)
+	if !far.ObjectMeta.DeletionTimestamp.IsZero() {
+		r.Log.Info("CR deletion timestamp is set", "CR Name", req.Name)
+
+		// Log remediation state if it didn't complete successfully
+		if !meta.IsStatusConditionPresentAndEqual(far.Status.Conditions, commonConditions.SucceededType, metav1.ConditionTrue) {
+			processingCondition := meta.FindStatusCondition(far.Status.Conditions, commonConditions.ProcessingType).Status
+			fenceAgentActionSucceededCondition := meta.FindStatusCondition(far.Status.Conditions, utils.FenceAgentActionSucceededType).Status
+			succeededCondition := meta.FindStatusCondition(far.Status.Conditions, commonConditions.SucceededType).Status
+			r.Log.Info("FAR didn't finish remediate the node", "CR Name", req.Name, "processing condition", processingCondition,
+				"fenceAgentActionSucceeded condition", fenceAgentActionSucceededCondition, "succeeded condition", succeededCondition)
 		}
-		r.Log.Error(err, "Could not find CR's target node", "CR's Name", req.Name, "Expected node name", v1alpha1.GetNodeName(far))
-		utils.UpdateConditions(utils.RemediationFinishedNodeNotFound, far, r.Log)
-		commonEvents.WarningEvent(r.Recorder, far, utils.EventReasonCrNodeNotFound, utils.EventMessageCrNodeNotFound)
-		return emptyResult, err
+
+		// Always stop the executor on deletion - it's a no-op if already stopped
+		// This ensures cleanup even if conditions are corrupted/missing
+		r.Executor.Remove(far.GetUID())
+
+		// handleFARDeletion is nil-safe: if node is missing (e.g., deleted by MDR or another remediator),
+		// it skips taint removal and proceeds directly to finalizer removal
+		return r.handleFARDeletion(ctx, far, node)
 	}
 
 	// Check NHC timeout annotation
+	// When NHC times out a remediation, it annotates and then deletes the CR
 	if isTimedOutByNHC(far) {
-		r.Executor.Remove(far.GetUID())
-		if far.DeletionTimestamp != nil {
-			// Removing finalizer so NHC deletion of the remediation can be completed
-			r.Log.Info("Cleaning up a timed-out remediation which is deleted by NHC", "remediation name", far.GetName())
-			// Node found, cleanup Taints before removing the finalizer
-			return r.handleFARDeletion(ctx, far, node)
-		}
 		r.Log.Info(utils.EventMessageRemediationStoppedByNHC)
+		r.Executor.Remove(far.GetUID())
 		utils.UpdateConditions(utils.RemediationInterruptedByNHC, far, r.Log)
 		commonEvents.RemediationStoppedByNHC(r.Recorder, far)
-		return emptyResult, err
+		return emptyResult, nil
+	}
+
+	// Check if node exists
+	// The FAR CR must be removable even when the node no longer exists (handled in deletion path above)
+	// Here we only deal with non-deleting CRs that reference a missing node
+	// If the node was deleted (e.g., by MDR or manually), the remediation is no longer relevant
+	if node == nil {
+		r.Log.Info("couldn't find node matching remediation, remediation skipped", "CR Name", req.Name, "Expected node name", v1alpha1.GetNodeName(far))
+		utils.UpdateConditions(utils.RemediationFinishedNodeNotFound, far, r.Log)
+		commonEvents.WarningEvent(r.Recorder, far, utils.EventReasonCrNodeNotFound, utils.EventMessageCrNodeNotFound)
+		// Return without error and without requeue - the node is gone, no point in retrying
+		return emptyResult, nil
 	}
 
 	// Add finalizer when the CR is created
-	if !controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) && far.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) {
 		controllerutil.AddFinalizer(far, v1alpha1.FARFinalizer)
 		if err := r.Client.Update(context.Background(), far); err != nil {
 			return emptyResult, fmt.Errorf("failed to add finalizer to the CR - %w", err)
@@ -166,21 +177,8 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		utils.UpdateConditions(utils.RemediationStarted, far, r.Log)
 		commonEvents.NormalEvent(r.Recorder, far, utils.EventReasonAddFinalizer, utils.EventMessageAddFinalizer)
 		return requeueImmediately, nil
-	} else if controllerutil.ContainsFinalizer(far, v1alpha1.FARFinalizer) && !far.ObjectMeta.DeletionTimestamp.IsZero() {
-		// Delete CR only when a finalizer and DeletionTimestamp are set
-		r.Log.Info("CR's deletion timestamp is not zero, and FAR finalizer exists", "CR Name", req.Name)
-
-		if !meta.IsStatusConditionPresentAndEqual(far.Status.Conditions, commonConditions.SucceededType, metav1.ConditionTrue) {
-			processingCondition := meta.FindStatusCondition(far.Status.Conditions, commonConditions.ProcessingType).Status
-			fenceAgentActionSucceededCondition := meta.FindStatusCondition(far.Status.Conditions, utils.FenceAgentActionSucceededType).Status
-			succeededCondition := meta.FindStatusCondition(far.Status.Conditions, commonConditions.SucceededType).Status
-			r.Log.Info("FAR didn't finish remediate the node ", "CR Name", req.Name, "processing condition", processingCondition,
-				"fenceAgentActionSucceeded condition", fenceAgentActionSucceededCondition, "succeeded condition", succeededCondition)
-			r.Executor.Remove(far.GetUID())
-		}
-
-		return r.handleFARDeletion(ctx, far, node)
 	}
+
 	// Add FAR (medik8s) remediation taint
 	taintAdded, err := utils.AppendTaint(r.Client, node.Name, utils.CreateRemediationTaint())
 	if err != nil {
@@ -266,38 +264,43 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 func (r *FenceAgentsRemediationReconciler) handleFARDeletion(ctx context.Context, far *v1alpha1.FenceAgentsRemediation, node *corev1.Node) (ctrl.Result, error) {
 	emptyResult := ctrl.Result{}
 
-	// remove out-of-service taint when using OutOfServiceTaint remediation
-	if far.Spec.RemediationStrategy == v1alpha1.OutOfServiceTaintRemediationStrategy {
-		r.Log.Info("Removing out-of-service taint", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
-		taint := utils.CreateOutOfServiceTaint()
+	// Only attempt taint removal if node still exists (it may have been deleted by MDR or another remediator)
+	if node != nil {
+		// remove out-of-service taint when using OutOfServiceTaint remediation
+		if far.Spec.RemediationStrategy == v1alpha1.OutOfServiceTaintRemediationStrategy {
+			r.Log.Info("Removing out-of-service taint", "Fence Agent", far.Spec.Agent, "Node Name", node.Name)
+			taint := utils.CreateOutOfServiceTaint()
+			if err := utils.RemoveTaint(r.Client, node.Name, taint); err != nil {
+				if apiErrors.IsConflict(err) {
+					r.Log.Error(err, "Failed to remove taint from node due to node update, retrying... ,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
+					return ctrl.Result{RequeueAfter: time.Second}, nil
+				} else if !apiErrors.IsNotFound(err) {
+					r.Log.Error(err, "Failed to remove taint from node,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
+					return emptyResult, err
+				}
+			}
+			r.Log.Info("out-of-service taint was removed", "Node Name", node.Name)
+			commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveOutOfServiceTaint, utils.EventMessageRemoveOutOfServiceTaint)
+		}
+
+		// remove node's taints
+		taint := utils.CreateRemediationTaint()
 		if err := utils.RemoveTaint(r.Client, node.Name, taint); err != nil {
 			if apiErrors.IsConflict(err) {
-				r.Log.Error(err, "Failed to remove taint from node due to node update, retrying... ,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
+				r.Log.Info("Failed to remove taint from node due to node update, retrying... ,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
 				return ctrl.Result{RequeueAfter: time.Second}, nil
+
 			} else if !apiErrors.IsNotFound(err) {
 				r.Log.Error(err, "Failed to remove taint from node,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
 				return emptyResult, err
 			}
 		}
-		r.Log.Info("out-of-service taint was removed", "Node Name", node.Name)
-		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveOutOfServiceTaint, utils.EventMessageRemoveOutOfServiceTaint)
+
+		r.Log.Info("FAR remediation taint was removed", "Node Name", node.Name)
+		commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveRemediationTaint, utils.EventMessageRemoveRemediationTaint)
+	} else {
+		r.Log.Info("Node already deleted, skipping taint removal", "CR Name", far.Name)
 	}
-
-	// remove node's taints
-	taint := utils.CreateRemediationTaint()
-	if err := utils.RemoveTaint(r.Client, node.Name, taint); err != nil {
-		if apiErrors.IsConflict(err) {
-			r.Log.Info("Failed to remove taint from node due to node update, retrying... ,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
-			return ctrl.Result{RequeueAfter: time.Second}, nil
-
-		} else if !apiErrors.IsNotFound(err) {
-			r.Log.Error(err, "Failed to remove taint from node,", "node name", node.Name, "taint key", taint.Key, "taint effect", taint.Effect)
-			return emptyResult, err
-		}
-	}
-
-	r.Log.Info("FAR remediation taint was removed", "Node Name", node.Name)
-	commonEvents.NormalEvent(r.Recorder, node, utils.EventReasonRemoveRemediationTaint, utils.EventMessageRemoveRemediationTaint)
 
 	// remove finalizer
 	controllerutil.RemoveFinalizer(far, v1alpha1.FARFinalizer)

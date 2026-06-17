@@ -545,6 +545,30 @@ var _ = Describe("FAR Controller", func() {
 			})
 		})
 
+		When("FAR CR is deleted and the node is already gone (no NHC timeout)", func() {
+			BeforeEach(func() {
+				node = utils.GetNode("", workerNode)
+				underTestFAR = getFenceAgentsRemediation(workerNode, fenceAgentIPMI, testShareParam, testNodeParam, v1alpha1.ResourceDeletionRemediationStrategy)
+			})
+
+			It("should remove the finalizer and allow the CR deletion to complete", func() {
+				By("Waiting for the finalizer to be added (remediation has started)")
+				underTestFAR = verifyPreRemediationSucceed(underTestFAR, defaultNamespace, &farRemediationTaint)
+
+				By("Simulating node deletion (e.g., cloud provider removed it, manual deletion)")
+				Expect(k8sClient.Delete(context.Background(), node)).To(Succeed())
+
+				By("User/system deletes the FAR CR (no NHC timeout annotation)")
+				Expect(k8sClient.Delete(context.Background(), underTestFAR)).To(Succeed())
+
+				By("Expecting the finalizer to be removed and the CR deletion to complete")
+				Eventually(func() bool {
+					err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(underTestFAR), &v1alpha1.FenceAgentsRemediation{})
+					return apierrors.IsNotFound(err)
+				}, timeoutPreRemediation, pollInterval).Should(BeTrue(), "FAR CR should have been deleted even without NHC timeout — finalizer must have been removed")
+			})
+		})
+
 		When("create FAR CR with invalid Action parameter", func() {
 			BeforeEach(func() {
 				node = utils.GetNode("", workerNode)
