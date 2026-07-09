@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
@@ -34,11 +35,14 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
+	configv1 "github.com/openshift/api/config/v1"
 
 	fenceagentsremediationv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/internal/controller"
@@ -46,6 +50,7 @@ import (
 	//+kubebuilder:scaffold:imports
 	webhookv1alpha1 "github.com/medik8s/fence-agents-remediation/internal/webhook/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/pkg/cli"
+	"github.com/medik8s/fence-agents-remediation/pkg/tlsconfig"
 	"github.com/medik8s/fence-agents-remediation/pkg/validation"
 	"github.com/medik8s/fence-agents-remediation/version"
 )
@@ -67,8 +72,11 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(fenceagentsremediationv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(configv1.Install(scheme))
 	//+kubebuilder:scaffold:scheme
 }
+
+// +kubebuilder:rbac:groups=config.openshift.io,resources=apiservers,verbs=get;list;watch
 
 func main() {
 	var (
@@ -96,17 +104,25 @@ func main() {
 
 	printVersion()
 
-	configureWebhookOpts(&webhookOpts, enableHTTP2)
-
-	// TLS options for metrics server: disable HTTP/2 for mitigating CVEs
-	var tlsOpts []func(*tls.Config)
-	if !enableHTTP2 {
-		tlsOpts = append(tlsOpts, func(c *tls.Config) {
-			c.NextProtos = []string{"http/1.1"}
-		})
+	// Create a temporary client to fetch cluster TLS configuration before manager starts
+	cfg := ctrl.GetConfigOrDie()
+	tempClient, err := client.New(cfg, client.Options{Scheme: scheme})
+	if err != nil {
+		setupLog.Error(err, "unable to create temporary client for TLS config")
+		os.Exit(1)
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	// Fetch cluster TLS profile and create TLS options (once for both servers)
+	ctx := context.Background()
+	tlsOpts, err := tlsconfig.CreateTLSOptsForServer(ctx, tempClient, !enableHTTP2)
+	if err != nil {
+		setupLog.Error(err, "failed to get cluster TLS config")
+		os.Exit(1)
+	}
+
+	configureWebhookOpts(&webhookOpts, enableHTTP2, tlsOpts)
+
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme,
 		Metrics: server.Options{
 			BindAddress:    metricsAddr,
@@ -195,7 +211,7 @@ func printVersion() {
 	setupLog.Info(fmt.Sprintf("Build Date: %s", version.BuildDate))
 }
 
-func configureWebhookOpts(webhookOpts *webhook.Options, enableHTTP2 bool) {
+func configureWebhookOpts(webhookOpts *webhook.Options, enableHTTP2 bool, tlsOpts []func(*tls.Config)) {
 
 	certs := []string{filepath.Join(WebhookCertDir, WebhookCertName), filepath.Join(WebhookCertDir, WebhookKeyName)}
 	certsInjected := true
@@ -213,13 +229,11 @@ func configureWebhookOpts(webhookOpts *webhook.Options, enableHTTP2 bool) {
 	} else {
 		setupLog.Info("OLM injected certs for webhooks not found")
 	}
-	// disable http/2 for mitigating relevant CVEs
+
+	// Apply the pre-fetched cluster TLS options to webhook server
+	webhookOpts.TLSOpts = append(webhookOpts.TLSOpts, tlsOpts...)
+
 	if !enableHTTP2 {
-		webhookOpts.TLSOpts = append(webhookOpts.TLSOpts,
-			func(c *tls.Config) {
-				c.NextProtos = []string{"http/1.1"}
-			},
-		)
 		setupLog.Info("HTTP/2 for webhooks disabled")
 	} else {
 		setupLog.Info("HTTP/2 for webhooks enabled")
