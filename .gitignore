@@ -26,3 +26,6 @@ testbin/*
 
 # vscode directory
 .vscode/*
+
+catalog/
+catalog.Dockerfile
