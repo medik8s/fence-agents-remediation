@@ -6,9 +6,13 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/library-go/pkg/crypto"
@@ -119,30 +123,29 @@ func TestGetClusterTLSConfig(t *testing.T) {
 }
 
 func TestGetClusterTLSConfig_VanillaK8s(t *testing.T) {
-	// Test vanilla K8s behavior with proper scheme registration
-	// On vanilla K8s, the configv1 types exist in the scheme but the CRD is not installed
-	// This returns IsNoMatchError (no kind match) which we treat as vanilla K8s
 	scheme := runtime.NewScheme()
 	_ = configv1.AddToScheme(scheme)
 
-	// Create a client without the APIServer object to simulate vanilla K8s
-	// where the API group doesn't exist in the cluster
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		Build()
 
+	vanillaClient := interceptor.NewClient(fakeClient, interceptor.Funcs{
+		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+			return &meta.NoKindMatchError{
+				GroupKind: schema.GroupKind{Group: "config.openshift.io", Kind: "APIServer"},
+			}
+		},
+	})
+
 	ctx := context.Background()
-	_, err := getClusterTLSConfig(ctx, fakeClient)
+	tlsConfig, err := getClusterTLSConfig(ctx, vanillaClient)
 
-	// With fake client, this returns IsNotFound (object not found) which now fails
-	// This is actually correct - if the type is registered but object doesn't exist,
-	// it means we're on OpenShift with a missing/deleted APIServer config
-	// Real vanilla K8s would return IsNoMatchError (CRD not installed)
-
-	// For test purposes, we expect an error since the fake client can't distinguish
-	// between "CRD not installed" vs "object not found"
-	if err == nil {
-		t.Error("getClusterTLSConfig() expected error with fake client (can't simulate IsNoMatchError), got nil")
+	if err != nil {
+		t.Errorf("getClusterTLSConfig() expected nil error for vanilla K8s, got %v", err)
+	}
+	if tlsConfig != nil {
+		t.Errorf("getClusterTLSConfig() expected nil config for vanilla K8s, got %+v", tlsConfig)
 	}
 }
 
@@ -166,7 +169,7 @@ func TestGetClusterTLSConfig_InvalidProfile(t *testing.T) {
 					},
 				},
 			},
-			wantError: "Custom TLS profile is invalid or incomplete",
+			wantError: "custom TLS profile is invalid or incomplete",
 		},
 		{
 			name: "Unknown profile type",
@@ -349,10 +352,57 @@ func TestCreateTLSOptsForServer(t *testing.T) {
 	})
 }
 
-// TestApplyTLSConfigWithHTTP2Control removed - this functionality is now handled
-// directly in CreateTLSOptsForServer which is tested separately
+func TestCreateTLSOptsForServer_VanillaK8s(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = configv1.AddToScheme(scheme)
+
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		Build()
+
+	vanillaClient := interceptor.NewClient(fakeClient, interceptor.Funcs{
+		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+			return &meta.NoKindMatchError{
+				GroupKind: schema.GroupKind{Group: "config.openshift.io", Kind: "APIServer"},
+			}
+		},
+	})
+
+	ctx := context.Background()
+
+	t.Run("With HTTP/2 disabled", func(t *testing.T) {
+		tlsOpts, err := CreateTLSOptsForServer(ctx, vanillaClient, true)
+		if err != nil {
+			t.Fatalf("CreateTLSOptsForServer() error = %v", err)
+		}
+
+		if len(tlsOpts) != 1 {
+			t.Fatalf("Expected 1 TLS option (HTTP/2 control only), got %d", len(tlsOpts))
+		}
+
+		testConfig := &tls.Config{}
+		tlsOpts[0](testConfig)
+
+		if len(testConfig.NextProtos) != 1 || testConfig.NextProtos[0] != "http/1.1" {
+			t.Errorf("NextProtos = %v, want [http/1.1]", testConfig.NextProtos)
+		}
+	})
+
+	t.Run("With HTTP/2 enabled", func(t *testing.T) {
+		tlsOpts, err := CreateTLSOptsForServer(ctx, vanillaClient, false)
+		if err != nil {
+			t.Fatalf("CreateTLSOptsForServer() error = %v", err)
+		}
+
+		if len(tlsOpts) != 0 {
+			t.Errorf("Expected 0 TLS options for vanilla K8s with HTTP/2 enabled, got %d", len(tlsOpts))
+		}
+	})
+}
 
 func TestConvertProfileToTLSConfig(t *testing.T) {
+	// expectCiphers == -1 means "at least 1" — used for real OpenShift profiles where
+	// the exact count depends on which ciphers the Go runtime supports
 	tests := []struct {
 		name          string
 		profile       *configv1.TLSProfileSpec
@@ -418,6 +468,13 @@ func TestConvertProfileToTLSConfig(t *testing.T) {
 			expectMinTLS:  tls.VersionTLS13,
 			expectCiphers: 2,
 		},
+		{
+			name:          "Real Intermediate profile from configv1",
+			profile:       configv1.TLSProfiles[configv1.TLSProfileIntermediateType],
+			expectError:   false,
+			expectMinTLS:  tls.VersionTLS12,
+			expectCiphers: -1,
+		},
 	}
 
 	for _, tt := range tests {
@@ -438,7 +495,11 @@ func TestConvertProfileToTLSConfig(t *testing.T) {
 				t.Errorf("MinVersion = %v, want %v", tlsConfig.MinVersion, tt.expectMinTLS)
 			}
 
-			if len(tlsConfig.CipherSuites) != tt.expectCiphers {
+			if tt.expectCiphers == -1 {
+				if len(tlsConfig.CipherSuites) == 0 {
+					t.Errorf("CipherSuites count = 0, want > 0")
+				}
+			} else if len(tlsConfig.CipherSuites) != tt.expectCiphers {
 				t.Errorf("CipherSuites count = %v, want %v", len(tlsConfig.CipherSuites), tt.expectCiphers)
 			}
 		})

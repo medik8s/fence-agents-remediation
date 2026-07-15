@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"go.uber.org/zap/zapcore"
 
@@ -76,7 +77,7 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 }
 
-// +kubebuilder:rbac:groups=config.openshift.io,resources=apiservers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=config.openshift.io,resources=apiservers,verbs=get
 
 func main() {
 	var (
@@ -113,7 +114,8 @@ func main() {
 	}
 
 	// Fetch cluster TLS profile and create TLS options (once for both servers)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	tlsOpts, err := tlsconfig.CreateTLSOptsForServer(ctx, tempClient, !enableHTTP2)
 	if err != nil {
 		setupLog.Error(err, "failed to get cluster TLS config")

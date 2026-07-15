@@ -88,7 +88,7 @@ func getEffectiveTLSProfile(profileSpec *configv1.TLSSecurityProfile, profileTyp
 	// Handle custom profile separately
 	if profileType == configv1.TLSProfileCustomType {
 		if profileSpec == nil || profileSpec.Custom == nil {
-			return nil, fmt.Errorf("Custom TLS profile is invalid or incomplete")
+			return nil, fmt.Errorf("custom TLS profile is invalid or incomplete")
 		}
 		spec := profileSpec.Custom.TLSProfileSpec
 		return &spec, nil
