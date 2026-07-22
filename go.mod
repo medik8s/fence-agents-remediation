@@ -4,7 +4,7 @@ module github.com/medik8s/fence-agents-remediation
 go 1.26.0
 
 // latest downstream version for security patches
-toolchain go1.26.3
+toolchain go1.26.5
 
 require (
 	github.com/go-logr/logr v1.4.3
