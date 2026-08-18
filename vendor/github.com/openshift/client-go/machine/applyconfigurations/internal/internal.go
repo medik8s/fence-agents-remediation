@@ -538,6 +538,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: fullyLabeledReplicas
       type:
         scalar: numeric
+    - name: labelSelector
+      type:
+        scalar: string
     - name: observedGeneration
       type:
         scalar: numeric
