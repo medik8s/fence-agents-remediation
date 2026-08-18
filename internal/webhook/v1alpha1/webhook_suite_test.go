@@ -29,7 +29,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	admissionv1beta1 "k8s.io/api/admission/v1beta1"
+	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -62,8 +62,9 @@ var (
 	ctx       context.Context
 	cancel    context.CancelFunc
 
-	mockValidatorClient *mockClient
-	validator           *remediationv1alpha1.CustomValidator
+	mockValidatorClient  *mockClient
+	farValidator         *remediationv1alpha1.FARValidator
+	farTemplateValidator *remediationv1alpha1.FARTemplateValidator
 )
 
 // mockClient for testing
@@ -112,7 +113,7 @@ var _ = BeforeSuite(func() {
 	err = remediationv1alpha1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = admissionv1beta1.AddToScheme(scheme)
+	err = admissionv1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = corev1.AddToScheme(scheme)
@@ -128,7 +129,10 @@ var _ = BeforeSuite(func() {
 		Client: k8sClient,
 	}
 
-	validator = &remediationv1alpha1.CustomValidator{
+	farValidator = &remediationv1alpha1.FARValidator{
+		Client: mockValidatorClient,
+	}
+	farTemplateValidator = &remediationv1alpha1.FARTemplateValidator{
 		Client: mockValidatorClient,
 	}
 

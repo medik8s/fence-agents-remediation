@@ -18,9 +18,7 @@ package v1alpha1
 
 import (
 	"context"
-	"fmt"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -35,9 +33,8 @@ var (
 )
 
 func SetupFARWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(&remediationv1alpha1.FenceAgentsRemediation{}).
-		WithValidator(&remediationv1alpha1.CustomValidator{
+	return ctrl.NewWebhookManagedBy(mgr, &remediationv1alpha1.FenceAgentsRemediation{}).
+		WithValidator(&remediationv1alpha1.FARValidator{
 			Client: mgr.GetClient(),
 		}).
 		WithDefaulter(&farDefaulter{
@@ -53,14 +50,9 @@ type farDefaulter struct {
 	client.Client
 }
 
-var _ admission.CustomDefaulter = &farDefaulter{}
+var _ admission.Defaulter[*remediationv1alpha1.FenceAgentsRemediation] = &farDefaulter{}
 
-// Default implements webhook.Defaulter so a webhook will be registered for the type
-func (d *farDefaulter) Default(ctx context.Context, obj runtime.Object) error {
-	far, ok := obj.(*remediationv1alpha1.FenceAgentsRemediation)
-	if !ok {
-		return fmt.Errorf("expected a FenceAgentsRemediation but got %T", obj)
-	}
+func (d *farDefaulter) Default(ctx context.Context, far *remediationv1alpha1.FenceAgentsRemediation) error {
 	webhookFARLog.Info("default", "name", far.Name)
 	isCreate := far.CreationTimestamp.IsZero()
 	return applySharedSecretDefaultNameToSpec(ctx, d.Client, &far.Spec, far.Namespace, isCreate)
