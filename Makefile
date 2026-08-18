@@ -8,13 +8,13 @@ CONTROLLER_GEN_VERSION ?= v0.21.0
 # Why to use the git commit sha? https://github.com/kubernetes-sigs/controller-runtime/issues/1670
 ENVTEST_VERSION ?= v0.24.1
 # See https://github.com/onsi/ginkgo/releases for the last version
-GINKGO_VERSION ?= v2.32.0
+GINKGO_VERSION ?= v2.32.1
 # See https://pkg.go.dev/golang.org/x/tools/cmd/goimports?tab=versions for the last version
-GOIMPORTS_VERSION ?= v0.48.0
+GOIMPORTS_VERSION ?= v0.49.0
 # See https://github.com/slintes/sort-imports/releases for the last version
 SORT_IMPORTS_VERSION = v0.3.0
 # See https://github.com/operator-framework/operator-registry/releases for the last version
-OPM_VERSION ?= v1.72.0
+OPM_VERSION ?= v1.73.0
 # See https://github.com/operator-framework/operator-sdk/releases for the last version
 # heads up: 1.37 is the last version which supports go/v3!
 OPERATOR_SDK_VERSION ?= v1.42.3
