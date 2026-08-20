@@ -24,14 +24,14 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 		When("agent name match format and binary", func() {
 			It("should be accepted", func() {
 				far := getTestFAR(validAgentName)
-				Expect(validator.ValidateCreate(ctx, far)).Error().NotTo(HaveOccurred())
+				Expect(farValidator.ValidateCreate(ctx, far)).Error().NotTo(HaveOccurred())
 			})
 		})
 
 		When("agent name was not found ", func() {
 			It("should be rejected", func() {
 				far := getTestFAR(invalidAgentName)
-				warnings, err := validator.ValidateCreate(ctx, far)
+				warnings, err := farValidator.ValidateCreate(ctx, far)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
 			})
@@ -51,7 +51,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 					remediationv1alpha1.IsOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
-					Expect(validator.ValidateCreate(ctx, outOfServiceStrategy)).Error().NotTo(HaveOccurred())
+					Expect(farValidator.ValidateCreate(ctx, outOfServiceStrategy)).Error().NotTo(HaveOccurred())
 				})
 			})
 			When("out of service taint is not supported", func() {
@@ -59,7 +59,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 					remediationv1alpha1.IsOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
-					warnings, err := validator.ValidateCreate(ctx, outOfServiceStrategy)
+					warnings, err := farValidator.ValidateCreate(ctx, outOfServiceStrategy)
 					ExpectWithOffset(1, warnings).To(BeEmpty())
 					Expect(err).To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
 				})
@@ -75,7 +75,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 			})
 			It("should be accepted", func() {
 				far := getTestFAR(validAgentName)
-				Expect(validator.ValidateUpdate(ctx, oldFAR, far)).Error().NotTo(HaveOccurred())
+				Expect(farValidator.ValidateUpdate(ctx, oldFAR, far)).Error().NotTo(HaveOccurred())
 			})
 		})
 
@@ -85,7 +85,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 			})
 			It("should be rejected", func() {
 				far := getTestFAR(invalidAgentName)
-				warnings, err := validator.ValidateUpdate(ctx, oldFAR, far)
+				warnings, err := farValidator.ValidateUpdate(ctx, oldFAR, far)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
 			})
@@ -107,7 +107,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 					remediationv1alpha1.IsOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
-					Expect(validator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)).Error().NotTo(HaveOccurred())
+					Expect(farValidator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)).Error().NotTo(HaveOccurred())
 				})
 			})
 			When("out of service taint is not supported", func() {
@@ -115,7 +115,7 @@ var _ = Describe("FenceAgentsRemediation Validation", func() {
 					remediationv1alpha1.IsOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
-					warnings, err := validator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)
+					warnings, err := farValidator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)
 					ExpectWithOffset(1, warnings).To(BeEmpty())
 					Expect(err).To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
 				})
@@ -302,14 +302,6 @@ var _ = Describe("FenceAgentsRemediation Defaulting", func() {
 		})
 	})
 
-	Context("with wrong object type", func() {
-		It("should return an error", func() {
-			farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
-			err := defaulter.Default(ctx, farTemplate)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("expected a FenceAgentsRemediation"))
-		})
-	})
 })
 
 func getTestFAR(agentName string) *remediationv1alpha1.FenceAgentsRemediation {

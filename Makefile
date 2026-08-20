@@ -3,32 +3,32 @@
 # See https://github.com/kubernetes-sigs/kustomize for the last version
 KUSTOMIZE_VERSION ?= v5@v5.8.1
 # https://github.com/kubernetes-sigs/controller-tools/releases for the last version
-CONTROLLER_GEN_VERSION ?= v0.20.1
+CONTROLLER_GEN_VERSION ?= v0.21.0
 # See for the last version
 # Why to use the git commit sha? https://github.com/kubernetes-sigs/controller-runtime/issues/1670
-ENVTEST_VERSION ?= v0.0.0-20260120065648-aebc15d7c689
+ENVTEST_VERSION ?= v0.24.1
 # See https://github.com/onsi/ginkgo/releases for the last version
-GINKGO_VERSION ?= v2.28.3
+GINKGO_VERSION ?= v2.32.1
 # See https://pkg.go.dev/golang.org/x/tools/cmd/goimports?tab=versions for the last version
-GOIMPORTS_VERSION ?= v0.44.0
+GOIMPORTS_VERSION ?= v0.49.0
 # See https://github.com/slintes/sort-imports/releases for the last version
 SORT_IMPORTS_VERSION = v0.3.0
 # See https://github.com/operator-framework/operator-registry/releases for the last version
-OPM_VERSION ?= v1.66.0
+OPM_VERSION ?= v1.73.0
 # See https://github.com/operator-framework/operator-sdk/releases for the last version
 # heads up: 1.37 is the last version which supports go/v3!
-OPERATOR_SDK_VERSION ?= v1.42.2
+OPERATOR_SDK_VERSION ?= v1.42.3
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.34
+ENVTEST_K8S_VERSION = 1.36
 
 # OCP Version: for OKD bundle community
-OCP_VERSION = 4.20
+OCP_VERSION = 4.23
 
 # Run unit tests once unless this parameter is set
 REPEAT_TIMES ?= 1
 # update for major version updates to YQ_VERSION! see https://github.com/mikefarah/yq
 YQ_API_VERSION = v4
-YQ_VERSION = v4.53.2
+YQ_VERSION = v4.53.3
 
 BLUE_ICON_PATH = "./config/assets/medik8s_blue_icon.png"
 

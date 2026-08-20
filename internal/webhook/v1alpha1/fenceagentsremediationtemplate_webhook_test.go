@@ -50,7 +50,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		When("agent name match format and binary", func() {
 			It("should be accepted", func() {
 				farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
-				_, err := validator.ValidateCreate(ctx, farTemplate)
+				_, err := farTemplateValidator.ValidateCreate(ctx, farTemplate)
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -66,7 +66,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				// Explicitly ensure no node parameters
 				farTemplate.Spec.Template.Spec.NodeParameters = nil
 
-				warnings, err := validator.ValidateCreate(ctx, farTemplate)
+				warnings, err := farTemplateValidator.ValidateCreate(ctx, farTemplate)
 				Expect(warnings).To(BeEmpty())
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError(ContainSubstring("invalid spec: mandatory parameters are missing")))
@@ -84,7 +84,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				// Explicitly ensure no node parameters
 				farTemplate.Spec.Template.Spec.NodeParameters = nil
 
-				warnings, err := validator.ValidateCreate(ctx, farTemplate)
+				warnings, err := farTemplateValidator.ValidateCreate(ctx, farTemplate)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(warnings).To(BeEmpty())
 			})
@@ -135,7 +135,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					},
 				}
 
-				warnings, err := validator.ValidateCreate(ctx, farTemplate)
+				warnings, err := farTemplateValidator.ValidateCreate(ctx, farTemplate)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(warnings).To(BeEmpty())
 			})
@@ -157,7 +157,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 						},
 					},
 				}
-				warnings, err := validator.ValidateCreate(ctx, farTemplate)
+				warnings, err := farTemplateValidator.ValidateCreate(ctx, farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("invalid spec: mandatory parameters are missing")))
 			})
@@ -166,7 +166,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 		When("agent name was not found ", func() {
 			It("should be rejected", func() {
 				farTemplate := getFARTemplate(invalidAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
-				warnings, err := validator.ValidateCreate(ctx, farTemplate)
+				warnings, err := farTemplateValidator.ValidateCreate(ctx, farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
 			})
@@ -187,7 +187,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					remediationv1alpha1.IsOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
-					_, err := validator.ValidateCreate(ctx, outOfServiceStrategy)
+					_, err := farTemplateValidator.ValidateCreate(ctx, outOfServiceStrategy)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
@@ -197,7 +197,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					remediationv1alpha1.IsOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
-					warnings, err := validator.ValidateCreate(ctx, outOfServiceStrategy)
+					warnings, err := farTemplateValidator.ValidateCreate(ctx, outOfServiceStrategy)
 					ExpectWithOffset(1, warnings).To(BeEmpty())
 					Expect(err).To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
 				})
@@ -213,7 +213,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			})
 			It("should be accepted", func() {
 				farTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
-				_, err := validator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
+				_, err := farTemplateValidator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -224,7 +224,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			})
 			It("should be rejected", func() {
 				farTemplate := getFARTemplate(invalidAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
-				warnings, err := validator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
+				warnings, err := farTemplateValidator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("unsupported fence agent: %s", invalidAgentName)))
 			})
@@ -239,7 +239,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				farTemplate.Spec.Template.Spec.SharedParameters = map[remediationv1alpha1.ParameterName]string{
 					"action": "shutdown", // Invalid action
 				}
-				warnings, err := validator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
+				warnings, err := farTemplateValidator.ValidateUpdate(ctx, oldFARTemplate, farTemplate)
 				ExpectWithOffset(1, warnings).To(BeEmpty())
 				Expect(err).To(MatchError(ContainSubstring("FAR doesn't support any other action than `reboot` or `off`")))
 			})
@@ -262,7 +262,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					remediationv1alpha1.IsOutOfServiceTaintSupported = true
 				})
 				It("should be allowed", func() {
-					_, err := validator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)
+					_, err := farTemplateValidator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
@@ -272,7 +272,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					remediationv1alpha1.IsOutOfServiceTaintSupported = false
 				})
 				It("should be denied", func() {
-					warnings, err := validator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)
+					warnings, err := farTemplateValidator.ValidateUpdate(ctx, resourceDeletionStrategy, outOfServiceStrategy)
 					ExpectWithOffset(1, warnings).To(BeEmpty())
 					Expect(err).To(MatchError(ContainSubstring(outOfServiceTaintUnsupportedMsg)))
 				})
@@ -288,7 +288,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					newTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					newTemplate.Spec.Template.Spec.SharedSecretName = nil
 
-					_, err := validator.ValidateUpdate(ctx, oldTemplate, newTemplate)
+					_, err := farTemplateValidator.ValidateUpdate(ctx, oldTemplate, newTemplate)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
@@ -301,7 +301,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					newTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					newTemplate.Spec.Template.Spec.SharedSecretName = nil
 
-					_, err := validator.ValidateUpdate(ctx, oldTemplate, newTemplate)
+					_, err := farTemplateValidator.ValidateUpdate(ctx, oldTemplate, newTemplate)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
@@ -336,7 +336,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					newTemplate := getFARTemplate(validAgentName, remediationv1alpha1.ResourceDeletionRemediationStrategy)
 					newTemplate.Spec.Template.Spec.SharedSecretName = ptr.To(otherSecretName)
 
-					_, err := validator.ValidateUpdate(ctx, oldTemplate, newTemplate)
+					_, err := farTemplateValidator.ValidateUpdate(ctx, oldTemplate, newTemplate)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
@@ -361,7 +361,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					newTemplate.ObjectMeta.Namespace = testNs
 					newTemplate.Spec.Template.Spec.SharedSecretName = nil
 
-					_, err := validator.ValidateUpdate(ctx, oldTemplate, newTemplate)
+					_, err := farTemplateValidator.ValidateUpdate(ctx, oldTemplate, newTemplate)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
@@ -395,7 +395,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					newTemplate.ObjectMeta.Namespace = testNs
 					newTemplate.Spec.Template.Spec.SharedSecretName = nil
 
-					_, err := validator.ValidateUpdate(ctx, oldTemplate, newTemplate)
+					_, err := farTemplateValidator.ValidateUpdate(ctx, oldTemplate, newTemplate)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("shared secret with the deprecated default name"))
 					Expect(err.Error()).To(ContainSubstring(remediationv1alpha1.OldDefaultSecretName))
@@ -431,7 +431,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					newTemplate.ObjectMeta.Namespace = testNs
 					newTemplate.Spec.Template.Spec.SharedSecretName = ptr.To("")
 
-					_, err := validator.ValidateUpdate(ctx, oldTemplate, newTemplate)
+					_, err := farTemplateValidator.ValidateUpdate(ctx, oldTemplate, newTemplate)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("shared secret with the deprecated default name"))
 				})
@@ -460,7 +460,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 					newTemplate.ObjectMeta.Namespace = testNs
 					newTemplate.Spec.Template.Spec.SharedSecretName = nil
 
-					_, err := validator.ValidateUpdate(ctx, oldTemplate, newTemplate)
+					_, err := farTemplateValidator.ValidateUpdate(ctx, oldTemplate, newTemplate)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to check if the default shared secret exists"))
 				})
@@ -492,7 +492,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 			}
 
 			// Validate and expect aggregated errors
-			warnings, err := validator.ValidateCreate(ctx, farTemplate)
+			warnings, err := farTemplateValidator.ValidateCreate(ctx, farTemplate)
 			Expect(warnings).To(BeEmpty())
 			Expect(err).To(HaveOccurred())
 
@@ -525,7 +525,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				},
 			}
 
-			warnings, err := validator.ValidateCreate(ctx, farTemplate)
+			warnings, err := farTemplateValidator.ValidateCreate(ctx, farTemplate)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(warnings).To(BeEmpty())
 		})
@@ -560,7 +560,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				},
 			}
 
-			warnings, err := validator.ValidateCreate(ctx, farTemplate)
+			warnings, err := farTemplateValidator.ValidateCreate(ctx, farTemplate)
 			Expect(warnings).To(BeEmpty())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("FAR doesn't support any other action than `reboot`"))
@@ -587,7 +587,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				},
 			}
 
-			warnings, err := validator.ValidateCreate(ctx, farTemplate)
+			warnings, err := farTemplateValidator.ValidateCreate(ctx, farTemplate)
 			// Should fail because node secrets are expected to exist when referenced
 			Expect(warnings).To(BeEmpty())
 			Expect(err).To(HaveOccurred())
@@ -610,7 +610,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				},
 			}
 
-			warnings, err := validator.ValidateCreate(ctx, farTemplate)
+			warnings, err := farTemplateValidator.ValidateCreate(ctx, farTemplate)
 			Expect(warnings).To(BeEmpty())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("secret 'non-existent-shared-secret' not found in namespace 'test-namespace'"))
@@ -642,7 +642,7 @@ var _ = Describe("FenceAgentsRemediationTemplate Validation", func() {
 				},
 			}
 
-			warnings, err := validator.ValidateCreate(ctx, farTemplate)
+			warnings, err := farTemplateValidator.ValidateCreate(ctx, farTemplate)
 			// Should fail because "--ip" is defined in both NodeParameters and the secret
 			Expect(warnings).To(BeEmpty())
 			Expect(err).To(HaveOccurred())
@@ -948,14 +948,6 @@ var _ = Describe("FenceAgentsRemediationTemplate Defaulting", func() {
 		})
 	})
 
-	Context("with wrong object type", func() {
-		It("should return an error", func() {
-			far := getTestFAR(validAgentName)
-			err := defaulter.Default(ctx, far)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("expected a FenceAgentsRemediationTemplate"))
-		})
-	})
 })
 
 func getFARTemplate(agentName string, strategy remediationv1alpha1.RemediationStrategyType) *remediationv1alpha1.FenceAgentsRemediationTemplate {

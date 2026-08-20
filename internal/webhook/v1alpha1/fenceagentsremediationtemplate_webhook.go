@@ -24,7 +24,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,9 +39,8 @@ var (
 )
 
 func SetupFARTemplateWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(&remediationv1alpha1.FenceAgentsRemediationTemplate{}).
-		WithValidator(&remediationv1alpha1.CustomValidator{
+	return ctrl.NewWebhookManagedBy(mgr, &remediationv1alpha1.FenceAgentsRemediationTemplate{}).
+		WithValidator(&remediationv1alpha1.FARTemplateValidator{
 			Client: mgr.GetClient(),
 		}).
 		WithDefaulter(&farTemplateDefaulter{
@@ -58,14 +56,9 @@ type farTemplateDefaulter struct {
 	client.Client
 }
 
-var _ admission.CustomDefaulter = &farTemplateDefaulter{}
+var _ admission.Defaulter[*remediationv1alpha1.FenceAgentsRemediationTemplate] = &farTemplateDefaulter{}
 
-// Default implements webhook.Defaulter so a webhook will be registered for the type
-func (d *farTemplateDefaulter) Default(ctx context.Context, obj runtime.Object) error {
-	farTemplate, ok := obj.(*remediationv1alpha1.FenceAgentsRemediationTemplate)
-	if !ok {
-		return fmt.Errorf("expected a FenceAgentsRemediationTemplate but got %T", obj)
-	}
+func (d *farTemplateDefaulter) Default(ctx context.Context, farTemplate *remediationv1alpha1.FenceAgentsRemediationTemplate) error {
 	webhookFARTemplateLog.Info("default", "name", farTemplate.Name)
 	if farTemplate.GetAnnotations() == nil {
 		farTemplate.Annotations = make(map[string]string)
