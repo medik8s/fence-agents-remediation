@@ -40,6 +40,14 @@ rules:
   verbs:
   - create
 - apiGroups:
+  - config.openshift.io
+  resources:
+  - apiservers
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - fence-agents-remediation.medik8s.io
   resources:
   - fenceagentsremediations
