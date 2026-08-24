@@ -11,8 +11,9 @@ require (
 	github.com/medik8s/common v1.17.0
 	github.com/onsi/ginkgo/v2 v2.32.1
 	github.com/onsi/gomega v1.42.1
-	github.com/openshift/api v0.0.0-20260726224011-9bcaa16cb258
-	github.com/openshift/client-go v0.0.0-20260723174158-ae2315de9d73
+	github.com/openshift/api v0.0.0-20260805215214-cfb63858e9d7
+	github.com/openshift/client-go v0.0.0-20260806041845-b74fb348f1e7
+	github.com/openshift/controller-runtime-common v0.0.0-20260813135806-e1187ec555fc
 	go.uber.org/zap v1.28.0
 	k8s.io/api v0.36.3
 	k8s.io/apimachinery v0.36.3
@@ -65,6 +66,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/openshift/library-go v0.0.0-20260807194649-ee0a87843dda // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
@@ -94,7 +96,7 @@ require (
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/term v0.44.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
-	golang.org/x/time v0.14.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.45.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260128011058-8636f8732409 // indirect
@@ -103,9 +105,9 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/apiextensions-apiserver v0.36.0 // indirect
-	k8s.io/apiserver v0.36.0 // indirect
-	k8s.io/component-base v0.36.0 // indirect
+	k8s.io/apiextensions-apiserver v0.36.2 // indirect
+	k8s.io/apiserver v0.36.2 // indirect
+	k8s.io/component-base v0.36.2 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260519202549-bbf5c5577288 // indirect
 	k8s.io/streaming v0.36.3 // indirect
