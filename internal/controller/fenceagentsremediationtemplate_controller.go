@@ -39,9 +39,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
-	"github.com/medik8s/fence-agents-remediation/pkg/cli"
-	"github.com/medik8s/fence-agents-remediation/pkg/utils"
+	"github.com/medik8s/fence-agents-remediation/v5/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/v5/pkg/cli"
+	"github.com/medik8s/fence-agents-remediation/v5/pkg/utils"
 )
 
 // FenceAgentsRemediationTemplateReconciler reconciles a FenceAgentsRemediationTemplate object

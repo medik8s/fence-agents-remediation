@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/v5/api/v1alpha1"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to

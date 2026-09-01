@@ -14,7 +14,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	remediationv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	remediationv1alpha1 "github.com/medik8s/fence-agents-remediation/v5/api/v1alpha1"
 )
 
 var _ = Describe("FenceAgentsRemediation Validation", func() {
