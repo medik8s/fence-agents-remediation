@@ -91,6 +91,9 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 OPERATOR_NAME ?= fence-agents-remediation
 OPERATOR_NAMESPACE ?= openshift-workload-availability
 
+# PACKAGE_NAME is the OLM package name
+PACKAGE_NAME ?= medik8s-$(OPERATOR_NAME)
+
 # IMAGE_TAG_BASE defines the docker.io namespace and part of the image name for remote images.
 # This variable is used to construct full image tags for bundle and catalog images.
 #
@@ -112,7 +115,7 @@ E2E_IMG        ?= $(IMAGE_TAG_BASE)-operator-e2e:$(IMAGE_TAG)
 E2E_BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-operator-e2e-bundle:$(IMAGE_TAG)
 
 # BUNDLE_GEN_FLAGS are the flags passed to the operator-sdk generate bundle command
-BUNDLE_GEN_FLAGS ?= -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+BUNDLE_GEN_FLAGS ?= -q --overwrite --version $(VERSION) --package $(PACKAGE_NAME) $(BUNDLE_METADATA_OPTS)
 
 # USE_IMAGE_DIGESTS defines if images are resolved via tags or digests
 # You can enable this value if you would like to use SHA Based Digests
@@ -227,7 +230,7 @@ bundle-run-update: operator-sdk ## Update bundle image.
 
 .PHONY: bundle-cleanup
 bundle-cleanup: operator-sdk ## Remove bundle installed via bundle-run
-	$(OPERATOR_SDK) -n $(OPERATOR_NAMESPACE) cleanup $(OPERATOR_NAME)
+	$(OPERATOR_SDK) -n $(OPERATOR_NAMESPACE) cleanup $(PACKAGE_NAME)
 
 .PHONY: create-ns
 create-ns: ## Create namespace
@@ -314,7 +317,7 @@ endif
 
 DEFAULT_ICON_BASE64 := $(shell $(BASE64) ${BLUE_ICON_PATH})
 export ICON_BASE64 ?= ${DEFAULT_ICON_BASE64}
-export CSV ?="./bundle/manifests/$(OPERATOR_NAME).clusterserviceversion.yaml"
+export CSV ?="./bundle/manifests/$(PACKAGE_NAME).clusterserviceversion.yaml"
 
 .PHONY: bundle-update
 bundle-update: verify-previous-version verify-skip-range ## Update CSV fields and validate the bundle directory
@@ -343,7 +346,7 @@ verify-previous-version:
 add-replaces-field: verify-previous-version ## Add replaces field to the CSV
 	$(SED_I) "/  replaces:.*/d" ${CSV}
 	@if [ -n "$(PREVIOUS_VERSION)" ]; then \
-		$(SED_I) "/  version: $(VERSION)/ a\  replaces: $(OPERATOR_NAME).v$(PREVIOUS_VERSION)" ${CSV}; \
+		$(SED_I) "/  version: $(VERSION)/ a\  replaces: $(PACKAGE_NAME).v$(PREVIOUS_VERSION)" ${CSV}; \
 	fi
 
 .PHONY: verify-skip-range
@@ -466,7 +469,7 @@ MANIFESTS_DIR ?= config/manifests
 bundle: verify-previous-version verify-skip-range ## Generate bundle manifests and metadata, then validate generated files.
 	# Validate before starting generation, including under parallel Make.
 	$(MAKE) manifests operator-sdk kustomize
-	$(OPERATOR_SDK) generate kustomize manifests -q
+	$(OPERATOR_SDK) generate kustomize manifests -q --package $(PACKAGE_NAME)
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build $(MANIFESTS_DIR) | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
 	$(MAKE) bundle-reset-date bundle-validate
@@ -526,13 +529,13 @@ add_channel_entry_for_the_bundle: verify-previous-version verify-skip-range
 	@for channel in $(shell echo ${CHANNELS} | tr ',' ' '); do \
 		echo "---" >> ${CATALOG_INDEX}; \
 		echo "schema: olm.channel" >> ${CATALOG_INDEX}; \
-		echo "package: ${OPERATOR_NAME}" >> ${CATALOG_INDEX}; \
+		echo "package: ${PACKAGE_NAME}" >> ${CATALOG_INDEX}; \
 		echo "name: $$channel" >> ${CATALOG_INDEX}; \
 		echo "entries:" >> ${CATALOG_INDEX}; \
-		echo "  - name: ${OPERATOR_NAME}.v${VERSION}" >> ${CATALOG_INDEX}; \
+		echo "  - name: ${PACKAGE_NAME}.v${VERSION}" >> ${CATALOG_INDEX}; \
 		\
 		if [ -n "${PREVIOUS_VERSION}" ]; then \
-			echo "    replaces: ${OPERATOR_NAME}.v${PREVIOUS_VERSION}" >> ${CATALOG_INDEX}; \
+			echo "    replaces: ${PACKAGE_NAME}.v${PREVIOUS_VERSION}" >> ${CATALOG_INDEX}; \
 		fi; \
 		if [ -n "${SKIP_RANGE_LOWER}" ]; then \
 			echo "    skipRange: '>=${SKIP_RANGE_LOWER} <${VERSION}'" >> ${CATALOG_INDEX}; \
@@ -546,7 +549,7 @@ catalog-build: verify-previous-version verify-skip-range ## Build a file-based c
 	-rm -r ${CATALOG_DIR} ${CATALOG_DOCKERFILE}
 	@mkdir -p ${CATALOG_DIR}
 	$(OPM) generate dockerfile ${CATALOG_DIR}
-	$(OPM) init ${OPERATOR_NAME} \
+	$(OPM) init ${PACKAGE_NAME} \
 		--default-channel=${DEFAULT_CHANNEL} \
 		--description=./README.md \
 		--icon=${BLUE_ICON_PATH} \
