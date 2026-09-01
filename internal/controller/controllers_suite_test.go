@@ -38,8 +38,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	//+kubebuilder:scaffold:imports ## https://github.com/kubernetes-sigs/kubebuilder/issues/1487 ?
-	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
-	"github.com/medik8s/fence-agents-remediation/pkg/cli"
+	"github.com/medik8s/fence-agents-remediation/v5/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/v5/pkg/cli"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to

@@ -48,14 +48,14 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	openshifttls "github.com/openshift/controller-runtime-common/pkg/tls"
 
-	fenceagentsremediationv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
-	"github.com/medik8s/fence-agents-remediation/internal/controller"
+	fenceagentsremediationv1alpha1 "github.com/medik8s/fence-agents-remediation/v5/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/v5/internal/controller"
 
 	//+kubebuilder:scaffold:imports
-	webhookv1alpha1 "github.com/medik8s/fence-agents-remediation/internal/webhook/v1alpha1"
-	"github.com/medik8s/fence-agents-remediation/pkg/cli"
-	"github.com/medik8s/fence-agents-remediation/pkg/validation"
-	"github.com/medik8s/fence-agents-remediation/version"
+	webhookv1alpha1 "github.com/medik8s/fence-agents-remediation/v5/internal/webhook/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/v5/pkg/cli"
+	"github.com/medik8s/fence-agents-remediation/v5/pkg/validation"
+	"github.com/medik8s/fence-agents-remediation/v5/version"
 )
 
 const (
