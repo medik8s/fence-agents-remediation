@@ -26,3 +26,5 @@ testbin/*
 
 # vscode directory
 .vscode/*
+
+.tools/
