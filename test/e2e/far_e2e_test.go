@@ -33,6 +33,7 @@ import (
 const (
 	nodeIdentifierPrefixAWS  = "--plug"
 	nodeIdentifierPrefixIPMI = "--ipport"
+	nodeIdentifierPrefixKind = "--plug"
 	testContainerName        = "test-container"
 	testPodName              = "test-pod"
 	fenceAgentDefaultAction  = "reboot"
@@ -60,6 +61,7 @@ var (
 	remediationTimes                 []time.Duration
 	fenceAgent, nodeIdentifierPrefix string
 	clusterPlatform                  *configv1.Infrastructure
+	isKind                           = os.Getenv("E2E_KIND") != ""
 )
 
 var _ = Describe("FAR E2e", func() {
@@ -308,6 +310,14 @@ var _ = AfterSuite(func() {
 
 // buildSharedParameters returns a map key-value of shared parameters based on cluster platform type if it finds the credentials, otherwise an error
 func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action string) map[v1alpha1.ParameterName]string {
+	if isKind {
+		return map[v1alpha1.ParameterName]string{
+			"--action":      action,
+			"--mode":        "far",
+			"--unix-socket": "/var/run/docker.sock",
+		}
+	}
+
 	var testShareParam map[v1alpha1.ParameterName]string
 
 	// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.type}'
@@ -335,6 +345,26 @@ func buildSharedParameters(clusterPlatform *configv1.Infrastructure, action stri
 
 // buildNodeParameters returns a map key-value of node parameters based on cluster platform type if it finds the node info list, otherwise an error
 func buildNodeParameters() (map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string, error) {
+	if isKind {
+		nodeListParam := map[v1alpha1.NodeName]string{}
+		workerNodes := &corev1.NodeList{}
+		selector := labels.NewSelector()
+		req, err := labels.NewRequirement(medik8sLabels.WorkerRole, selection.Exists, []string{})
+		if err != nil {
+			return nil, err
+		}
+		selector = selector.Add(*req)
+		if err := k8sClient.List(context.Background(), workerNodes, &client.ListOptions{LabelSelector: selector}); err != nil {
+			return nil, err
+		}
+		for _, node := range workerNodes.Items {
+			nodeListParam[v1alpha1.NodeName(node.Name)] = node.Name
+		}
+		return map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{
+			nodeIdentifierPrefixKind: nodeListParam,
+		}, nil
+	}
+
 	var (
 		nodeListParam  map[v1alpha1.NodeName]string
 		nodeIdentifier v1alpha1.ParameterName
@@ -524,8 +554,17 @@ func verifyNodeRebooted(nodeName string, nodeBootTimeBefore time.Time) {
 // verifyNodePoweredOff checks if the node remains powered off
 func verifyNodePoweredOff(nodeName string) {
 	log.Info("checking if Node was powered off", "node", nodeName)
-	var nodePowerStatus string
 
+	if isKind {
+		// On Kind, powered-off = container stopped = node NotReady/Unknown.
+		node := &corev1.Node{}
+		Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: nodeName}, node)).To(Succeed())
+		waitForNodeHealthyCondition(node, corev1.ConditionUnknown)
+		log.Info("Successfully confirmed node is powered off (NotReady on Kind)", "node", nodeName)
+		return
+	}
+
+	var nodePowerStatus string
 	Eventually(func() (string, error) {
 		var err error
 		nodePowerStatus, err = e2eUtils.GetPowerStatus(machineClient, nodeName)
@@ -632,6 +671,14 @@ func checkRemediation(nodeName string, nodeBootTimeBefore time.Time, pod *corev1
 
 // preTestsSetup will initialize values with are required in all of the tests before the suite is run
 func preTestsSetup() {
+	if isKind {
+		log.Info("Kind cluster detected (E2E_KIND=true), using fence_kind")
+		fenceAgent = e2eUtils.FenceAgentKind
+		nodeIdentifierPrefix = nodeIdentifierPrefixKind
+		secretMap = map[string]string{}
+		return
+	}
+
 	//Building the params once for all of the tests
 	var err error
 	clusterPlatform, err = e2eUtils.GetClusterInfo(configClient)
@@ -664,6 +711,9 @@ func setFenceAgentParams(platformType configv1.PlatformType) {
 }
 
 func buildSecretMap(clusterPlatform *configv1.Infrastructure) (map[string]string, error) {
+	if isKind {
+		return map[string]string{}, nil
+	}
 	secrets := map[string]string{}
 	// oc get Infrastructure.config.openshift.io/cluster -o jsonpath='{.status.platformStatus.type}'
 	if clusterPlatform.Status.PlatformStatus.Type == configv1.AWSPlatformType {

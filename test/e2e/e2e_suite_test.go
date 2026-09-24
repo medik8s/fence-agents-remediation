@@ -70,19 +70,21 @@ var _ = BeforeSuite(func() {
 		Fail(fmt.Sprintf("Couldn't get kubeconfig %v", err))
 	}
 
-	configClient, err = configclient.NewForConfig(config)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(configClient).NotTo(BeNil())
-
 	// Create a Kubernetes clientset using the configuration
 	clientSet, err = kubernetes.NewForConfig(config)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(clientSet).NotTo(BeNil())
 
-	// Create a Machine clientset using the configuration
-	machineClient, err = machineclient.NewForConfig(config)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(machineClient).NotTo(BeNil())
+	if !isKind {
+		configClient, err = configclient.NewForConfig(config)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(configClient).NotTo(BeNil())
+
+		// Create a Machine clientset using the configuration
+		machineClient, err = machineclient.NewForConfig(config)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(machineClient).NotTo(BeNil())
+	}
 
 	scheme.AddToScheme(scheme.Scheme)
 	err = v1alpha1.AddToScheme(scheme.Scheme)

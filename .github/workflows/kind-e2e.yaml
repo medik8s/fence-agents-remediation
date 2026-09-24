@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main*, release-*]
+  pull_request:
+    branches: [main*, release-*]
+  workflow_dispatch: {}
+
+jobs:
+  kind-e2e:
+    name: Kind E2E
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      TOOLS_DIR: ${{ github.workspace }}/.tools
+      MEDIK8S_CLUSTER_NAME: medik8s-ci
+      CONTAINER_TOOL: docker
+      MEDIK8S_REGISTRY_NAME: kind-registry
+      MEDIK8S_REGISTRY_PORT: "5000"
+      IMAGE_REGISTRY: kind-registry:5000/medik8s
+      OPERATOR_NAMESPACE: openshift-workload-availability
+    steps:
+    - name: Checkout FAR
+      uses: actions/checkout@v6
+      with:
+        persist-credentials: false
+
+    - name: Setup Go
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+
+    - name: Install operator-sdk
+      run: |
+        make operator-sdk
+        OPERATOR_SDK_BIN=$(find ./bin/operator-sdk -name operator-sdk -type f | head -1)
+        cp "${OPERATOR_SDK_BIN}" /usr/local/bin/operator-sdk
+
+    - name: Create Kind cluster with registry, OLM, and docker.sock mount
+      # SETUP_DOCKER_SOCKET=true causes setup.sh to generate a kind config with
+      # extraMounts binding /var/run/docker.sock into the control-plane node,
+      # enabling fence_kind to reach the host Docker daemon from the manager pod.
+      env:
+        SETUP_DOCKER_SOCKET: "true"
+      run: make dev-setup
+
+    - name: Prepare operator namespace
+      run: |
+        kubectl create ns ${OPERATOR_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+        kubectl label --overwrite ns ${OPERATOR_NAMESPACE} \
+          pod-security.kubernetes.io/enforce=privileged \
+          pod-security.kubernetes.io/audit=privileged \
+          pod-security.kubernetes.io/warn=privileged
+
+    - name: Build and push e2e image and OLM bundle
+      # docker-build-e2e builds the standard operator image first, then copies
+      # kind-reboot-watcher.sh from the tools repo (already downloaded into
+      # TOOLS_DIR=.tools by the dev-setup step above) as hack/fence_kind and
+      # layers it into the e2e image as /usr/sbin/fence_kind.
+      # bundle-e2e generates the OLM bundle from config/kind-e2e (which patches
+      # the manager Deployment with the docker.sock mount, control-plane
+      # nodeSelector, and run-as-root).
+      run: make bundle-e2e
+
+    - name: Deploy FAR via OLM bundle
+      # OLM injects the webhook serving certs itself — no cert-manager step needed.
+      run: |
+        operator-sdk run bundle -n ${OPERATOR_NAMESPACE} --use-http \
+          --timeout 5m \
+          ${IMAGE_REGISTRY}/fence-agents-remediation-operator-e2e-bundle:latest
+
+    - name: Wait for operator to be ready
+      run: make dev-wait
+
+    - name: Pre-load test helper image into Kind nodes
+      # runCommandInCluster schedules a ubi8 pod on each worker (GetBootTime, StopKubelet).
+      # Loading via kind load docker-image is reliable: it pulls to host Docker then injects
+      # directly into every node's containerd store, so the pod starts instantly, this is to
+      # avoid the pull time inside the 1-minute pod-ready timeout in tests
+      run: |
+        docker pull registry.access.redhat.com/ubi8/ubi-minimal
+        kind load docker-image registry.access.redhat.com/ubi8/ubi-minimal \
+          --name ${MEDIK8S_CLUSTER_NAME}
+
+    - name: Run e2e tests
+      # fence_kind --mode=far off/on maps to Docker API stop/start, so power-off tests run on Kind.
+      timeout-minutes: 60
+      env:
+        E2E_KIND: "true"
+        OPERATOR_NS: ${{ env.OPERATOR_NAMESPACE }}
+      run: make test-e2e
+
+    - name: Debug on failure
+      if: ${{ always() }}
+      run: |
+        mkdir -p .tests
+        kubectl get fenceagentsremediation -A -o yaml > .tests/far-crs.yaml 2>/dev/null || true
+        kubectl get fenceagentsremediationtemplate -A -o yaml > .tests/fart-crs.yaml 2>/dev/null || true
+        kubectl get csv -A > .tests/csvs.txt 2>/dev/null || true
+        kubectl get sub -A > .tests/subs.txt 2>/dev/null || true
+        kubectl logs -n ${OPERATOR_NAMESPACE} -l control-plane=controller-manager --tail=200 > .tests/operator-logs.txt 2>/dev/null || true
+        kubectl get nodes -o wide > .tests/nodes.txt 2>/dev/null || true
+        make dev-ci-debug 2>/dev/null || true
+
+    - name: Upload test artifacts
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-artifacts
+        path: .tests/
+        include-hidden-files: true
+        if-no-files-found: ignore

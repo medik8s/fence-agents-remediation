@@ -112,6 +112,9 @@ CATALOG_IMG ?= $(IMAGE_TAG_BASE)-operator-catalog:$(IMAGE_TAG)
 # Image URL to use all building/pushing image targets
 IMG ?= $(IMAGE_TAG_BASE)-operator:$(IMAGE_TAG)
 
+E2E_IMG        ?= $(IMAGE_TAG_BASE)-operator-e2e:$(IMAGE_TAG)
+E2E_BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-operator-e2e-bundle:$(IMAGE_TAG)
+
 # BUNDLE_GEN_FLAGS are the flags passed to the operator-sdk generate bundle command
 BUNDLE_GEN_FLAGS ?= -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 
@@ -143,7 +146,7 @@ SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
 .PHONY: all
-all: build
+all: manager
 
 ##@ General
 
@@ -236,8 +239,8 @@ create-ns: ## Create namespace
 
 ##@ Build
 
-.PHONY: build
-build: ## Build manager binary.
+.PHONY: manager
+manager: ## Build manager binary.
 	./hack/build.sh
 
 .PHONY: run
@@ -246,11 +249,36 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 .PHONY: docker-build
 docker-build: test-no-verify ## Build docker image with the manager.
-	docker build -t ${IMG} .
+	$(CONTAINER_TOOL) build -t ${IMG} .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
-	docker push ${IMG}
+	$(CONTAINER_TOOL) push ${IMG}
+
+CONTAINER_TOOL   ?= docker
+DOCKER_BUILD_ARGS ?=
+
+.PHONY: docker-build-e2e
+docker-build-e2e: ## Build operator image, then layer fence_kind for e2e (skips unit tests).
+	$(CONTAINER_TOOL) build $(DOCKER_BUILD_ARGS) -t $(IMG) .
+	@test -f $(TOOLS_DIR)/dev/kind-reboot-watcher.sh || \
+		{ echo "Error: $(TOOLS_DIR)/dev/kind-reboot-watcher.sh not found. Run 'make dev-setup' first to download the tools repo."; exit 1; }
+	cp $(TOOLS_DIR)/dev/kind-reboot-watcher.sh hack/fence_kind
+	$(CONTAINER_TOOL) build $(DOCKER_BUILD_ARGS) -f Dockerfile.e2e --build-arg BASE_IMG=$(IMG) -t $(E2E_IMG) .
+	rm -f hack/fence_kind
+
+.PHONY: docker-push-e2e
+docker-push-e2e: ## Push the e2e operator image.
+	$(CONTAINER_TOOL) push $(IMG)
+	$(CONTAINER_TOOL) push $(E2E_IMG)
+
+.PHONY: bundle-e2e
+bundle-e2e: ## Build+push e2e image and e2e OLM bundle.
+	$(MAKE) docker-build-e2e IMG=$(E2E_IMG)
+	$(MAKE) docker-push-e2e IMG=$(E2E_IMG) E2E_IMG=$(E2E_IMG)
+	$(MAKE) bundle-build IMG=$(E2E_IMG) BUNDLE_IMG=$(E2E_BUNDLE_IMG) MANIFESTS_DIR=config/kind-e2e
+	$(MAKE) bundle-push BUNDLE_IMG=$(E2E_BUNDLE_IMG)
+	@echo "e2e image: $(E2E_IMG)"; echo "e2e bundle: $(E2E_BUNDLE_IMG)"
 
 ##@ Deployment
 
@@ -277,15 +305,26 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 
 ##@ Bundle Creation Addition
 ## Some addition to bundle creation in the bundle
-DEFAULT_ICON_BASE64 := $(shell base64 --wrap=0 ${BLUE_ICON_PATH})
+
+# Cross-platform base64 and in-place sed (GNU/Linux vs BSD/macOS).
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+BASE64 = base64 -b 0 -i
+SED_I  = sed -E -i ''
+else
+BASE64 = base64 --wrap=0
+SED_I  = sed -r -i
+endif
+
+DEFAULT_ICON_BASE64 := $(shell $(BASE64) ${BLUE_ICON_PATH})
 export ICON_BASE64 ?= ${DEFAULT_ICON_BASE64}
 export CSV ?="./bundle/manifests/$(OPERATOR_NAME).clusterserviceversion.yaml"
 
 .PHONY: bundle-update
 bundle-update: ## Update CSV fields and validate the bundle directory
-	sed -r -i "s|containerImage: .*|containerImage: $(IMG)|;" ${CSV}
-	sed -r -i "s|createdAt: .*|createdAt: `date '+%Y-%m-%d %T'`|;" ${CSV}
-	sed -r -i "s|base64data:.*|base64data: ${ICON_BASE64}|;" ${CSV}
+	$(SED_I) "s|containerImage: .*|containerImage: $(IMG)|;" ${CSV}
+	$(SED_I) "s|createdAt: .*|createdAt: `date '+%Y-%m-%d %T'`|;" ${CSV}
+	$(SED_I) "s|base64data:.*|base64data: ${ICON_BASE64}|;" ${CSV}
 	$(MAKE) bundle-validate
 
 .PHONY: add-replaces-field
@@ -300,16 +339,19 @@ add-replaces-field: ## Add replaces field to the CSV
 			exit 1; \
 		else \
 		  	# preferring sed here, in order to have "replaces" near "version" \
-			sed -r -i "/  version: $(VERSION)/ a\  replaces: $(OPERATOR_NAME).v$(PREVIOUS_VERSION)" ${CSV}; \
+			$(SED_I) "/  version: $(VERSION)/ a\  replaces: $(OPERATOR_NAME).v$(PREVIOUS_VERSION)" ${CSV}; \
 		fi \
 	fi
 
 .PHONY: bundle-reset-date
 bundle-reset-date: ## Reset bundle's createdAt
-	sed -r -i "s|createdAt: .*|createdAt: \"\"|;" ${CSV}
+	$(SED_I) "s|createdAt: .*|createdAt: \"\"|;" ${CSV}
 
 .PHONY: bundle-community-k8s
 bundle-community-k8s: bundle-community ## Generate bundle manifests and metadata customized to Red Hat community release
+
+.PHONY: bundle-k8s
+bundle-k8s: bundle-community-k8s ## Alias for bundle-community-k8s (compatibility with common CI workflow).
 
 .PHONY: bundle-community-okd
 bundle-community-okd: bundle-community  ## Generate bundle manifests and metadata customized to Red Hat community release
@@ -331,7 +373,7 @@ add-ocp-annotations: yq ## Add OCP annotations
 
 .PHONY: bundle-community
 bundle-community: bundle ## Update displayName field in the bundle's CSV
-	sed -r -i "s|displayName: Fence Agents Remediation Operator|displayName: Fence Agents Remediation Operator - Community Edition|;" ${CSV}
+	$(SED_I) "s|displayName: Fence Agents Remediation Operator|displayName: Fence Agents Remediation Operator - Community Edition|;" ${CSV}
 	$(MAKE) bundle-update
 
 ##@ Build Dependencies
@@ -406,11 +448,13 @@ define go-install-tool
 }
 endef
 
+MANIFESTS_DIR ?= config/manifests
+
 .PHONY: bundle
 bundle: manifests operator-sdk kustomize ## Generate bundle manifests and metadata, then validate generated files.
 	$(OPERATOR_SDK) generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
+	$(KUSTOMIZE) build $(MANIFESTS_DIR) | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
 	$(MAKE) bundle-reset-date bundle-validate
 
 .PHONY: bundle-validate
@@ -419,7 +463,7 @@ bundle-validate: operator-sdk ## Validate the bundle directory with additional v
 
 .PHONY: bundle-build
 bundle-build: bundle bundle-update ## Build the bundle image.
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	$(CONTAINER_TOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.
@@ -499,7 +543,7 @@ catalog-build: opm ## Build a file-based catalog image.
 	$(OPM) render ${BUNDLE_IMG} --output yaml >> ${CATALOG_INDEX}
 	$(MAKE) add_channel_entry_for_the_bundle
 	$(OPM) validate ${CATALOG_DIR}
-	docker build . -f ${CATALOG_DOCKERFILE} -t ${CATALOG_IMG}
+	$(CONTAINER_TOOL) build . -f ${CATALOG_DOCKERFILE} -t ${CATALOG_IMG}
 	# Clean up the catalog directory and Dockerfile
 	rm -r ${CATALOG_DIR} ${CATALOG_DOCKERFILE}
 
@@ -523,7 +567,7 @@ container-build: docker-build bundle-build ## Build containers
 
 .PHONY: bundle-build-community
 bundle-build-community: bundle-community ## Run bundle community changes in CSV, and then build the bundle image.
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	$(CONTAINER_TOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: container-build-community
 container-build-community: docker-build bundle-build-community ## Build containers for community
