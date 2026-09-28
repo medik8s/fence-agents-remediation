@@ -270,7 +270,6 @@ docker-build-e2e: ## Build operator image, then layer fence_kind for e2e (skips 
 
 .PHONY: docker-push-e2e
 docker-push-e2e: ## Push the e2e operator image.
-	$(CONTAINER_TOOL) push $(IMG)
 	$(CONTAINER_TOOL) push $(E2E_IMG)
 
 .PHONY: bundle-e2e
