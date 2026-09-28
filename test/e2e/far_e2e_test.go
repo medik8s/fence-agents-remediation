@@ -39,14 +39,13 @@ const (
 	fenceAgentDefaultAction  = "reboot"
 	//TODO: try to minimize timeout
 	// eventually parameters
-	timeoutTaint                = "20s"   // Timeout for checking the FAR taint
-	timeoutReboot               = "6m0s"  // fencing with reboot should be completed within 6 minutes
-	timeoutPowerOff             = "10m0s" // fencing with off should be completed within 10 minutes
-	timeoutAfterFenceAction     = "5m0s"  // Timeout for verifying steps after fencing.
-	timeoutForRemediationChecks = "5s"    // Timeout for remediation checks
+	timeoutTaint                = "20s"            // Timeout for checking the FAR taint
+	timeoutReboot               = "6m0s"           // fencing with reboot should be completed within 6 minutes
+	timeoutPowerOff             = 10 * time.Minute // fencing with off should be completed within 10 minutes
+	timeoutAfterFenceAction     = "5m0s"           // Timeout for verifying steps after fencing.
+	timeoutForRemediationChecks = "5s"             // Timeout for remediation checks
 	pollTaint                   = "100ms"
 	pollReboot                  = "1s"
-	pollPowerOff                = "10s"
 	pollAfterFenceAction        = "10s"
 	pollForRemediationChecks    = "250ms"
 	skipOOSREnvVarName          = "SKIP_OOST_REMEDIATION_VERIFICATION"
@@ -556,11 +555,14 @@ func verifyNodePoweredOff(nodeName string) {
 	log.Info("checking if Node was powered off", "node", nodeName)
 
 	if isKind {
-		// On Kind, powered-off = container stopped = node NotReady/Unknown.
-		node := &corev1.Node{}
-		Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: nodeName}, node)).To(Succeed())
-		waitForNodeHealthyCondition(node, corev1.ConditionUnknown)
-		log.Info("Successfully confirmed node is powered off (NotReady on Kind)", "node", nodeName)
+		// Ready=Unknown is already set by makeNodeUnready before FAR creation.
+		// Require the node container to exit to verify the off action took effect.
+		ctx, cancel := context.WithTimeout(context.Background(), timeoutPowerOff)
+		defer cancel()
+		Eventually(func(ctx context.Context) (string, error) {
+			return e2eUtils.GetKindNodeContainerStatus(ctx, nodeName)
+		}, timeoutPowerOff, pollReboot).WithContext(ctx).Should(Equal("exited"), "Kind node container %s must stop after fencing", nodeName)
+		log.Info("Confirmed Kind node container is stopped", "node", nodeName)
 		return
 	}
 
