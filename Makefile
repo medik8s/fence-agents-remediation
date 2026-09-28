@@ -244,6 +244,7 @@ docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
 
 CONTAINER_TOOL   ?= docker
+export CONTAINER_TOOL
 DOCKER_BUILD_ARGS ?=
 
 .PHONY: docker-build-e2e
