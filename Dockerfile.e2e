@@ -1,0 +1,6 @@
+ARG BASE_IMG
+FROM ${BASE_IMG}
+USER 0
+COPY hack/fence_kind /usr/sbin/fence_kind
+RUN chmod +x /usr/sbin/fence_kind
+USER 65532:65532
