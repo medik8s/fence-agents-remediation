@@ -5,12 +5,12 @@ metadata:
     alm-examples: '[]'
     capabilities: Basic Install
     categories: OpenShift Optional
-    containerImage: ""
+    containerImage: quay.io/medik8s/fence-agents-remediation-operator:v5.8.0
     createdAt: ""
     description: Fence Agents Remediation Operator uses well-known agents to fence
       and remediate unhealthy nodes. The remediation includes rebooting the unhealthy
       node using a fence agent, and then evicting workloads from the unhealthy node.
-    olm.skipRange: '>=0.0.1'
+    olm.skipRange: '>=0.0.1 <5.8.0'
     operatorframework.io/suggested-namespace: openshift-workload-availability
     operatorframework.io/suggested-namespace-template: '{"kind":"Namespace","apiVersion":"v1","metadata":{"name":"openshift-workload-availability","annotations":{"openshift.io/node-selector":""}}}'
     repository: https://github.com/medik8s/fence-agents-remediation

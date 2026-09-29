@@ -13,4 +13,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: quay.io/medik8s/fence-agents-remediation-operator
-  newTag: latest
+  newTag: v5.8.0
