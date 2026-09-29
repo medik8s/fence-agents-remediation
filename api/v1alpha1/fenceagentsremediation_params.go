@@ -33,8 +33,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	"github.com/medik8s/fence-agents-remediation/pkg/template"
-	"github.com/medik8s/fence-agents-remediation/pkg/validation"
+	"github.com/medik8s/fence-agents-remediation/v5/pkg/template"
+	"github.com/medik8s/fence-agents-remediation/v5/pkg/validation"
 )
 
 const (

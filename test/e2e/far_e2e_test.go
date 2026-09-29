@@ -25,9 +25,9 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 
-	"github.com/medik8s/fence-agents-remediation/api/v1alpha1"
-	"github.com/medik8s/fence-agents-remediation/pkg/utils"
-	e2eUtils "github.com/medik8s/fence-agents-remediation/test/e2e/utils"
+	"github.com/medik8s/fence-agents-remediation/v5/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/v5/pkg/utils"
+	e2eUtils "github.com/medik8s/fence-agents-remediation/v5/test/e2e/utils"
 )
 
 const (

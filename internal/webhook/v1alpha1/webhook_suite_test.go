@@ -41,8 +41,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	remediationv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
-	"github.com/medik8s/fence-agents-remediation/pkg/validation"
+	remediationv1alpha1 "github.com/medik8s/fence-agents-remediation/v5/api/v1alpha1"
+	"github.com/medik8s/fence-agents-remediation/v5/pkg/validation"
 	//+kubebuilder:scaffold:imports
 )
 
