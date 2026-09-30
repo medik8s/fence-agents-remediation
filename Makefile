@@ -139,6 +139,15 @@ ifeq (,$(shell which kubectl))
 KUBECTL=oc
 endif
 
+# CONTAINER_TOOL defines the container tool to be used for building images.
+CONTAINER_TOOL ?= $(shell \
+	if command -v podman >/dev/null 2>&1; then echo podman; \
+	elif command -v docker >/dev/null 2>&1; then echo docker; \
+	else echo podman; \
+	fi \
+)
+export CONTAINER_TOOL
+
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # This is a requirement for 'setup-envtest.sh' in the test target.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
@@ -255,8 +264,6 @@ docker-build: test-no-verify ## Build docker image with the manager.
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
 
-CONTAINER_TOOL   ?= docker
-export CONTAINER_TOOL
 DOCKER_BUILD_ARGS ?=
 
 .PHONY: docker-build-e2e
@@ -462,12 +469,13 @@ bundle-validate: operator-sdk ## Validate the bundle directory with additional v
 	$(OPERATOR_SDK) bundle validate ./bundle --select-optional suite=operatorframework
 
 .PHONY: bundle-build
-bundle-build: bundle bundle-update ## Build the bundle image.
+bundle-build: bundle ## Build the bundle image.
+	$(MAKE) bundle-update
 	$(CONTAINER_TOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.
-	$(MAKE) docker-push IMG=$(BUNDLE_IMG)
+	$(CONTAINER_TOOL) push $(BUNDLE_IMG)
 
 .PHONY: opm
 opm: ## Download opm locally if necessary.
@@ -550,7 +558,7 @@ catalog-build: opm ## Build a file-based catalog image.
 # Push the catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
-	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+	$(CONTAINER_TOOL) push $(CATALOG_IMG)
 
 ##@ Targets used by CI
 
