@@ -243,19 +243,19 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 .PHONY: docker-build
 docker-build: test-no-verify ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build -t ${IMG} .
+	$(CONTAINER_TOOL) build --build-arg OPERATOR_VERSION=$(VERSION) -t ${IMG} .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
 
-CONTAINER_TOOL   ?= docker
+CONTAINER_TOOL ?= podman
 export CONTAINER_TOOL
 DOCKER_BUILD_ARGS ?=
 
 .PHONY: docker-build-e2e
 docker-build-e2e: ## Build operator image, then layer fence_kind for e2e (skips unit tests).
-	$(CONTAINER_TOOL) build $(DOCKER_BUILD_ARGS) -t $(IMG) .
+	$(CONTAINER_TOOL) build $(DOCKER_BUILD_ARGS) --build-arg OPERATOR_VERSION=$(VERSION) -t $(IMG) .
 	@test -f $(TOOLS_DIR)/dev/kind-reboot-watcher.sh || \
 		{ echo "Error: $(TOOLS_DIR)/dev/kind-reboot-watcher.sh not found. Run 'make dev-setup' first to download the tools repo."; exit 1; }
 	cp $(TOOLS_DIR)/dev/kind-reboot-watcher.sh hack/fence_kind
@@ -315,20 +315,33 @@ export ICON_BASE64 ?= ${DEFAULT_ICON_BASE64}
 export CSV ?="./bundle/manifests/$(OPERATOR_NAME).clusterserviceversion.yaml"
 
 .PHONY: bundle-update
-bundle-update: ## Update CSV fields and validate the bundle directory
+bundle-update: verify-previous-version ## Update CSV fields and validate the bundle directory
 	$(SED_I) "s|containerImage: .*|containerImage: $(IMG)|;" ${CSV}
 	$(SED_I) "s|createdAt: .*|createdAt: `date '+%Y-%m-%d %T'`|;" ${CSV}
 	$(SED_I) "s|base64data:.*|base64data: ${ICON_BASE64}|;" ${CSV}
+	$(MAKE) add-replaces-field
+	@if [ -n "$(SKIP_RANGE_LOWER)" ]; then \
+		if [ "$(SKIP_RANGE_LOWER)" = "$(VERSION)" ] || ! printf '%s\n' "$(SKIP_RANGE_LOWER)" "$(VERSION)" | sort -V -C 2>/dev/null; then \
+			echo "Error: VERSION must be greater than SKIP_RANGE_LOWER"; exit 1; \
+		fi; \
+		$(SED_I) "s|olm.skipRange: .*|olm.skipRange: '>=${SKIP_RANGE_LOWER} <$(VERSION)'|;" ${CSV}; \
+	else \
+		$(SED_I) "/    olm.skipRange:.*/d" ${CSV}; \
+	fi
 	$(MAKE) bundle-validate
 
-.PHONY: add-replaces-field
-add-replaces-field: ## Add replaces field to the CSV
-	@if [ -z "$(PREVIOUS_VERSION)" ] || [ "$(PREVIOUS_VERSION)" = "$(VERSION)" ]; then \
-		echo "Error: PREVIOUS_VERSION must be set and differ from VERSION"; \
-		exit 1; \
+.PHONY: verify-previous-version
+verify-previous-version:
+	@if [ -n "$(PREVIOUS_VERSION)" ] && [ "$$(./hack/semver_cmp.sh $(VERSION) $(PREVIOUS_VERSION))" != 1 ]; then \
+		echo "Error: VERSION must be greater than PREVIOUS_VERSION"; exit 1; \
 	fi
+
+.PHONY: add-replaces-field
+add-replaces-field: verify-previous-version ## Add replaces field to the CSV
 	$(SED_I) "/  replaces:.*/d" ${CSV}
-	$(SED_I) "/  version: $(VERSION)/ a\  replaces: $(OPERATOR_NAME).v$(PREVIOUS_VERSION)" ${CSV}
+	@if [ -n "$(PREVIOUS_VERSION)" ]; then \
+		$(SED_I) "/  version: $(VERSION)/ a\  replaces: $(OPERATOR_NAME).v$(PREVIOUS_VERSION)" ${CSV}; \
+	fi
 
 .PHONY: bundle-reset-date
 bundle-reset-date: ## Reset bundle's createdAt
@@ -449,12 +462,13 @@ bundle-validate: operator-sdk ## Validate the bundle directory with additional v
 	$(OPERATOR_SDK) bundle validate ./bundle --select-optional suite=operatorframework
 
 .PHONY: bundle-build
-bundle-build: bundle bundle-update ## Build the bundle image.
+bundle-build: bundle ## Build the bundle image.
+	$(MAKE) bundle-update
 	$(CONTAINER_TOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.
-	$(MAKE) docker-push IMG=$(BUNDLE_IMG)
+	$(CONTAINER_TOOL) push $(BUNDLE_IMG)
 
 .PHONY: opm
 opm: ## Download opm locally if necessary.
@@ -494,7 +508,7 @@ CATALOG_INDEX := $(CATALOG_DIR)/index.yaml
 # Add olm.channel entries for each channel in CHANNELS.
 # Keep the default candidate's upgrade edge in the catalog.
 .PHONY: add_channel_entry_for_the_bundle
-add_channel_entry_for_the_bundle:
+add_channel_entry_for_the_bundle: verify-previous-version
 	@for channel in $(shell echo ${CHANNELS} | tr ',' ' '); do \
 		echo "---" >> ${CATALOG_INDEX}; \
 		echo "schema: olm.channel" >> ${CATALOG_INDEX}; \
@@ -506,8 +520,8 @@ add_channel_entry_for_the_bundle:
 		if [ -n "${PREVIOUS_VERSION}" ]; then \
 			echo "    replaces: ${OPERATOR_NAME}.v${PREVIOUS_VERSION}" >> ${CATALOG_INDEX}; \
 		fi; \
-		if [ -n "${SKIP_RANGE_LOWER}" ] && [ "${VERSION}" != "${SKIP_RANGE_LOWER}" ]; then \
-			if ! printf '%s\n' "${SKIP_RANGE_LOWER}" "${VERSION}" | sort -V -C 2>/dev/null; then \
+		if [ -n "${SKIP_RANGE_LOWER}" ]; then \
+			if [ "${VERSION}" = "${SKIP_RANGE_LOWER}" ] || ! printf '%s\n' "${SKIP_RANGE_LOWER}" "${VERSION}" | sort -V -C 2>/dev/null; then \
 				echo "Error: VERSION (${VERSION}) must be greater than SKIP_RANGE_LOWER (${SKIP_RANGE_LOWER})"; \
 				exit 1; \
 			fi; \
@@ -537,7 +551,7 @@ catalog-build: opm ## Build a file-based catalog image.
 # Push the catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
-	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+	$(CONTAINER_TOOL) push $(CATALOG_IMG)
 
 ##@ Targets used by CI
 
@@ -584,8 +598,8 @@ test-e2e: ginkgo ## Run end to end (E2E) tests
 .PHONY: bundle-reset
 bundle-reset:
 	VERSION=$(DEFAULT_VERSION) $(MAKE) manifests bundle
-	VERSION=$(DEFAULT_VERSION) $(MAKE) add-replaces-field
-	sed -r -i "s|olm.skipRange: .*|olm.skipRange: '>=${SKIP_RANGE_LOWER} <$(DEFAULT_VERSION)'|;" ${CSV}
+	VERSION=$(DEFAULT_VERSION) $(MAKE) bundle-update bundle-reset-date
+	$(SED_I) "s|base64data:.*|base64data: base64EncodedIcon|;" ${CSV}
 	VERSION=$(DEFAULT_VERSION) $(MAKE) bundle-validate
 
 .PHONY: full-gen

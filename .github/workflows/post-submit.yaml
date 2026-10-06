@@ -31,4 +31,4 @@ jobs:
           registry: quay.io
 
       - name: Build and push current main images
-        run: export IMAGE_REGISTRY=quay.io/medik8s && make container-build-and-push-community IMAGE_TAG=latest
+        run: export IMAGE_REGISTRY=quay.io/medik8s && make container-build-and-push-community CONTAINER_TOOL=docker IMAGE_TAG=latest

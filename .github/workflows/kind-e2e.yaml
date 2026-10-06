@@ -19,6 +19,7 @@ jobs:
       MEDIK8S_REGISTRY_NAME: kind-registry
       MEDIK8S_REGISTRY_PORT: "5000"
       IMAGE_REGISTRY: kind-registry:5000/medik8s
+      IMAGE_TAG: latest
       OPERATOR_NAMESPACE: openshift-workload-availability
     steps:
     - name: Checkout FAR
