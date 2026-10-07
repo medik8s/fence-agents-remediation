@@ -597,10 +597,10 @@ test-e2e: ginkgo ## Run end to end (E2E) tests
 # Revert all version or build date related changes
 .PHONY: bundle-reset
 bundle-reset:
-	VERSION=$(DEFAULT_VERSION) $(MAKE) manifests bundle
-	VERSION=$(DEFAULT_VERSION) $(MAKE) bundle-update bundle-reset-date
+	$(MAKE) manifests bundle VERSION=$(DEFAULT_VERSION) IMAGE_TAG=v$(DEFAULT_VERSION)
+	$(MAKE) bundle-update bundle-reset-date VERSION=$(DEFAULT_VERSION) IMAGE_TAG=v$(DEFAULT_VERSION)
 	$(SED_I) "s|base64data:.*|base64data: base64EncodedIcon|;" ${CSV}
-	VERSION=$(DEFAULT_VERSION) $(MAKE) bundle-validate
+	$(MAKE) bundle-validate VERSION=$(DEFAULT_VERSION) IMAGE_TAG=v$(DEFAULT_VERSION)
 
 .PHONY: full-gen
 full-gen: go-verify manifests  generate manifests fmt bundle fix-imports bundle-reset ## generates all automatically generated content
