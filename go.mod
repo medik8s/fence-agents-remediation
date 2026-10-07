@@ -1,4 +1,4 @@
-module github.com/medik8s/fence-agents-remediation
+module github.com/medik8s/fence-agents-remediation/v5
 
 // min version, matches k8s 1.36.3
 go 1.26.0

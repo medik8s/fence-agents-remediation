@@ -36,15 +36,11 @@ BLUE_ICON_PATH = "./config/assets/medik8s_blue_icon.png"
 IMAGE_REGISTRY ?= quay.io/medik8s
 export IMAGE_REGISTRY
 
-# When no version is set, use latest as image tags
-DEFAULT_VERSION := 0.0.1
-ifeq ($(origin VERSION), undefined)
-IMAGE_TAG = latest
-else ifeq ($(VERSION), $(DEFAULT_VERSION))
-IMAGE_TAG = latest
-else
+# Use the selected version for image tags.
+DEFAULT_VERSION := 5.8.0
+DEFAULT_PREVIOUS_VERSION := 0.8.0
+DEFAULT_SKIP_RANGE_LOWER := 0.0.1
 IMAGE_TAG = v$(VERSION)
-endif
 export IMAGE_TAG
 
 CHANNELS ?= stable
@@ -69,8 +65,8 @@ endif
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= $(DEFAULT_VERSION)
-PREVIOUS_VERSION ?= $(DEFAULT_VERSION)
-SKIP_RANGE_LOWER ?=
+PREVIOUS_VERSION ?= $(DEFAULT_PREVIOUS_VERSION)
+SKIP_RANGE_LOWER ?= $(DEFAULT_SKIP_RANGE_LOWER)
 export VERSION
 
 # CHANNELS define the bundle channels used in the bundle.
@@ -249,19 +245,19 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 .PHONY: docker-build
 docker-build: test-no-verify ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build -t ${IMG} .
+	$(CONTAINER_TOOL) build --build-arg OPERATOR_VERSION=$(VERSION) -t ${IMG} .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
 
-CONTAINER_TOOL   ?= docker
+CONTAINER_TOOL ?= podman
 export CONTAINER_TOOL
 DOCKER_BUILD_ARGS ?=
 
 .PHONY: docker-build-e2e
 docker-build-e2e: ## Build operator image, then layer fence_kind for e2e (skips unit tests).
-	$(CONTAINER_TOOL) build $(DOCKER_BUILD_ARGS) -t $(IMG) .
+	$(CONTAINER_TOOL) build $(DOCKER_BUILD_ARGS) --build-arg OPERATOR_VERSION=$(VERSION) -t $(IMG) .
 	@test -f $(TOOLS_DIR)/dev/kind-reboot-watcher.sh || \
 		{ echo "Error: $(TOOLS_DIR)/dev/kind-reboot-watcher.sh not found. Run 'make dev-setup' first to download the tools repo."; exit 1; }
 	cp $(TOOLS_DIR)/dev/kind-reboot-watcher.sh hack/fence_kind
@@ -321,26 +317,42 @@ export ICON_BASE64 ?= ${DEFAULT_ICON_BASE64}
 export CSV ?="./bundle/manifests/$(OPERATOR_NAME).clusterserviceversion.yaml"
 
 .PHONY: bundle-update
-bundle-update: ## Update CSV fields and validate the bundle directory
+bundle-update: verify-previous-version verify-skip-range ## Update CSV fields and validate the bundle directory
 	$(SED_I) "s|containerImage: .*|containerImage: $(IMG)|;" ${CSV}
 	$(SED_I) "s|createdAt: .*|createdAt: `date '+%Y-%m-%d %T'`|;" ${CSV}
 	$(SED_I) "s|base64data:.*|base64data: ${ICON_BASE64}|;" ${CSV}
+	$(MAKE) add-replaces-field
+	@if [ -n "$(SKIP_RANGE_LOWER)" ]; then \
+		if grep -q '^    olm\.skipRange:' ${CSV}; then \
+			$(SED_I) "s|olm.skipRange: .*|olm.skipRange: '>=${SKIP_RANGE_LOWER} <$(VERSION)'|;" ${CSV}; \
+		else \
+			$(SED_I) "/^  annotations:/ a\    olm.skipRange: '>=${SKIP_RANGE_LOWER} <$(VERSION)'" ${CSV}; \
+		fi; \
+	else \
+		$(SED_I) "/    olm.skipRange:.*/d" ${CSV}; \
+	fi
 	$(MAKE) bundle-validate
 
+.PHONY: verify-previous-version
+verify-previous-version:
+	@if [ -n "$(PREVIOUS_VERSION)" ] && [ "$$(./hack/semver_cmp.sh $(VERSION) $(PREVIOUS_VERSION))" != 1 ]; then \
+		echo "Error: VERSION must be greater than PREVIOUS_VERSION"; exit 1; \
+	fi
+
 .PHONY: add-replaces-field
-add-replaces-field: ## Add replaces field to the CSV
-	# add replaces field when building versioned bundle
-	@if [ $(VERSION) != $(DEFAULT_VERSION) ]; then \
-		if [ $(PREVIOUS_VERSION) == $(DEFAULT_VERSION) ]; then \
-			echo "Error: PREVIOUS_VERSION must be set for versioned builds"; \
+add-replaces-field: verify-previous-version ## Add replaces field to the CSV
+	$(SED_I) "/  replaces:.*/d" ${CSV}
+	@if [ -n "$(PREVIOUS_VERSION)" ]; then \
+		$(SED_I) "/  version: $(VERSION)/ a\  replaces: $(OPERATOR_NAME).v$(PREVIOUS_VERSION)" ${CSV}; \
+	fi
+
+.PHONY: verify-skip-range
+verify-skip-range: ## Require any skip-range lower bound to be older than the candidate.
+	@if [ -n "$(SKIP_RANGE_LOWER)" ]; then \
+		if [ "$(SKIP_RANGE_LOWER)" = "$(VERSION)" ] || ! printf '%s\n' "$(SKIP_RANGE_LOWER)" "$(VERSION)" | sort -V -C 2>/dev/null; then \
+			echo "Error: VERSION must be greater than SKIP_RANGE_LOWER"; \
 			exit 1; \
-		elif [ $(shell ./hack/semver_cmp.sh $(VERSION) $(PREVIOUS_VERSION)) != 1 ]; then \
-			echo "Error: VERSION ($(VERSION)) must be greater than PREVIOUS_VERSION ($(PREVIOUS_VERSION))"; \
-			exit 1; \
-		else \
-		  	# preferring sed here, in order to have "replaces" near "version" \
-			$(SED_I) "/  version: $(VERSION)/ a\  replaces: $(OPERATOR_NAME).v$(PREVIOUS_VERSION)" ${CSV}; \
-		fi \
+		fi; \
 	fi
 
 .PHONY: bundle-reset-date
@@ -451,7 +463,9 @@ endef
 MANIFESTS_DIR ?= config/manifests
 
 .PHONY: bundle
-bundle: manifests operator-sdk kustomize ## Generate bundle manifests and metadata, then validate generated files.
+bundle: verify-previous-version verify-skip-range ## Generate bundle manifests and metadata, then validate generated files.
+	# Validate before starting generation, including under parallel Make.
+	$(MAKE) manifests operator-sdk kustomize
 	$(OPERATOR_SDK) generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build $(MANIFESTS_DIR) | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
@@ -462,12 +476,13 @@ bundle-validate: operator-sdk ## Validate the bundle directory with additional v
 	$(OPERATOR_SDK) bundle validate ./bundle --select-optional suite=operatorframework
 
 .PHONY: bundle-build
-bundle-build: bundle bundle-update ## Build the bundle image.
+bundle-build: bundle ## Build the bundle image.
+	$(MAKE) bundle-update
 	$(CONTAINER_TOOL) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.
-	$(MAKE) docker-push IMG=$(BUNDLE_IMG)
+	$(CONTAINER_TOOL) push $(BUNDLE_IMG)
 
 .PHONY: opm
 opm: ## Download opm locally if necessary.
@@ -505,9 +520,9 @@ CATALOG_DOCKERFILE := ${CATALOG_DIR}.Dockerfile
 CATALOG_INDEX := $(CATALOG_DIR)/index.yaml
 
 # Add olm.channel entries for each channel in CHANNELS.
-# For development version (0.0.1), omit replaces and skipRange to avoid OLM catalog validation errors.
+# Keep the default candidate's upgrade edge in the catalog.
 .PHONY: add_channel_entry_for_the_bundle
-add_channel_entry_for_the_bundle:
+add_channel_entry_for_the_bundle: verify-previous-version verify-skip-range
 	@for channel in $(shell echo ${CHANNELS} | tr ',' ' '); do \
 		echo "---" >> ${CATALOG_INDEX}; \
 		echo "schema: olm.channel" >> ${CATALOG_INDEX}; \
@@ -516,20 +531,17 @@ add_channel_entry_for_the_bundle:
 		echo "entries:" >> ${CATALOG_INDEX}; \
 		echo "  - name: ${OPERATOR_NAME}.v${VERSION}" >> ${CATALOG_INDEX}; \
 		\
-		if [ -n "${PREVIOUS_VERSION}" ] && [ "${VERSION}" != "${DEFAULT_VERSION}" ] && [ "${PREVIOUS_VERSION}" != "${DEFAULT_VERSION}" ]; then \
+		if [ -n "${PREVIOUS_VERSION}" ]; then \
 			echo "    replaces: ${OPERATOR_NAME}.v${PREVIOUS_VERSION}" >> ${CATALOG_INDEX}; \
 		fi; \
-		if [ -n "${SKIP_RANGE_LOWER}" ] && [ "${VERSION}" != "${DEFAULT_VERSION}" ] && [ "${VERSION}" != "${SKIP_RANGE_LOWER}" ]; then \
-			if ! printf '%s\n' "${SKIP_RANGE_LOWER}" "${VERSION}" | sort -V -C 2>/dev/null; then \
-				echo "Error: VERSION (${VERSION}) must be greater than SKIP_RANGE_LOWER (${SKIP_RANGE_LOWER})"; \
-				exit 1; \
-			fi; \
+		if [ -n "${SKIP_RANGE_LOWER}" ]; then \
 			echo "    skipRange: '>=${SKIP_RANGE_LOWER} <${VERSION}'" >> ${CATALOG_INDEX}; \
 		fi; \
 	done
 
 .PHONY: catalog-build
-catalog-build: opm ## Build a file-based catalog image.
+catalog-build: verify-previous-version verify-skip-range ## Build a file-based catalog image.
+	$(MAKE) opm
 	# Remove the catalog directory and Dockerfile
 	-rm -r ${CATALOG_DIR} ${CATALOG_DOCKERFILE}
 	@mkdir -p ${CATALOG_DIR}
@@ -550,7 +562,7 @@ catalog-build: opm ## Build a file-based catalog image.
 # Push the catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
-	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+	$(CONTAINER_TOOL) push $(CATALOG_IMG)
 
 ##@ Targets used by CI
 
@@ -596,7 +608,11 @@ test-e2e: ginkgo ## Run end to end (E2E) tests
 # Revert all version or build date related changes
 .PHONY: bundle-reset
 bundle-reset:
-	VERSION=0.0.1 $(MAKE) manifests bundle
+	$(MAKE) bundle VERSION=$(DEFAULT_VERSION) IMAGE_TAG=v$(DEFAULT_VERSION) PREVIOUS_VERSION=$(DEFAULT_PREVIOUS_VERSION) SKIP_RANGE_LOWER=$(DEFAULT_SKIP_RANGE_LOWER)
+	$(MAKE) bundle-update VERSION=$(DEFAULT_VERSION) IMAGE_TAG=v$(DEFAULT_VERSION) PREVIOUS_VERSION=$(DEFAULT_PREVIOUS_VERSION) SKIP_RANGE_LOWER=$(DEFAULT_SKIP_RANGE_LOWER)
+	$(MAKE) bundle-reset-date VERSION=$(DEFAULT_VERSION) IMAGE_TAG=v$(DEFAULT_VERSION) PREVIOUS_VERSION=$(DEFAULT_PREVIOUS_VERSION) SKIP_RANGE_LOWER=$(DEFAULT_SKIP_RANGE_LOWER)
+	$(SED_I) "s|base64data:.*|base64data: base64EncodedIcon|;" ${CSV}
+	$(MAKE) bundle-validate VERSION=$(DEFAULT_VERSION) IMAGE_TAG=v$(DEFAULT_VERSION) PREVIOUS_VERSION=$(DEFAULT_PREVIOUS_VERSION) SKIP_RANGE_LOWER=$(DEFAULT_SKIP_RANGE_LOWER)
 
 .PHONY: full-gen
 full-gen: go-verify manifests  generate manifests fmt bundle fix-imports bundle-reset ## generates all automatically generated content

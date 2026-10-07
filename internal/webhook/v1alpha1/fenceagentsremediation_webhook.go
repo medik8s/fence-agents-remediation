@@ -24,7 +24,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	remediationv1alpha1 "github.com/medik8s/fence-agents-remediation/api/v1alpha1"
+	remediationv1alpha1 "github.com/medik8s/fence-agents-remediation/v5/api/v1alpha1"
 )
 
 var (

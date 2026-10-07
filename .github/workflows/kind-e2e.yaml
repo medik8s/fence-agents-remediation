@@ -19,6 +19,7 @@ jobs:
       MEDIK8S_REGISTRY_NAME: kind-registry
       MEDIK8S_REGISTRY_PORT: "5000"
       IMAGE_REGISTRY: kind-registry:5000/medik8s
+      IMAGE_TAG: latest
       OPERATOR_NAMESPACE: openshift-workload-availability
     steps:
     - name: Checkout FAR
@@ -61,14 +62,14 @@ jobs:
       # bundle-e2e generates the OLM bundle from config/kind-e2e (which patches
       # the manager Deployment with the docker.sock mount, control-plane
       # nodeSelector, and run-as-root).
-      run: make bundle-e2e
+      run: make bundle-e2e IMAGE_TAG="${IMAGE_TAG}"
 
     - name: Deploy FAR via OLM bundle
       # OLM injects the webhook serving certs itself — no cert-manager step needed.
       run: |
         operator-sdk run bundle -n ${OPERATOR_NAMESPACE} --use-http \
           --timeout 5m \
-          ${IMAGE_REGISTRY}/fence-agents-remediation-operator-e2e-bundle:latest
+          ${IMAGE_REGISTRY}/fence-agents-remediation-operator-e2e-bundle:${IMAGE_TAG}
 
     - name: Wait for operator to be ready
       run: make dev-wait
