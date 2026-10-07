@@ -15,7 +15,7 @@ metadata:
     operatorframework.io/suggested-namespace-template: '{"kind":"Namespace","apiVersion":"v1","metadata":{"name":"openshift-workload-availability","annotations":{"openshift.io/node-selector":""}}}'
     repository: https://github.com/medik8s/fence-agents-remediation
     support: Medik8s
-  name: fence-agents-remediation.v0.0.0
+  name: fence-agents-remediation.v5.8.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -207,4 +207,4 @@ spec:
   provider:
     name: Medik8s
     url: https://github.com/medik8s
-  version: 0.0.0
+  version: 5.8.0
