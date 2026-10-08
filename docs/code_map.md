@@ -62,7 +62,7 @@ Helpers to find the **operator pod** / **deployment namespace**—primarily usef
 
 ## Related pieces
 
-- **`architecture.md`** — how these components fit together at runtime.  
+- **`../ARCHITECTURE.md`** — how these components fit together at runtime.  
 - **`runbook.md`** — operational commands.
 
 ## Scope

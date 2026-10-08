@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This is a **symptom-first** guide: what you might see when something goes wrong with FAR, and what usually causes it. Use it with **`architecture.md`** (how it works) and **`runbook.md`** (commands).
+This is a **symptom-first** guide: what you might see when something goes wrong with FAR, and what usually causes it. Use it with **`../ARCHITECTURE.md`** (how it works) and **`runbook.md`** (commands).
 
 Behaviour references **`internal/controller/fenceagentsremediation_controller.go`**, **`internal/controller/fenceagentsremediationtemplate_controller.go`**, **`api/v1alpha1/fenceagentsremediation_params.go`**, **`pkg/cli/cliexecuter.go`**, **`pkg/utils/conditions.go`**, unless noted.
 
@@ -22,9 +22,9 @@ Behaviour references **`internal/controller/fenceagentsremediation_controller.go
 
 **Symptom:** Conditions reflect **node not found**; events suggest the CR does not match a cluster node.
 
-**Behaviour:** FAR resolves the target from **`remediation.medik8s.io/node-name`** if set, otherwise **`metadata.name`**. If that **Node** is missing, FAR does **not** run fencing and records a terminal **not-found** outcome.
+**Behaviour:** FAR resolves the target from **`remediation.medik8s.io/node-name`** if set, otherwise **`metadata.name`**. If that **Node** is missing, a **non-deleting** CR does **not** run fencing and records a terminal **not-found** outcome. A CR that is already **deleting** when its Node is missing follows the deletion path instead: taint removal is skipped (there is no Node to untaint) and the **FAR finalizer** is removed directly, without a not-found condition or event.
 
-**Ops:** Align CR **name** and **node-name** annotation with **`kubectl get node`**; confirm NHC or automation created the FAR for the correct node.
+**Ops:** Align CR **name** and **node-name** annotation with **`kubectl get node`**; confirm NHC or automation created the FAR for the correct node. For a deleting CR stuck with its Node gone, check for finalizer removal rather than a not-found condition.
 
 ---
 
@@ -116,7 +116,7 @@ Behaviour references **`internal/controller/fenceagentsremediation_controller.go
 
 ## Related pieces
 
-- **`architecture.md`** — reconcile order and components.
+- **`../ARCHITECTURE.md`** — reconcile order and components.
 - **`runbook.md`** — `kubectl` flows.
 
 ## Scope

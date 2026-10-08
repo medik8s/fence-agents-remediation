@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Practical checks for **Fence Agents Remediation**: what to look at when FAR is installed, when a remediation runs, or when something looks stuck. Use **`overview.md`**, **`architecture.md`**, and **`failure_modes.md`** for behaviour; this page focuses on **commands** and **fields to inspect**.
+Practical checks for **Fence Agents Remediation**: what to look at when FAR is installed, when a remediation runs, or when something looks stuck. Use **`overview.md`**, **`../ARCHITECTURE.md`**, and **`failure_modes.md`** for behaviour; this page focuses on **commands** and **fields to inspect**.
 
 ## Components
 
@@ -19,7 +19,7 @@ FAR CRs and referenced **Secrets** are **namespaced** (same namespace for the Se
 |-------|------|
 | **Metrics** | Default bind **`:8443`**, **secured** (TLS + Kubernetes bearer-token authn/authz via controller-runtime filters — same pattern as sibling medik8s operators); scrape via your **Service** / **ServiceMonitor** if enabled in the bundle. |
 | **Health / readiness** | Default **`:8081`** (`cmd/main.go`). |
-| **Webhooks** | TLS often uses certs under **`/apiserver.local.config/certificates`** when OLM injects them; **HTTP/2** for metrics/webhooks is **disabled by default** for hardening (`--enable-http2` to re-enable). On **OpenShift**, TLS settings for both servers follow the cluster's **`APIServer`** TLS profile, and the operator restarts if that profile changes—see **`architecture.md`**. |
+| **Webhooks** | TLS often uses certs under **`/apiserver.local.config/certificates`** when OLM injects them; **HTTP/2** for metrics/webhooks is **disabled by default** for hardening (`--enable-http2` to re-enable). On **OpenShift**, TLS settings for both servers follow the cluster's **`APIServer`** TLS profile, and the operator restarts if that profile changes—see **`../ARCHITECTURE.md`**. |
 | **Leader election & replicas** | **`--leader-elect`** is a **flag**; the **shipped CSV** usually runs **two** operator replicas with leader election so **one** active reconciler holds the lease. If behaviour looks duplicated or “stuck between pods”, check the **Deployment** args. |
 
 ## Admission defaults (what operators notice)
@@ -108,7 +108,7 @@ FAR emits **events** on the FAR object and on the **Node**. Medik8s remediation-
 ## Related pieces
 
 - **`failure_modes.md`** — symptom → cause mapping.  
-- **`architecture.md`** — reconcile order and internals.
+- **`../ARCHITECTURE.md`** — reconcile order and internals.
 
 ## Scope
 

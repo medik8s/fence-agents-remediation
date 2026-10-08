@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document explains **how the FAR operator runs**: startup, **`FenceAgentsRemediation`** reconciliation, **`FenceAgentsRemediationTemplate`** validation, **webhooks**, and the **fence CLI executor**. Read **`overview.md`** first for the product-level picture.
+This document explains **how the FAR operator runs**: startup, **`FenceAgentsRemediation`** reconciliation, **`FenceAgentsRemediationTemplate`** validation, **webhooks**, and the **fence CLI executor**. Read **`docs/overview.md`** first for the product-level picture.
 
 ## API scope
 
@@ -30,7 +30,7 @@ Each loop tries to move one **`FenceAgentsRemediation`** forward safely.
 
 1. **Load** the FAR. If it no longer exists, stop.
 2. **Defer status update** at the end of the function. If the object is deleting and the **finalizer** is already gone, status update may be skipped.
-3. **Target node:** **`GetNodeName`** uses annotation **`remediation.medik8s.io/node-name`** (medik8s common) if set; otherwise **`metadata.name`**. **`GetNodeWithName`** loads the **Node**. If the node does **not** exist, FAR sets **node-not-found** conditions and an event—there is no healthy fencing target.
+3. **Target node:** **`GetNodeName`** uses annotation **`remediation.medik8s.io/node-name`** (medik8s common) if set; otherwise **`metadata.name`**. **`GetNodeWithName`** loads the **Node** (returns **`nil`**, not an error, if it does not exist). **Deletion takes precedence:** if the CR is also **deleting**, step 6 runs regardless of whether the node was found—**`handleFARDeletion`** skips taint removal and proceeds straight to finalizer removal. The **node-not-found** conditions and event described below apply only to **non-deleting** CRs; there is no healthy fencing target in that case.
 4. **NHC timeout:** if **`remediation.medik8s.io/nhc-timed-out`** is present, FAR stops driving work: it removes any **executor** routine for this object’s UID. If the CR is **deleting**, it runs **deletion cleanup** (taints + finalizer); otherwise it marks remediation **interrupted by NHC** and stops.
 5. **Finalizer:** if the FAR is not deleting and does not yet have **`fence-agents-remediation.medik8s.io/far-finalizer`**, FAR adds it, records **remediation started**, emits events, and **requeues immediately** so the next pass continues with stable metadata.
 6. **Deleting:** if the finalizer is present and **DeletionTimestamp** is set, and **Succeeded** was not reached, FAR cancels executor work, then runs **deletion cleanup**.
@@ -97,11 +97,11 @@ The template **status** exposes **`FenceAgentStatusValidationSucceeded`**, plus 
 
 ## Related pieces
 
-- **`overview.md`** — what FAR is for.
-- **`failure_modes.md`** — symptoms and failure behaviour.
-- **`runbook.md`** — operational commands and checks.
-- **`code_map.md`** — repository file index (`github.com/medik8s/fence-agents-remediation`).
+- **`docs/overview.md`** — what FAR is for.
+- **`docs/failure_modes.md`** — symptoms and failure behaviour.
+- **`docs/runbook.md`** — operational commands and checks.
+- **`docs/code_map.md`** — repository file index (`github.com/medik8s/fence-agents-remediation`).
 
 ## Scope
 
-This document does **not** enumerate every **Event** reason or RBAC verb. It does **not** replace **`runbook.md`** for step-by-step operations.
+This document does **not** enumerate every **Event** reason or RBAC verb. It does **not** replace **`docs/runbook.md`** for step-by-step operations.
