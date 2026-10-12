@@ -462,9 +462,9 @@ endef
 MANIFESTS_DIR ?= config/manifests
 
 .PHONY: update-scorecard-images
-update-scorecard-images: ## Sync scorecard-test image tag in patches to OPERATOR_SDK_VERSION.
-	find config/scorecard/patches -name "*.yaml" -exec \
-		sed -i 's|quay.io/operator-framework/scorecard-test:.*|quay.io/operator-framework/scorecard-test:$(OPERATOR_SDK_VERSION)|g' {} \;
+update-scorecard-images: ## Sync scorecard-test image tag in patches and bundle output to OPERATOR_SDK_VERSION.
+	find config/scorecard/patches bundle/tests/scorecard -name "*.yaml" -exec \
+		$(SED_I) 's|quay.io/operator-framework/scorecard-test:.*|quay.io/operator-framework/scorecard-test:$(OPERATOR_SDK_VERSION)|g' {} \;
 
 .PHONY: bundle
 bundle: verify-previous-version verify-skip-range update-scorecard-images ## Generate bundle manifests and metadata, then validate generated files.
@@ -473,7 +473,6 @@ bundle: verify-previous-version verify-skip-range update-scorecard-images ## Gen
 	$(OPERATOR_SDK) generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build $(MANIFESTS_DIR) | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
-	$(KUSTOMIZE) build config/scorecard -o bundle/tests/scorecard/config.yaml
 	$(MAKE) bundle-reset-date bundle-validate
 
 .PHONY: bundle-validate
