@@ -62,8 +62,11 @@ jobs:
           password: ${{ secrets.QUAY_PASSWORD }}
           registry: quay.io
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push versioned CSV and images
-        run: VERSION=$VERSION PREVIOUS_VERSION=$PREVIOUS_VERSION make container-build-and-push-community CONTAINER_TOOL=docker
+        run: VERSION=$VERSION PREVIOUS_VERSION=$PREVIOUS_VERSION make container-buildx-and-push-community CONTAINER_TOOL=docker
 
       - name: Compress bundle manifests
         run: tar czf bundle.tar.gz bundle/
