@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
+    branches: ['main*', 'medik8s-*', 'release-*']
   pull_request:
+    branches: ['**']
   workflow_dispatch: {}
 
 jobs:

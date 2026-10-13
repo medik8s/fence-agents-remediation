@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ['**']
+    branches: ['main*', 'medik8s-*', 'release-*']
   pull_request:
     branches: ['**']
 
