@@ -231,6 +231,9 @@ create-ns: ## Create namespace
 manager: ## Build manager binary.
 	./hack/build.sh
 
+.PHONY: build
+build: manager
+
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
