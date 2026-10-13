@@ -1,4 +1,4 @@
-name: CI
+name: Kind E2E
 
 on:
   push:
