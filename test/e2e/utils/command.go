@@ -7,7 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,6 +29,7 @@ const (
 	containerTestName = "test-command"
 	FenceAgentAWS     = "fence_aws"
 	FenceAgentIPMI    = "fence_ipmilan"
+	FenceAgentKind    = "fence_kind"
 )
 
 // StopKubelet runs cmd command to stop kubelet for the node and returns an error only if it fails
@@ -45,17 +46,22 @@ func StopKubelet(c *kubernetes.Clientset, nodeName string, testNsName string, lo
 // GetBootTime returns the node's boot time, otherwise it fails and returns an error
 func GetBootTime(c *kubernetes.Clientset, nodeName string, ns string, log logr.Logger) (time.Time, error) {
 	emptyTime := time.Time{}
-	output, err := runCommandInCluster(c, nodeName, ns, "microdnf install procps -y >/dev/null 2>&1 && uptime -s", log)
+	// Compute PID 1's wall-clock start time from the stable kernel ABI:
+	//   btime  — seconds since epoch at boot (/proc/stat)
+	//   field 22 — process start time in USER_HZ ticks since boot (/proc/1/stat)
+	// This is more reliable than stat -c %Y /proc/1, whose inode timestamp
+	// semantics vary across kernel versions.
+	cmd := `btime=$(awk '/^btime /{print $2}' /proc/stat); starttime=$(awk '{print $22}' /proc/1/stat); echo "$((btime + starttime / 100))"`
+	output, err := runCommandInCluster(c, nodeName, ns, cmd, log)
 	if err != nil {
 		return emptyTime, err
 	}
 
-	bootTime, err := time.Parse("2006-01-02 15:04:05", output)
+	ts, err := strconv.ParseInt(strings.TrimSpace(output), 10, 64)
 	if err != nil {
-		return emptyTime, err
+		return emptyTime, fmt.Errorf("failed to parse PID 1 start time %q: %w", output, err)
 	}
-
-	return bootTime, nil
+	return time.Unix(ts, 0), nil
 }
 
 // runCommandInCluster runs a command in a pod in the cluster and returns the output
@@ -121,7 +127,7 @@ func execCommandOnPod(c *kubernetes.Clientset, pod *corev1.Pod, command []string
 		VersionedParams(&corev1.PodExecOptions{
 			Container: selectedContainer,
 			Command:   command,
-			Stdin:     true,
+			Stdin:     false,
 			Stdout:    true,
 			Stderr:    true,
 			TTY:       true,
@@ -138,7 +144,6 @@ func execCommandOnPod(c *kubernetes.Clientset, pod *corev1.Pod, command []string
 	}
 
 	err = exec.Stream(remotecommand.StreamOptions{
-		Stdin:  os.Stdin,
 		Stdout: &outputBuf,
 		Stderr: &errorBuf,
 		Tty:    true,
@@ -182,13 +187,15 @@ func GetPod(nodeName, containerName string) *corev1.Pod {
 			NodeName: nodeName,
 			HostPID:  true,
 			SecurityContext: &corev1.PodSecurityContext{
+				RunAsUser:  pointer.Int64(0),
 				RunAsGroup: pointer.Int64(0),
 			},
 			RestartPolicy: corev1.RestartPolicyNever,
 			Containers: []corev1.Container{
 				{
-					Name:  containerName,
-					Image: "registry.access.redhat.com/ubi8/ubi-minimal",
+					Name:            containerName,
+					Image:           "registry.access.redhat.com/ubi8/ubi-minimal",
+					ImagePullPolicy: corev1.PullIfNotPresent,
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: pointer.Bool(true),
 						Capabilities: &corev1.Capabilities{
@@ -278,6 +285,14 @@ func CreateFenceCommandForAction(c *kubernetes.Clientset, far *v1alpha1.FenceAge
 			fmt.Sprintf("--ipport=%s", nodeparms[v1alpha1.ParameterName("--ipport")][v1alpha1.NodeName(targetNodeName)]),
 			"--lanplus",
 			"--retry-on=10",
+		}
+	case FenceAgentKind:
+		command = []string{
+			"/usr/sbin/fence_kind",
+			"--mode=far",
+			fmt.Sprintf("--action=%s", action),
+			fmt.Sprintf("--plug=%s", targetNodeName),
+			"--unix-socket=/var/run/docker.sock",
 		}
 	default:
 		err = fmt.Errorf("unsupported agent: %s", agent)
