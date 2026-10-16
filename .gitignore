@@ -32,3 +32,4 @@ catalog.Dockerfile
 .tools/
 
 .codex/*
+.DS_Store
