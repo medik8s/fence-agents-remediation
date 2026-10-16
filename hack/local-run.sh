@@ -205,7 +205,7 @@ if [ "${SKIP_BUILD}" = false ]; then
     make bundle-e2e ${DOCKER_BUILD_ARGS:+DOCKER_BUILD_ARGS="${DOCKER_BUILD_ARGS}"}
 
     step "Deploying FAR via OLM bundle"
-    operator-sdk cleanup fence-agents-remediation -n "${OPERATOR_NAMESPACE}" --timeout 2m 2>/dev/null || true
+    operator-sdk cleanup medik8s-fence-agents-remediation -n "${OPERATOR_NAMESPACE}" --timeout 2m 2>/dev/null || true
     operator-sdk run bundle -n "${OPERATOR_NAMESPACE}" --use-http \
         --timeout 5m \
         "${FAR_E2E_BUNDLE}"
