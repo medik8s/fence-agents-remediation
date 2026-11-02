@@ -37,7 +37,7 @@ IMAGE_REGISTRY ?= quay.io/medik8s
 export IMAGE_REGISTRY
 
 # Use the selected version for image tags.
-DEFAULT_VERSION := 99.9
+DEFAULT_VERSION := 99.9.9
 DEFAULT_PREVIOUS_VERSION := 5.8.0
 DEFAULT_SKIP_RANGE_LOWER := 0.0.1
 IMAGE_TAG = v$(VERSION)
