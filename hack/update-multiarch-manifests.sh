@@ -6,18 +6,25 @@ set -euo pipefail
 
 PLATFORMS="${1:-linux/amd64}"
 
+CSV_PATH="config/manifests/bases/fence-agents-remediation.clusterserviceversion.yaml"
+MGR_PATH="config/manager/manager.yaml"
+trap 'rm -f "${CSV_PATH}.tmp" "${MGR_PATH}.tmp"' EXIT
+
 # Parse GOARCH values from "linux/amd64,linux/arm64,..."
 arches=()
 IFS=',' read -ra parts <<< "$PLATFORMS"
 for part in "${parts[@]}"; do
     part="${part// /}"
-    [[ "$part" == */* ]] && arches+=("${part##*/}")
+    [[ -z "$part" ]] && continue
+    if [[ "$part" != linux/* || "${part#linux/}" == */* || -z "${part#linux/}" ]]; then
+        echo "ERROR: invalid platform '${part}' (expected linux/<arch>)" >&2
+        exit 1
+    fi
+    arches+=("${part#linux/}")
 done
 [[ ${#arches[@]} -eq 0 ]] && arches=("amd64")
 
 # ── Base CSV template: update metadata.labels ────────────────────────────────
-CSV_PATH="config/manifests/bases/fence-agents-remediation.clusterserviceversion.yaml"
-
 labels_block="  labels:"$'\n'
 for arch in "${arches[@]}"; do
     labels_block+="    operatorframework.io/arch.${arch}: supported"$'\n'
@@ -25,9 +32,11 @@ done
 labels_block+="    operatorframework.io/os.linux: supported"
 
 awk -v block="$labels_block" '
-    /^  labels:$/  { in_labels=1; found=1; print block; next }
+    /^metadata:$/   { in_meta=1 }
+    /^[a-z]/ && !/^metadata:$/ { in_meta=0; in_labels=0 }
+    in_meta && /^  labels:$/ { in_labels=1; found=1; print block; next }
     in_labels && /^    / { next }
-    in_labels       { in_labels=0 }
+    in_labels        { in_labels=0 }
     { print }
     END { if (!found) { print "ERROR: metadata.labels block not found in CSV" > "/dev/stderr"; exit 1 } }
 ' "$CSV_PATH" > "${CSV_PATH}.tmp" && mv "${CSV_PATH}.tmp" "$CSV_PATH"
@@ -35,8 +44,6 @@ awk -v block="$labels_block" '
 echo "Updated ${CSV_PATH}: arch.* labels -> ${arches[*]}"
 
 # ── config/manager/manager.yaml: update nodeAffinity values ──────────────────
-MGR_PATH="config/manager/manager.yaml"
-
 arch_values=""
 for arch in "${arches[@]}"; do
     arch_values+="                - ${arch}"$'\n'
