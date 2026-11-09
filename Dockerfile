@@ -28,7 +28,7 @@ RUN git config --global --add safe.directory /workspace
 RUN GOARCH="${TARGETARCH}" VERSION="${OPERATOR_VERSION}" ./hack/build.sh
 
 FROM quay.io/centos/centos:stream9
-ARG TARGETARCH
+ARG TARGETARCH=amd64
 
 WORKDIR /
 COPY --from=builder /workspace/manager .

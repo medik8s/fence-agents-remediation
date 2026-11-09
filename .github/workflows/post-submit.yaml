@@ -31,7 +31,7 @@ jobs:
           registry: quay.io
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v3.9.0
 
       - name: Build and push current main images
         run: export IMAGE_REGISTRY=quay.io/medik8s && make container-buildx-and-push-community CONTAINER_TOOL=docker IMAGE_TAG=latest

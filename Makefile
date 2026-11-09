@@ -259,13 +259,23 @@ PLATFORMS ?= linux/amd64
 multiarch-manifests: ## Sync arch labels (base CSV) and nodeAffinity (manager.yaml) from PLATFORMS.
 	./hack/update-multiarch-manifests.sh "$(PLATFORMS)"
 
-.PHONY: docker-buildx
-docker-buildx: multiarch-manifests test-no-verify ## Build and push a multi-platform image using buildx.
-	- docker buildx create --name project-v3-builder
-	docker buildx use project-v3-builder
-	docker buildx build --push --platform=$(PLATFORMS) --build-arg OPERATOR_VERSION=$(VERSION) --tag ${IMG} -f Dockerfile .
-	- docker buildx rm project-v3-builder
+.PHONY: multiarch-manifests-cleanup
+multiarch-manifests-cleanup: ## Restore tracked manifests modified by multiarch-manifests.
 	git checkout -- config/manifests/bases/fence-agents-remediation.clusterserviceversion.yaml config/manager/manager.yaml
+
+.PHONY: docker-buildx
+docker-buildx: multiarch-manifests ## Build and push a multi-platform image using buildx.
+	@rc=0; \
+	$(MAKE) test-no-verify || { rc=$$?; \
+	    git checkout -- config/manifests/bases/fence-agents-remediation.clusterserviceversion.yaml config/manager/manager.yaml; \
+	    exit $$rc; }; \
+	docker buildx create --name project-v3-builder --use 2>/dev/null || docker buildx use project-v3-builder; \
+	docker buildx build --push --platform=$(PLATFORMS) --build-arg OPERATOR_VERSION=$(VERSION) --tag ${IMG} -f Dockerfile . || rc=$$?; \
+	docker buildx rm project-v3-builder || true; \
+	if [ $$rc -ne 0 ]; then \
+	    git checkout -- config/manifests/bases/fence-agents-remediation.clusterserviceversion.yaml config/manager/manager.yaml; \
+	fi; \
+	exit $$rc
 
 CONTAINER_TOOL ?= podman
 export CONTAINER_TOOL
@@ -607,7 +617,11 @@ container-push: docker-push bundle-push catalog-build catalog-push ## Push conta
 container-build-and-push-community: container-build-community container-push ## Build three images, update CSV for community, and push all the images to Quay (docker, bundle, and catalog).
 
 .PHONY: container-buildx-and-push-community
-container-buildx-and-push-community: docker-buildx bundle-build-community container-push ## Build multi-arch operator image via buildx and community bundle, then push all images to Quay.
+container-buildx-and-push-community: ## Build multi-arch operator image via buildx and community bundle, then push all images to Quay.
+	$(MAKE) docker-buildx
+	$(MAKE) bundle-build-community
+	$(MAKE) multiarch-manifests-cleanup
+	$(MAKE) bundle-push catalog-build catalog-push
 
 export OCP_AWS_CREDENTIALS ="config/ocp_aws/fence_aws_credentials_request.yaml"
 .PHONY: ocp-aws-credentials
