@@ -99,6 +99,9 @@ metadata:
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/medik8s/fence-agents-remediation
     support: Medik8s
+  labels:
+    operatorframework.io/arch.amd64: supported
+    operatorframework.io/os.linux: supported
   name: fence-agents-remediation.v5.8.0
   namespace: placeholder
 spec:
@@ -376,6 +379,19 @@ spec:
                 app.kubernetes.io/name: fence-agents-remediation-operator
                 control-plane: controller-manager
             spec:
+              affinity:
+                nodeAffinity:
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                    nodeSelectorTerms:
+                    - matchExpressions:
+                      - key: kubernetes.io/arch
+                        operator: In
+                        values:
+                        - amd64
+                      - key: kubernetes.io/os
+                        operator: In
+                        values:
+                        - linux
               containers:
               - args:
                 - --health-probe-bind-address=:8081
