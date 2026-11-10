@@ -3,6 +3,7 @@ package utils
 // Inspired from SNR - https://github.com/medik8s/self-node-remediation/blob/main/pkg/utils/taints.go
 import (
 	"context"
+	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -87,6 +88,35 @@ func AppendTaint(r client.Client, nodeName string, taint corev1.Taint) (bool, er
 	}
 	loggerTaint.Info("Taint was added", "taint effect", taint.Effect, "taint list", node.Spec.Taints)
 	return true, nil
+}
+
+// UpdateBoundTaints uses the caller's verified Node and resourceVersion without name-based rebinding.
+func UpdateBoundTaints(ctx context.Context, writer client.Writer, node *corev1.Node, binding v1alpha1.NodeBinding, add, remove []corev1.Taint) error {
+	if err := binding.Matches(node); err != nil {
+		return err
+	}
+	if node.ResourceVersion == "" {
+		return fmt.Errorf("node resourceVersion required for conditional taint update")
+	}
+	changed := false
+	for _, taint := range remove {
+		var removed bool
+		node.Spec.Taints, removed = deleteTaint(node.Spec.Taints, &taint)
+		changed = changed || removed
+	}
+	for _, taint := range add {
+		if !TaintExists(node.Spec.Taints, &taint) {
+			node.Spec.Taints = append(node.Spec.Taints, taint)
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	if err := writer.Update(ctx, node); err != nil {
+		return fmt.Errorf("update identity-bound Node taints: %w", err)
+	}
+	return nil
 }
 
 // RemoveTaint removes taint from the taint list when it is existed, and returns error if it fails in the process

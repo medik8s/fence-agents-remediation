@@ -75,16 +75,24 @@ type SecretParams struct {
 // FARValidator implements admission.Validator for FenceAgentsRemediation
 // +kubebuilder:object:generate=false
 type FARValidator struct {
-	Client client.Client
+	Client    client.Client
+	APIReader client.Reader
+	Safety    SafetyConfig
 }
 
 var _ admission.Validator[*FenceAgentsRemediation] = &FARValidator{}
 
 func (v *FARValidator) ValidateCreate(ctx context.Context, far *FenceAgentsRemediation) (admission.Warnings, error) {
+	if v.Safety.Enabled || far.Spec.SafetyPolicy != "" || far.Spec.NodeBinding != nil {
+		return nil, v.validateSafetyCreate(ctx, far)
+	}
 	return validateSpec(ctx, v.Client, &far.Spec, far)
 }
 
-func (v *FARValidator) ValidateUpdate(ctx context.Context, _, newFAR *FenceAgentsRemediation) (admission.Warnings, error) {
+func (v *FARValidator) ValidateUpdate(ctx context.Context, oldFAR, newFAR *FenceAgentsRemediation) (admission.Warnings, error) {
+	if v.Safety.Enabled || oldFAR.Spec.SafetyPolicy != "" || newFAR.Spec.SafetyPolicy != "" || oldFAR.Spec.NodeBinding != nil || newFAR.Spec.NodeBinding != nil {
+		return nil, v.validateSafetyUpdate(oldFAR, newFAR)
+	}
 	return validateSpec(ctx, v.Client, &newFAR.Spec, newFAR)
 }
 
@@ -96,16 +104,24 @@ func (v *FARValidator) ValidateDelete(ctx context.Context, far *FenceAgentsRemed
 // FARTemplateValidator implements admission.Validator for FenceAgentsRemediationTemplate
 // +kubebuilder:object:generate=false
 type FARTemplateValidator struct {
-	Client client.Client
+	Client    client.Client
+	APIReader client.Reader
+	Safety    SafetyConfig
 }
 
 var _ admission.Validator[*FenceAgentsRemediationTemplate] = &FARTemplateValidator{}
 
 func (v *FARTemplateValidator) ValidateCreate(ctx context.Context, tmpl *FenceAgentsRemediationTemplate) (admission.Warnings, error) {
+	if v.Safety.Enabled || tmpl.Spec.Template.Spec.SafetyPolicy != "" || tmpl.Spec.Template.Spec.NodeBinding != nil {
+		return nil, v.validateSafetyTemplate(ctx, tmpl)
+	}
 	return validateSpec(ctx, v.Client, &tmpl.Spec.Template.Spec, tmpl)
 }
 
 func (v *FARTemplateValidator) ValidateUpdate(ctx context.Context, oldTmpl, newTmpl *FenceAgentsRemediationTemplate) (admission.Warnings, error) {
+	if v.Safety.Enabled || oldTmpl.Spec.Template.Spec.SafetyPolicy != "" || newTmpl.Spec.Template.Spec.SafetyPolicy != "" || newTmpl.Spec.Template.Spec.NodeBinding != nil {
+		return nil, v.validateSafetyTemplate(ctx, newTmpl)
+	}
 	warnings, err := validateSpec(ctx, v.Client, &newTmpl.Spec.Template.Spec, newTmpl)
 	aggregated := utilErrors.NewAggregate([]error{
 		err,

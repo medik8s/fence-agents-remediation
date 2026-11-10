@@ -32,12 +32,19 @@ var (
 	webhookFARLog = logf.Log.WithName("fenceagentsremediation-resource")
 )
 
-func SetupFARWebhookWithManager(mgr ctrl.Manager) error {
+func SetupFARWebhookWithManager(mgr ctrl.Manager, configs ...remediationv1alpha1.SafetyConfig) error {
+	var safety remediationv1alpha1.SafetyConfig
+	if len(configs) > 0 {
+		safety = configs[0]
+	}
 	return ctrl.NewWebhookManagedBy(mgr, &remediationv1alpha1.FenceAgentsRemediation{}).
 		WithValidator(&remediationv1alpha1.FARValidator{
-			Client: mgr.GetClient(),
+			APIReader: mgr.GetAPIReader(),
+			Safety:    safety,
+			Client:    mgr.GetClient(),
 		}).
 		WithDefaulter(&farDefaulter{
+			Safety: safety.Enabled,
 			Client: mgr.GetClient(),
 		}).
 		Complete()
@@ -48,11 +55,15 @@ func SetupFARWebhookWithManager(mgr ctrl.Manager) error {
 
 type farDefaulter struct {
 	client.Client
+	Safety bool
 }
 
 var _ admission.Defaulter[*remediationv1alpha1.FenceAgentsRemediation] = &farDefaulter{}
 
 func (d *farDefaulter) Default(ctx context.Context, far *remediationv1alpha1.FenceAgentsRemediation) error {
+	if d.Safety || far.Spec.SafetyPolicy != "" || far.Spec.NodeBinding != nil {
+		return nil
+	}
 	webhookFARLog.Info("default", "name", far.Name)
 	isCreate := far.CreationTimestamp.IsZero()
 	return applySharedSecretDefaultNameToSpec(ctx, d.Client, &far.Spec, far.Namespace, isCreate)
