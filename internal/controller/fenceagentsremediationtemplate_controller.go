@@ -51,6 +51,7 @@ type FenceAgentsRemediationTemplateReconciler struct {
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
 	Executor *cli.Executer
+	Safety   v1alpha1.SafetyConfig
 }
 
 // ParameterValidationResult contains the results of parameter validation
@@ -99,6 +100,18 @@ func (r *FenceAgentsRemediationTemplateReconciler) Reconcile(ctx context.Context
 		}
 		r.Log.Error(err, "Failed to get FenceAgentsRemediationTemplate CR")
 		return ctrl.Result{}, err
+	}
+	if r.Safety.Enabled || fart.Spec.Template.Spec.SafetyPolicy != "" || fart.Spec.Template.Spec.NodeBinding != nil {
+		if err := r.Safety.Validate(); err != nil {
+			return ctrl.Result{}, err
+		}
+		if err := v1alpha1.ValidateSafetySpec(&fart.Spec.Template.Spec, true); err != nil {
+			return ctrl.Result{}, err
+		}
+		if sample := fart.Spec.StatusValidationSample; sample != nil && sample.String() != "0" && sample.String() != "0%" {
+			return ctrl.Result{}, fmt.Errorf("generic template status execution is unsupported in safety-mode")
+		}
+		return ctrl.Result{}, nil
 	}
 	orig := fart.DeepCopy()
 

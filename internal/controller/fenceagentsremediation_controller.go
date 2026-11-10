@@ -50,10 +50,12 @@ import (
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
 type FenceAgentsRemediationReconciler struct {
 	client.Client
-	Log      logr.Logger
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-	Executor *cli.Executer
+	Log       logr.Logger
+	Scheme    *runtime.Scheme
+	Recorder  record.EventRecorder
+	Executor  *cli.Executer
+	APIReader client.Reader
+	Safety    v1alpha1.SafetyConfig
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -67,7 +69,7 @@ func (r *FenceAgentsRemediationReconciler) SetupWithManager(mgr ctrl.Manager) er
 // +kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;delete;deletecollection
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch,namespace=system
-// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;update;delete
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;update
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 // +kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=fence-agents-remediation.medik8s.io,resources=fenceagentsremediations/status,verbs=get;update;patch
@@ -100,6 +102,10 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 		r.Log.Error(err, "Failed to get FenceAgentsRemediation CR")
 		return emptyResult, err
+	}
+
+	if r.Safety.Enabled || far.Spec.SafetyPolicy != "" || far.Spec.NodeBinding != nil || far.Status.SafetySnapshot != nil || far.Status.OffProof != nil {
+		return r.reconcileSafety(ctx, req)
 	}
 
 	// At the end of each Reconcile we try to update CR's status

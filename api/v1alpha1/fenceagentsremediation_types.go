@@ -55,6 +55,15 @@ type RemediationStrategyType string
 
 // FenceAgentsRemediationSpec defines the desired state of FenceAgentsRemediation
 type FenceAgentsRemediationSpec struct {
+	// SafetyPolicy opts into identity-bound Redfish Off verification.
+	// +optional
+	// +kubebuilder:validation:Enum=RedfishOffV1
+	SafetyPolicy string `json:"safetyPolicy,omitempty"`
+
+	// NodeBinding is populated by NHC from the Node selected for remediation, never by a template.
+	// +optional
+	NodeBinding *NodeBinding `json:"nodeBinding,omitempty"`
+
 	// Agent is the name of fence agent that will be used.
 	// It should have a fence_ prefix.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
@@ -121,6 +130,23 @@ type FenceAgentsRemediationSpec struct {
 
 // FenceAgentsRemediationStatus defines the observed state of FenceAgentsRemediation
 type FenceAgentsRemediationStatus struct {
+	// SafetySnapshot fixes the target before any safety-mode effects; it is not Off evidence.
+	// +optional
+	SafetySnapshot *SafetySnapshot `json:"safetySnapshot,omitempty"`
+
+	// OffProof records confirmed same-system Off for the immutable snapshot.
+	// +optional
+	OffProof *OffProof `json:"offProof,omitempty"`
+
+	// SafetyAttempts reserves action attempts before contacting the BMC, including across restarts.
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	SafetyAttempts int `json:"safetyAttempts,omitempty"`
+
+	// SafetyLastAttempt preserves retry spacing across status events and leader restarts.
+	// +optional
+	SafetyLastAttempt *metav1.Time `json:"safetyLastAttempt,omitempty"`
+
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
@@ -144,6 +170,9 @@ type FenceAgentsRemediationStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=far
+// +kubebuilder:validation:XValidation:rule="!has(self.spec.safetyPolicy) || (has(self.spec.nodeBinding) && self.spec.retrycount >= 1 && self.spec.retrycount <= 5 && self.spec.agent == 'fence_redfish' && self.spec.remediationStrategy == 'OutOfServiceTaint')",message="RedfishOffV1 requires a binding, bounded retries and off-only Redfish OOS remediation"
+// +kubebuilder:validation:XValidation:rule="!has(self.spec.nodeBinding) || has(self.spec.safetyPolicy)",message="nodeBinding requires a safety policy"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.safetyPolicy) || self.spec == oldSelf.spec",message="safety-mode spec is immutable"
 
 // +operator-sdk:csv:customresourcedefinitions:resources={{"FenceAgentsRemediation","v1alpha1","fenceagentsremediations"}}
 // FenceAgentsRemediation is the Schema for the fenceagentsremediations API

@@ -50,6 +50,32 @@ spec:
                   It should have a fence_ prefix.
                 pattern: fence_.+
                 type: string
+              nodeBinding:
+                description: NodeBinding is populated by NHC from the Node selected
+                  for remediation, never by a template.
+                properties:
+                  name:
+                    minLength: 1
+                    type: string
+                  systemUUID:
+                    pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                    type: string
+                  uid:
+                    minLength: 1
+                    type: string
+                  version:
+                    enum:
+                    - v1
+                    type: string
+                required:
+                - name
+                - systemUUID
+                - uid
+                - version
+                type: object
+                x-kubernetes-validations:
+                - message: node binding is immutable
+                  rule: self == oldSelf
               nodeSecretNames:
                 additionalProperties:
                   type: string
@@ -86,6 +112,11 @@ spec:
                 description: RetryInterval is the interval between each fencing agent
                   execution
                 pattern: ^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$
+                type: string
+              safetyPolicy:
+                description: SafetyPolicy opts into identity-bound Redfish Off verification.
+                enum:
+                - RedfishOffV1
                 type: string
               sharedSecretName:
                 description: |-
@@ -181,8 +212,195 @@ spec:
                 description: LastUpdateTime is the last time the status was updated.
                 format: date-time
                 type: string
+              offProof:
+                description: OffProof records confirmed same-system Off for the immutable
+                  snapshot.
+                properties:
+                  confirmedAt:
+                    format: date-time
+                    type: string
+                  snapshot:
+                    description: SafetySnapshot is persisted before action and must
+                      match every later effect.
+                    properties:
+                      binding:
+                        description: NodeBinding identifies the Node selected by NHC,
+                          independently of later name reuse.
+                        properties:
+                          name:
+                            minLength: 1
+                            type: string
+                          systemUUID:
+                            pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                            type: string
+                          uid:
+                            minLength: 1
+                            type: string
+                          version:
+                            enum:
+                            - v1
+                            type: string
+                        required:
+                        - name
+                        - systemUUID
+                        - uid
+                        - version
+                        type: object
+                        x-kubernetes-validations:
+                        - message: node binding is immutable
+                          rule: self == oldSelf
+                      farUID:
+                        type: string
+                      generation:
+                        format: int64
+                        type: integer
+                      specDigest:
+                        type: string
+                      target:
+                        description: SafetyTarget contains no credential data or credential-derived
+                          digest.
+                        properties:
+                          credential:
+                            description: CredentialVersion invalidates evidence on
+                              Secret replacement or content updates.
+                            properties:
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                              resourceVersion:
+                                type: string
+                              uid:
+                                type: string
+                            required:
+                            - name
+                            - namespace
+                            - resourceVersion
+                            - uid
+                            type: object
+                          endpoint:
+                            type: string
+                          systemURI:
+                            type: string
+                          trustDigest:
+                            type: string
+                        required:
+                        - credential
+                        - endpoint
+                        - systemURI
+                        - trustDigest
+                        type: object
+                    required:
+                    - binding
+                    - farUID
+                    - generation
+                    - specDigest
+                    - target
+                    type: object
+                required:
+                - confirmedAt
+                - snapshot
+                type: object
+              safetyAttempts:
+                description: SafetyAttempts reserves action attempts before contacting
+                  the BMC, including across restarts.
+                minimum: 0
+                type: integer
+              safetyLastAttempt:
+                description: SafetyLastAttempt preserves retry spacing across status
+                  events and leader restarts.
+                format: date-time
+                type: string
+              safetySnapshot:
+                description: SafetySnapshot fixes the target before any safety-mode
+                  effects; it is not Off evidence.
+                properties:
+                  binding:
+                    description: NodeBinding identifies the Node selected by NHC,
+                      independently of later name reuse.
+                    properties:
+                      name:
+                        minLength: 1
+                        type: string
+                      systemUUID:
+                        pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                        type: string
+                      uid:
+                        minLength: 1
+                        type: string
+                      version:
+                        enum:
+                        - v1
+                        type: string
+                    required:
+                    - name
+                    - systemUUID
+                    - uid
+                    - version
+                    type: object
+                    x-kubernetes-validations:
+                    - message: node binding is immutable
+                      rule: self == oldSelf
+                  farUID:
+                    type: string
+                  generation:
+                    format: int64
+                    type: integer
+                  specDigest:
+                    type: string
+                  target:
+                    description: SafetyTarget contains no credential data or credential-derived
+                      digest.
+                    properties:
+                      credential:
+                        description: CredentialVersion invalidates evidence on Secret
+                          replacement or content updates.
+                        properties:
+                          name:
+                            type: string
+                          namespace:
+                            type: string
+                          resourceVersion:
+                            type: string
+                          uid:
+                            type: string
+                        required:
+                        - name
+                        - namespace
+                        - resourceVersion
+                        - uid
+                        type: object
+                      endpoint:
+                        type: string
+                      systemURI:
+                        type: string
+                      trustDigest:
+                        type: string
+                    required:
+                    - credential
+                    - endpoint
+                    - systemURI
+                    - trustDigest
+                    type: object
+                required:
+                - binding
+                - farUID
+                - generation
+                - specDigest
+                - target
+                type: object
             type: object
         type: object
+        x-kubernetes-validations:
+        - message: RedfishOffV1 requires a binding, bounded retries and off-only Redfish
+            OOS remediation
+          rule: '!has(self.spec.safetyPolicy) || (has(self.spec.nodeBinding) && self.spec.retrycount
+            >= 1 && self.spec.retrycount <= 5 && self.spec.agent == ''fence_redfish''
+            && self.spec.remediationStrategy == ''OutOfServiceTaint'')'
+        - message: nodeBinding requires a safety policy
+          rule: '!has(self.spec.nodeBinding) || has(self.spec.safetyPolicy)'
+        - message: safety-mode spec is immutable
+          rule: '!has(oldSelf.spec.safetyPolicy) || self.spec == oldSelf.spec'
     served: true
     storage: true
     subresources:

@@ -38,12 +38,19 @@ var (
 	webhookFARTemplateLog = logf.Log.WithName("fenceagentsremediationtemplate-resource")
 )
 
-func SetupFARTemplateWebhookWithManager(mgr ctrl.Manager) error {
+func SetupFARTemplateWebhookWithManager(mgr ctrl.Manager, configs ...remediationv1alpha1.SafetyConfig) error {
+	var safety remediationv1alpha1.SafetyConfig
+	if len(configs) > 0 {
+		safety = configs[0]
+	}
 	return ctrl.NewWebhookManagedBy(mgr, &remediationv1alpha1.FenceAgentsRemediationTemplate{}).
 		WithValidator(&remediationv1alpha1.FARTemplateValidator{
-			Client: mgr.GetClient(),
+			APIReader: mgr.GetAPIReader(),
+			Safety:    safety,
+			Client:    mgr.GetClient(),
 		}).
 		WithDefaulter(&farTemplateDefaulter{
+			Safety: safety.Enabled,
 			Client: mgr.GetClient(),
 		}).
 		Complete()
@@ -54,6 +61,7 @@ func SetupFARTemplateWebhookWithManager(mgr ctrl.Manager) error {
 
 type farTemplateDefaulter struct {
 	client.Client
+	Safety bool
 }
 
 var _ admission.Defaulter[*remediationv1alpha1.FenceAgentsRemediationTemplate] = &farTemplateDefaulter{}
@@ -65,6 +73,9 @@ func (d *farTemplateDefaulter) Default(ctx context.Context, farTemplate *remedia
 	}
 	if _, isSameKindAnnotationSet := farTemplate.GetAnnotations()[commonAnnotations.MultipleTemplatesSupportedAnnotation]; !isSameKindAnnotationSet {
 		farTemplate.Annotations[commonAnnotations.MultipleTemplatesSupportedAnnotation] = "true"
+	}
+	if d.Safety || farTemplate.Spec.Template.Spec.SafetyPolicy != "" || farTemplate.Spec.Template.Spec.NodeBinding != nil {
+		return nil
 	}
 	isCreate := farTemplate.CreationTimestamp.IsZero()
 	if err := applySharedSecretDefaultNameToSpec(ctx, d.Client, &farTemplate.Spec.Template.Spec, farTemplate.Namespace, isCreate); err != nil {

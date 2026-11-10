@@ -69,6 +69,32 @@ spec:
                           It should have a fence_ prefix.
                         pattern: fence_.+
                         type: string
+                      nodeBinding:
+                        description: NodeBinding is populated by NHC from the Node
+                          selected for remediation, never by a template.
+                        properties:
+                          name:
+                            minLength: 1
+                            type: string
+                          systemUUID:
+                            pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                            type: string
+                          uid:
+                            minLength: 1
+                            type: string
+                          version:
+                            enum:
+                            - v1
+                            type: string
+                        required:
+                        - name
+                        - systemUUID
+                        - uid
+                        - version
+                        type: object
+                        x-kubernetes-validations:
+                        - message: node binding is immutable
+                          rule: self == oldSelf
                       nodeSecretNames:
                         additionalProperties:
                           type: string
@@ -106,6 +132,12 @@ spec:
                         description: RetryInterval is the interval between each fencing
                           agent execution
                         pattern: ^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$
+                        type: string
+                      safetyPolicy:
+                        description: SafetyPolicy opts into identity-bound Redfish
+                          Off verification.
+                        enum:
+                        - RedfishOffV1
                         type: string
                       sharedSecretName:
                         description: |-
@@ -219,6 +251,9 @@ spec:
                 type: object
             type: object
         type: object
+        x-kubernetes-validations:
+        - message: templates must not supply a Node binding
+          rule: '!has(self.spec.template.spec.nodeBinding)'
     served: true
     storage: true
     subresources:
