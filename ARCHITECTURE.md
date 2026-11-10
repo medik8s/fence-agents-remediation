@@ -4,6 +4,8 @@
 
 This document explains **how the FAR operator runs**: startup, **`FenceAgentsRemediation`** reconciliation, **`FenceAgentsRemediationTemplate`** validation, **webhooks**, and the **fence CLI executor**. Read **`docs/overview.md`** first for the product-level picture.
 
+The reconcile and CLI flows below describe default mode. [Safety-mode](docs/safety-mode.md) uses the same controllers but a guarded Go Redfish path, immutable NHC-selected identity, pre-effect target snapshots, separately confirmed Off evidence, uncached precondition checks, and UID/resourceVersion-bound taint updates. It rejects generic template sampling and direct pod deletion; its Secret, FAR, and template caches and permissions are scoped to the configured BMC namespace.
+
 ## API scope
 
 - **Group:** `fence-agents-remediation.medik8s.io`, **`v1alpha1`**

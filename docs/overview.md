@@ -6,6 +6,8 @@
 
 FAR is a **remediator**: something else (usually **Node Health Check**, NHC) decides the node is unhealthy and creates a **`FenceAgentsRemediation`** object; FAR **runs** the remediation and **reports status** on that object.
 
+[Safety-mode](safety-mode.md) is an explicit Redfish-only alternative: only the configured NHC creator may supply an immutable selected-Node binding, and FAR verifies that system's UUID and Off state before OOS release. The steps below describe default CLI mode.
+
 ## How it works
 
 1. **Someone creates a FAR object** for a node (often NHC, using a **`FenceAgentsRemediationTemplate`**).
