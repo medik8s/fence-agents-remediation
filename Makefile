@@ -16,7 +16,6 @@ SORT_IMPORTS_VERSION = v0.3.0
 # See https://github.com/operator-framework/operator-registry/releases for the last version
 OPM_VERSION ?= v1.73.0
 # See https://github.com/operator-framework/operator-sdk/releases for the last version
-# heads up: 1.37 is the last version which supports go/v3!
 OPERATOR_SDK_VERSION ?= v1.42.3
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.36
@@ -462,8 +461,13 @@ endef
 
 MANIFESTS_DIR ?= config/manifests
 
+.PHONY: update-scorecard-images
+update-scorecard-images: ## Sync scorecard-test image tag in patches and bundle output to OPERATOR_SDK_VERSION.
+	find config/scorecard/patches bundle/tests/scorecard -name "*.yaml" -exec \
+		$(SED_I) 's|quay.io/operator-framework/scorecard-test:.*|quay.io/operator-framework/scorecard-test:$(OPERATOR_SDK_VERSION)|g' {} \;
+
 .PHONY: bundle
-bundle: verify-previous-version verify-skip-range ## Generate bundle manifests and metadata, then validate generated files.
+bundle: verify-previous-version verify-skip-range update-scorecard-images ## Generate bundle manifests and metadata, then validate generated files.
 	# Validate before starting generation, including under parallel Make.
 	$(MAKE) manifests operator-sdk kustomize
 	$(OPERATOR_SDK) generate kustomize manifests -q
