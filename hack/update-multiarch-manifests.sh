@@ -6,7 +6,11 @@ set -euo pipefail
 
 PLATFORMS="${1:-linux/amd64}"
 
-CSV_PATH="config/manifests/bases/fence-agents-remediation.clusterserviceversion.yaml"
+CSV_PATH=$(find config/manifests/bases/ -name '*.clusterserviceversion.yaml' | head -1)
+if [[ -z "$CSV_PATH" ]]; then
+    echo "ERROR: no .clusterserviceversion.yaml found under config/manifests/bases/" >&2
+    exit 1
+fi
 MGR_PATH="config/manager/manager.yaml"
 trap 'rm -f "${CSV_PATH}.tmp" "${MGR_PATH}.tmp"' EXIT
 

@@ -1,6 +1,7 @@
-# Build the manager binary
-# BUILDPLATFORM pins the builder stage to the host architecture for a native-speed Go toolchain;
-# TARGETARCH drives cross-compilation so the output binary runs on the target platform.
+# PLATFORMS/PLATFORM (Makefile) → --platform (buildx) → BUILDPLATFORM / TARGETARCH (Docker ARGs)
+#   BUILDPLATFORM: host arch; pins builder stage so Go toolchain runs native, not under QEMU.
+#   TARGETARCH:    target arch; passed as GOARCH to build.sh — overrides go env GOARCH so the
+#                  binary targets the right arch even when the toolchain runs on a different host.
 FROM --platform=$BUILDPLATFORM quay.io/konveyor/builder:ubi9-latest AS builder
 ARG TARGETOS
 ARG TARGETARCH
