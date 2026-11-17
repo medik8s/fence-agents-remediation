@@ -243,9 +243,13 @@ manager: ## Build manager binary.
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
+# PLATFORM pins docker-build to a single target platform.
+# Defaults to linux/amd64 so Mac (arm64) builds produce a usable image for amd64 clusters.
+PLATFORM ?= linux/amd64
+
 .PHONY: docker-build
 docker-build: test-no-verify ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build --build-arg OPERATOR_VERSION=$(VERSION) -t ${IMG} .
+	$(CONTAINER_TOOL) build --platform $(PLATFORM) --build-arg OPERATOR_VERSION=$(VERSION) -t ${IMG} .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
