@@ -102,8 +102,20 @@ func VerifyOff(ctx context.Context, cfg Config, force bool, beforeAction func(co
 			Target string `json:"target"`
 		}
 		if fields["Actions"] != nil {
-			if err := json.Unmarshal(fields["Actions"], &actions); err != nil {
+			var rawActions map[string]json.RawMessage
+			if err := json.Unmarshal(fields["Actions"], &rawActions); err != nil {
 				return nil, fmt.Errorf("malformed Redfish actions")
+			}
+			if raw, found := rawActions["#ComputerSystem.Reset"]; found {
+				var reset struct {
+					Target string `json:"target"`
+				}
+				if err := json.Unmarshal(raw, &reset); err != nil {
+					return nil, fmt.Errorf("malformed Redfish actions")
+				}
+				actions = map[string]struct {
+					Target string `json:"target"`
+				}{"#ComputerSystem.Reset": reset}
 			}
 		}
 		system := &computerSystem{UUID: uuid, PowerState: power, Actions: actions}
