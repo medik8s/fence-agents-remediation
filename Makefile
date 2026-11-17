@@ -243,13 +243,34 @@ manager: ## Build manager binary.
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
+# PLATFORM pins docker-build to a single target platform.
+# Defaults to linux/amd64 so Mac (arm64) builds produce a usable image for amd64 clusters.
+PLATFORM ?= linux/amd64
+
 .PHONY: docker-build
 docker-build: test-no-verify ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build --build-arg OPERATOR_VERSION=$(VERSION) -t ${IMG} .
+	$(CONTAINER_TOOL) build --platform $(PLATFORM) --build-arg OPERATOR_VERSION=$(VERSION) -t ${IMG} .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
+
+# Platforms to build for multi-arch images. Override to enable additional arches, e.g.:
+#   make docker-buildx PLATFORMS=linux/amd64,linux/arm64,linux/ppc64le,linux/s390x
+PLATFORMS ?= linux/amd64
+
+.PHONY: multiarch-manifests
+multiarch-manifests: ## Sync arch labels (base CSV) and nodeAffinity (manager.yaml) from PLATFORMS.
+	./hack/update-multiarch-manifests.sh "$(PLATFORMS)"
+
+.PHONY: docker-buildx
+docker-buildx: multiarch-manifests test-no-verify ## Build and push a multi-platform image using buildx.
+	@rc=0; \
+	docker buildx create --name project-v3-builder --use 2>/dev/null || docker buildx use project-v3-builder; \
+	docker buildx build --push --platform=$(PLATFORMS) --build-arg OPERATOR_VERSION=$(VERSION) --tag ${IMG} -f Dockerfile . || rc=$$?; \
+	docker buildx rm project-v3-builder || true; \
+	git checkout -- config/manifests/bases/fence-agents-remediation.clusterserviceversion.yaml config/manager/manager.yaml; \
+	exit $$rc
 
 CONTAINER_TOOL ?= podman
 export CONTAINER_TOOL
@@ -589,6 +610,9 @@ container-push: docker-push bundle-push catalog-build catalog-push ## Push conta
 
 .PHONY: container-build-and-push-community
 container-build-and-push-community: container-build-community container-push ## Build three images, update CSV for community, and push all the images to Quay (docker, bundle, and catalog).
+
+.PHONY: container-buildx-and-push-community
+container-buildx-and-push-community: docker-buildx bundle-build-community bundle-push catalog-build catalog-push ## Build multi-arch operator image via buildx and community bundle, then push all images to Quay.
 
 export OCP_AWS_CREDENTIALS ="config/ocp_aws/fence_aws_credentials_request.yaml"
 .PHONY: ocp-aws-credentials

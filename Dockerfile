@@ -1,5 +1,8 @@
-# Build the manager binary
-FROM quay.io/konveyor/builder:ubi9-latest AS builder
+# PLATFORMS/PLATFORM (Makefile) → --platform (buildx) → BUILDPLATFORM / TARGETARCH (Docker ARGs)
+#   BUILDPLATFORM: host arch; pins builder stage so Go toolchain runs native, not under QEMU.
+#   TARGETARCH:    target arch; passed as GOARCH to build.sh — overrides go env GOARCH so the
+#                  binary targets the right arch even when the toolchain runs on a different host.
+FROM --platform=$BUILDPLATFORM quay.io/konveyor/builder:ubi9-latest AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG OPERATOR_VERSION=""
@@ -23,9 +26,10 @@ COPY .git/ .git/
 RUN go version
 RUN git config --global --add safe.directory /workspace
 # Do not inherit the builder image's unrelated VERSION environment variable.
-RUN VERSION="${OPERATOR_VERSION}" ./hack/build.sh
+RUN GOARCH="${TARGETARCH}" VERSION="${OPERATOR_VERSION}" ./hack/build.sh
 
 FROM quay.io/centos/centos:stream9
+ARG TARGETARCH
 
 WORKDIR /
 COPY --from=builder /workspace/manager .
@@ -37,7 +41,9 @@ RUN dnf install -y dnf-plugins-core \
     fence-agents-intelmodular fence-agents-ipdu fence-agents-ipmilan fence-agents-redfish fence-agents-rhevm \
     fence-agents-vmware-rest fence-agents-vmware-soap \
     fence-agents-kubevirt fence-agents-ibm-powervs fence-agents-ibm-vpc \
-    fence-agents-aws fence-agents-azure-arm fence-agents-gce \
+    && if [ "$TARGETARCH" = "amd64" ]; then \
+         dnf --enablerepo=highavailability install -y fence-agents-aws fence-agents-azure-arm fence-agents-gce; \
+       fi \
     && dnf clean all -y
 
 USER 65532:65532

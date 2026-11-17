@@ -15,7 +15,7 @@ jobs:
   push_to_registry:
     uses: medik8s/.github/.github/workflows/post_submit.yaml@main
     with:
-      make_targets: container-build-and-push-community
+      make_targets: container-buildx-and-push-community
       make_vars: CONTAINER_TOOL=docker
     secrets:
       QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
