@@ -528,7 +528,6 @@ spec:
     name: Medik8s
     url: https://github.com/medik8s
   version: 5.8.0
-  replaces: fence-agents-remediation.v0.8.0
   webhookdefinitions:
   - admissionReviewVersions:
     - v1

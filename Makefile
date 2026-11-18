@@ -40,6 +40,9 @@ export IMAGE_REGISTRY
 DEFAULT_VERSION := 5.8.0
 DEFAULT_PREVIOUS_VERSION := 0.8.0
 DEFAULT_SKIP_RANGE_LOWER := 0.0.1
+# NO_REPLACES omits the CSV / catalog "replaces" field for a clean-root release that has no
+# in-package predecessor
+NO_REPLACES ?= false
 IMAGE_TAG = v$(VERSION)
 export IMAGE_TAG
 
@@ -345,7 +348,10 @@ verify-previous-version:
 .PHONY: add-replaces-field
 add-replaces-field: verify-previous-version ## Add replaces field to the CSV
 	$(SED_I) "/  replaces:.*/d" ${CSV}
-	@if [ -n "$(PREVIOUS_VERSION)" ]; then \
+	# NO_REPLACES=true => clean-root release (e.g. first release after the package rename)
+	@if [ "$(NO_REPLACES)" = "true" ]; then \
+		echo "NO_REPLACES=true: omitting replaces field (clean-root release)"; \
+	elif [ -n "$(PREVIOUS_VERSION)" ]; then \
 		$(SED_I) "/  version: $(VERSION)/ a\  replaces: $(PACKAGE_NAME).v$(PREVIOUS_VERSION)" ${CSV}; \
 	fi
 
@@ -534,7 +540,7 @@ add_channel_entry_for_the_bundle: verify-previous-version verify-skip-range
 		echo "entries:" >> ${CATALOG_INDEX}; \
 		echo "  - name: ${PACKAGE_NAME}.v${VERSION}" >> ${CATALOG_INDEX}; \
 		\
-		if [ -n "${PREVIOUS_VERSION}" ]; then \
+		if [ "${NO_REPLACES}" != "true" ] && [ -n "${PREVIOUS_VERSION}" ]; then \
 			echo "    replaces: ${PACKAGE_NAME}.v${PREVIOUS_VERSION}" >> ${CATALOG_INDEX}; \
 		fi; \
 		if [ -n "${SKIP_RANGE_LOWER}" ]; then \
@@ -611,8 +617,8 @@ test-e2e: ginkgo ## Run end to end (E2E) tests
 # Revert all version or build date related changes
 .PHONY: bundle-reset
 bundle-reset:
-	$(MAKE) bundle VERSION=$(DEFAULT_VERSION) IMAGE_TAG=v$(DEFAULT_VERSION) PREVIOUS_VERSION=$(DEFAULT_PREVIOUS_VERSION) SKIP_RANGE_LOWER=$(DEFAULT_SKIP_RANGE_LOWER)
-	$(MAKE) bundle-update VERSION=$(DEFAULT_VERSION) IMAGE_TAG=v$(DEFAULT_VERSION) PREVIOUS_VERSION=$(DEFAULT_PREVIOUS_VERSION) SKIP_RANGE_LOWER=$(DEFAULT_SKIP_RANGE_LOWER)
+	NO_REPLACES=true $(MAKE) bundle VERSION=$(DEFAULT_VERSION) IMAGE_TAG=v$(DEFAULT_VERSION) PREVIOUS_VERSION=$(DEFAULT_PREVIOUS_VERSION) SKIP_RANGE_LOWER=$(DEFAULT_SKIP_RANGE_LOWER)
+	NO_REPLACES=true $(MAKE) bundle-update VERSION=$(DEFAULT_VERSION) IMAGE_TAG=v$(DEFAULT_VERSION) PREVIOUS_VERSION=$(DEFAULT_PREVIOUS_VERSION) SKIP_RANGE_LOWER=$(DEFAULT_SKIP_RANGE_LOWER)
 	$(MAKE) bundle-reset-date VERSION=$(DEFAULT_VERSION) IMAGE_TAG=v$(DEFAULT_VERSION) PREVIOUS_VERSION=$(DEFAULT_PREVIOUS_VERSION) SKIP_RANGE_LOWER=$(DEFAULT_SKIP_RANGE_LOWER)
 	$(SED_I) "s|base64data:.*|base64data: base64EncodedIcon|;" ${CSV}
 	$(MAKE) bundle-validate VERSION=$(DEFAULT_VERSION) IMAGE_TAG=v$(DEFAULT_VERSION) PREVIOUS_VERSION=$(DEFAULT_PREVIOUS_VERSION) SKIP_RANGE_LOWER=$(DEFAULT_SKIP_RANGE_LOWER)
