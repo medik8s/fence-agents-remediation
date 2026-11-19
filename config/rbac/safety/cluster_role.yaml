@@ -1,0 +1,11 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fence-agents-remediation-safety
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["config.openshift.io"]
+    resources: ["apiservers"]
+    verbs: ["get", "list", "watch"]

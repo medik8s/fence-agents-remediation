@@ -88,6 +88,10 @@ func main() {
 		probeAddr            string
 		enableHTTP2          bool
 		webhookOpts          webhook.Options
+		safetyMode           bool
+		trustedNHCCreator    string
+		credentialNamespace  string
+		redfishCAFile        string
 	)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8443", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -95,6 +99,11 @@ func main() {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false, "If HTTP/2 should be enabled for the metrics and webhook servers.")
+
+	flag.BoolVar(&safetyMode, "safety-mode", false, "Require identity-bound Redfish Off remediation for all FAR objects.")
+	flag.StringVar(&trustedNHCCreator, "trusted-nhc-creator", "", "Exact NHC service-account username allowed to create safety-mode remediations.")
+	flag.StringVar(&credentialNamespace, "bmc-credential-namespace", "", "Dedicated namespace for safety-mode remediations and credential Secrets.")
+	flag.StringVar(&redfishCAFile, "redfish-ca-file", "", "Trusted PEM CA bundle for authenticated Redfish requests in safety-mode.")
 
 	opts := zap.Options{
 		Development: true,
@@ -104,6 +113,12 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	safety, err := loadSafetyConfig(safetyMode, trustedNHCCreator, credentialNamespace, redfishCAFile)
+	if err != nil {
+		setupLog.Error(err, "invalid safety-mode configuration")
+		os.Exit(1)
+	}
 
 	printVersion()
 
@@ -150,6 +165,7 @@ func main() {
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme,
+		Cache:  safetyCacheOptions(safety),
 		Metrics: server.Options{
 			BindAddress:    metricsAddr,
 			SecureServing:  true,
@@ -175,6 +191,10 @@ func main() {
 		setupLog.Info("out-of-service taint is supported on this cluster")
 	}
 	fenceagentsremediationv1alpha1.SetOutOfServiceTaintSupported(isOutOfServiceTaintSupported)
+	if safety.Enabled && !isOutOfServiceTaintSupported {
+		setupLog.Error(fmt.Errorf("OutOfServiceTaint support required"), "safety-mode cannot start")
+		os.Exit(1)
+	}
 
 	executer, err := cli.NewExecuter(mgr.GetClient(), mgr.GetEventRecorderFor(farControllerName+"-executer"))
 	if err != nil {
@@ -183,25 +203,28 @@ func main() {
 	}
 
 	if err = (&controller.FenceAgentsRemediationReconciler{
-		Client:   mgr.GetClient(),
-		Log:      ctrl.Log.WithName("controller").WithName(farControllerName),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor(farControllerName),
-		Executor: executer,
+		APIReader: mgr.GetAPIReader(),
+		Safety:    safety,
+		Client:    mgr.GetClient(),
+		Log:       ctrl.Log.WithName("controller").WithName(farControllerName),
+		Scheme:    mgr.GetScheme(),
+		Recorder:  mgr.GetEventRecorderFor(farControllerName),
+		Executor:  executer,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", farControllerName)
 		os.Exit(1)
 	}
 
-	if err = webhookv1alpha1.SetupFARWebhookWithManager(mgr); err != nil {
+	if err = webhookv1alpha1.SetupFARWebhookWithManager(mgr, safety); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "FenceAgentsRemediation")
 		os.Exit(1)
 	}
-	if err = webhookv1alpha1.SetupFARTemplateWebhookWithManager(mgr); err != nil {
+	if err = webhookv1alpha1.SetupFARTemplateWebhookWithManager(mgr, safety); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "FenceAgentsRemediationTemplate")
 		os.Exit(1)
 	}
 	if err = (&controller.FenceAgentsRemediationTemplateReconciler{
+		Safety:   safety,
 		Client:   mgr.GetClient(),
 		Log:      ctrl.Log.WithName("controller").WithName(fartControllerName),
 		Scheme:   mgr.GetScheme(),
