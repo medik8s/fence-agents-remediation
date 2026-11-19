@@ -19,6 +19,8 @@ The Secret, FenceAgentsRemediation, and FenceAgentsRemediationTemplate caches wa
 
 Wait until no FenceAgentsRemediation exists before enabling safety-mode. A safety-mode operator refuses a CR created in default mode, and does not see one outside the credential namespace at all, so neither has its taints removed; admission still lets their finalizer be removed by hand. The reverse direction is covered: a safety-mode CR deleted after safety-mode was turned off still has its taints removed from the bound Node.
 
+Check for FARs across all namespaces and inspect any remaining remediation and out-of-service taints before switching modes. Remove those taints only after verifying that the Node is safe to recover.
+
 ## Template and credential contract
 
 A template selects `spec.template.spec.safetyPolicy: RedfishOffV1`, `agent: fence_redfish`, and `remediationStrategy: OutOfServiceTaint`. It must leave generic `statusValidationSample` unset or zero. Safety-mode never runs a generic status subprocess.
