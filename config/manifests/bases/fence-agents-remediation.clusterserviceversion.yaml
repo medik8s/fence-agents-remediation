@@ -5,7 +5,7 @@ metadata:
     alm-examples: '[]'
     capabilities: Basic Install
     categories: OpenShift Optional
-    containerImage: quay.io/medik8s/fence-agents-remediation-operator:v5.8.0
+    containerImage: quay.io/medik8s/fence-agents-remediation-operator:v99.9.9
     createdAt: ""
     description: Fence Agents Remediation Operator uses well-known agents to fence
       and remediate unhealthy nodes. The remediation includes rebooting the unhealthy
