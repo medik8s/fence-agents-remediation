@@ -5,12 +5,18 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 const testUUID = "00112233-4455-4677-8899-aabbccddeeff"
@@ -205,3 +211,64 @@ func TestReleaseCheckNeverResets(t *testing.T) {
 		t.Fatal("release check issued reset")
 	}
 }
+
+func TestRedfish(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Redfish Suite")
+}
+
+type requestRoundTripper func(*http.Request) (*http.Response, error)
+
+func (f requestRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+type requestErrorBody struct{ readErr, closeErr error }
+
+func (b requestErrorBody) Read([]byte) (int, error) { return 0, b.readErr }
+func (b requestErrorBody) Close() error             { return b.closeErr }
+
+var _ = Describe("Redfish request error context", func() {
+	DescribeTable("preserves the cause without printing credentials or the URL", func(stage string) {
+		cause := errors.New("user-hidden password-hidden bmc-private.example hidden-token")
+		cfg := Config{Username: "user-hidden", Password: "password-hidden"}
+		target := "https://bmc-private.example/redfish/v1/Systems/1?token=hidden-token"
+		transport := requestRoundTripper(func(*http.Request) (*http.Response, error) {
+			if stage == "transport" {
+				return nil, cause
+			}
+			body := requestErrorBody{readErr: cause}
+			if stage == "close" {
+				body.readErr, body.closeErr = io.EOF, cause
+			}
+			return &http.Response{StatusCode: http.StatusOK, Body: body}, nil
+		})
+		if stage == "construct" {
+			target = "https://user-hidden:password-hidden@bmc-private.example/%zz?token=hidden-token"
+		}
+		_, err := request(context.Background(), &http.Client{Transport: transport}, cfg, http.MethodGet, target, nil)
+		Expect(err).To(HaveOccurred())
+		if stage == "construct" {
+			var parseError *url.Error
+			Expect(errors.As(err, &parseError)).To(BeTrue(), "preserve the URL parsing error for inspection")
+		} else {
+			Expect(errors.Is(err, cause)).To(BeTrue(), "preserve the original failure for inspection")
+		}
+		for _, secret := range []string{"user-hidden", "password-hidden", "bmc-private.example", "hidden-token"} {
+			Expect(err.Error()).NotTo(ContainSubstring(secret))
+			Expect(fmt.Sprintf("%+v", err)).NotTo(ContainSubstring(secret))
+		}
+	},
+		Entry("request construction", "construct"),
+		Entry("HTTP transport", "transport"),
+		Entry("reading the response", "read"),
+		Entry("closing the response", "close"),
+	)
+
+	It("reports the size limit separately from a read failure", func() {
+		transport := requestRoundTripper(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(strings.Repeat("x", (1<<20)+1)))}, nil
+		})
+		_, err := request(context.Background(), &http.Client{Transport: transport}, Config{}, http.MethodGet, "https://bmc.example", nil)
+		Expect(err).To(MatchError("invalid Redfish response size"))
+		Expect(errors.Unwrap(err)).To(BeNil())
+	})
+})

@@ -186,10 +186,20 @@ func VerifyOff(ctx context.Context, cfg Config, force bool, beforeAction func(co
 	}
 }
 
+// HTTP and URL errors may contain credentials or endpoint URLs. Preserve their
+// chain for errors.Is/As without including it in ordinary error/log formatting.
+type requestFailure struct {
+	operation string
+	cause     error
+}
+
+func (e *requestFailure) Error() string { return e.operation }
+func (e *requestFailure) Unwrap() error { return e.cause }
+
 func request(ctx context.Context, client *http.Client, cfg Config, method, target string, body []byte) (data []byte, requestErr error) {
 	req, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("construct Redfish request")
+		return nil, &requestFailure{operation: "construct Redfish request", cause: err}
 	}
 	req.SetBasicAuth(cfg.Username, cfg.Password)
 	req.Header.Set("Accept", "application/json")
@@ -198,11 +208,11 @@ func request(ctx context.Context, client *http.Client, cfg Config, method, targe
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("authenticated Redfish request failed")
+		return nil, &requestFailure{operation: "authenticated Redfish request failed", cause: err}
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil && requestErr == nil {
-			requestErr = fmt.Errorf("close redfish response: %w", err)
+			requestErr = &requestFailure{operation: "close Redfish response", cause: err}
 		}
 	}()
 	if method == http.MethodGet && resp.StatusCode != http.StatusOK {
@@ -215,7 +225,10 @@ func request(ctx context.Context, client *http.Client, cfg Config, method, targe
 		return nil, nil
 	}
 	data, err = io.ReadAll(io.LimitReader(resp.Body, (1<<20)+1))
-	if err != nil || len(data) > 1<<20 {
+	if err != nil {
+		return nil, &requestFailure{operation: "read Redfish response", cause: err}
+	}
+	if len(data) > 1<<20 {
 		return nil, fmt.Errorf("invalid Redfish response size")
 	}
 	return data, nil
