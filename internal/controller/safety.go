@@ -98,6 +98,7 @@ func (r *FenceAgentsRemediationReconciler) reconcileSafety(ctx context.Context, 
 		if err := r.Status().Update(ctx, far); err != nil {
 			return ctrl.Result{}, fmt.Errorf("persist selected target: %w", err)
 		}
+		r.logSafetyPhase(far, "TargetBound")
 		return ctrl.Result{RequeueAfter: time.Millisecond}, nil
 	}
 	remediationTaint := utils.CreateRemediationTaint()
@@ -130,6 +131,7 @@ func (r *FenceAgentsRemediationReconciler) reconcileSafety(ctx context.Context, 
 			if err := r.Status().Update(ctx, far); err != nil {
 				return ctrl.Result{}, fmt.Errorf("reserve guarded action attempt: %w", err)
 			}
+			r.logSafetyPhase(far, "ActionAttemptReserved", "attempt", far.Status.SafetyAttempts, "maxAttempts", far.Spec.RetryCount)
 		}
 		err := redfish.VerifyOff(ctx, cfg, canAct, func(ctx context.Context) error { _, err := r.checkSafetySnapshot(ctx, far, snapshot); return err })
 		if err != nil {
@@ -150,6 +152,7 @@ func (r *FenceAgentsRemediationReconciler) reconcileSafety(ctx context.Context, 
 		if err := r.Status().Update(ctx, far); err != nil {
 			return ctrl.Result{}, fmt.Errorf("persist bound Off proof: %w", err)
 		}
+		r.logSafetyPhase(far, "RedfishOffVerified")
 		return ctrl.Result{RequeueAfter: time.Millisecond}, nil
 	}
 	if far.Status.OffProof.Snapshot != snapshot || far.Status.OffProof.ConfirmedAt.IsZero() {
@@ -172,6 +175,7 @@ func (r *FenceAgentsRemediationReconciler) reconcileSafety(ctx context.Context, 
 	if err := r.Status().Update(ctx, far); err != nil {
 		return ctrl.Result{}, fmt.Errorf("persist identity-bound release: %w", err)
 	}
+	r.logSafetyPhase(far, "IdentityBoundRelease")
 	return ctrl.Result{}, nil
 }
 
@@ -219,6 +223,7 @@ func (r *FenceAgentsRemediationReconciler) failSafety(ctx context.Context, far *
 		if err := r.Status().Update(ctx, far); err != nil {
 			return ctrl.Result{}, fmt.Errorf("persist safety refusal: %w", err)
 		}
+		r.logSafetyPhase(far, "SafetyCheckRefused", "errorType", fmt.Sprintf("%T", cause))
 	}
 	return ctrl.Result{}, cause
 }
@@ -240,6 +245,7 @@ func (r *FenceAgentsRemediationReconciler) cleanupSafety(ctx context.Context, fa
 		}
 	}
 	node := &corev1.Node{}
+	taintsRetained := false
 	err = r.APIReader.Get(ctx, client.ObjectKey{Name: binding.Name}, node)
 	if err != nil && !apierrors.IsNotFound(err) {
 		return ctrl.Result{}, fmt.Errorf("read cleanup Node: %w", err)
@@ -252,15 +258,19 @@ func (r *FenceAgentsRemediationReconciler) cleanupSafety(ctx context.Context, fa
 		if err != nil {
 			return ctrl.Result{}, err
 		}
+		taintsRetained = shared
 		if !shared {
 			if err := utils.UpdateBoundTaints(ctx, r.Client, node, binding, nil, []corev1.Taint{utils.CreateOutOfServiceTaint(), utils.CreateRemediationTaint()}); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
 	}
-	controllerutil.RemoveFinalizer(far, v1alpha1.FARFinalizer)
+	finalizerRemoved := controllerutil.RemoveFinalizer(far, v1alpha1.FARFinalizer)
 	if err := r.Update(ctx, far); err != nil {
 		return ctrl.Result{}, fmt.Errorf("remove safety finalizer: %w", err)
+	}
+	if finalizerRemoved {
+		r.logSafetyPhase(far, "CleanedUp", "taintsRetained", taintsRetained)
 	}
 	return ctrl.Result{}, nil
 }
@@ -314,4 +324,8 @@ func setSafetyConditions(far *v1alpha1.FenceAgentsRemediation, state safetyState
 	now := metav1.Now()
 	far.Status.LastUpdateTime = &now
 	return true
+}
+
+func (r *FenceAgentsRemediationReconciler) logSafetyPhase(far *v1alpha1.FenceAgentsRemediation, phase string, details ...any) {
+	r.Log.WithValues("remediation", client.ObjectKeyFromObject(far), "node", far.Annotations[commonannotations.NodeNameAnnotation], "nodeUID", far.Annotations[commonannotations.NodeUIDAnnotation], "phase", phase).Info("Safety remediation state", details...)
 }

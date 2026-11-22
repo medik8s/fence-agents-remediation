@@ -16,8 +16,19 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"sync/atomic"
+
+	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 	"time"
 
 	commonAnnotations "github.com/medik8s/common/pkg/annotations"
@@ -29,8 +40,11 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/medik8s/fence-agents-remediation/v5/api/v1alpha1"
@@ -1006,3 +1020,171 @@ func cleanupFar(ctx context.Context, far *v1alpha1.FenceAgentsRemediation) error
 	}, pollInterval, timeoutPostRemediation).Should(BeNil(), "CR should be deleted")
 	return nil
 }
+
+const safetySystemUUID = "00112233-4455-4677-8899-aabbccddeeff"
+
+type safetyHarness struct {
+	client     client.Client
+	reconciler *FenceAgentsRemediationReconciler
+	far        *v1alpha1.FenceAgentsRemediation
+	calls      atomic.Int32
+}
+
+func newSafetyHarness(t GinkgoTInterface, retries int, runnerErr error) *safetyHarness {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	for _, add := range []func(*runtime.Scheme) error{corev1.AddToScheme, v1alpha1.AddToScheme} {
+		if err := add(scheme); err != nil {
+			t.Fatal(err)
+		}
+	}
+	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "worker-a", UID: "node-a"}, Status: corev1.NodeStatus{NodeInfo: corev1.NodeSystemInfo{SystemUUID: safetySystemUUID}}}
+	far := &v1alpha1.FenceAgentsRemediation{ObjectMeta: metav1.ObjectMeta{Name: node.Name, Namespace: "bmc", UID: "far-a", Finalizers: []string{v1alpha1.FARFinalizer}}, Spec: v1alpha1.FenceAgentsRemediationSpec{Agent: "fence_redfish", RetryCount: retries, RetryInterval: metav1.Duration{Duration: time.Millisecond}, Timeout: metav1.Duration{Duration: time.Second}, RemediationStrategy: v1alpha1.OutOfServiceTaintRemediationStrategy, SharedParameters: map[v1alpha1.ParameterName]string{"--action": "off"}, NodeParameters: map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{"--ip": {v1alpha1.NodeName(node.Name): "192.0.2.1"}}}}
+	utils.UpdateConditions(utils.RemediationStarted, far, logr.Discard())
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(far).WithObjects(node, far).Build()
+	h := &safetyHarness{client: c, far: far}
+	recorder := record.NewFakeRecorder(100)
+	executor := cli.NewFakeExecuter(c, func(context.Context, []string) (string, string, error) { h.calls.Add(1); return "", "", runnerErr }, recorder)
+	h.reconciler = &FenceAgentsRemediationReconciler{Client: c, Scheme: scheme, Log: logr.Discard(), Recorder: recorder, Executor: executor}
+	return h
+}
+
+func (h *safetyHarness) reconcile(t GinkgoTInterface) {
+	t.Helper()
+	if _, err := h.reconciler.Reconcile(context.Background(), ctrl.Request{NamespacedName: client.ObjectKeyFromObject(h.far)}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (h *safetyHarness) getFAR(t GinkgoTInterface) *v1alpha1.FenceAgentsRemediation {
+	t.Helper()
+	far := &v1alpha1.FenceAgentsRemediation{}
+	if err := h.client.Get(context.Background(), client.ObjectKeyFromObject(h.far), far); err != nil {
+		t.Fatal(err)
+	}
+	return far
+}
+
+func enableSafety(t GinkgoTInterface, h *safetyHarness) {
+	t.Helper()
+	fixture, config, _ := safetyFixture(t)
+	far := h.getFAR(t)
+	far.Spec.SafetyPolicy = fixture.Spec.SafetyPolicy
+	if far.Annotations == nil {
+		far.Annotations = map[string]string{}
+	}
+	for key, value := range fixture.Annotations {
+		far.Annotations[key] = value
+	}
+	far.Spec.RetryInterval.Duration = time.Second
+	h.reconciler.Safety = config
+	h.reconciler.APIReader = h.client
+	if err := h.client.Update(context.Background(), far); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func safetyFixture(t GinkgoTInterface) (*v1alpha1.FenceAgentsRemediation, v1alpha1.SafetyConfig, *corev1.Secret) {
+	t.Helper()
+	server := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	t.Cleanup(server.Close)
+	name := "credentials"
+	return &v1alpha1.FenceAgentsRemediation{ObjectMeta: metav1.ObjectMeta{Name: "worker-a", Namespace: "bmc", UID: "far-a", Generation: 1, Annotations: safetyIdentityAnnotations("worker-a", "node-a", safetySystemUUID)}, Spec: v1alpha1.FenceAgentsRemediationSpec{
+		SafetyPolicy: v1alpha1.RedfishOffV1,
+		Agent:        "fence_redfish", RetryCount: 1, RetryInterval: metav1.Duration{Duration: time.Second}, Timeout: metav1.Duration{Duration: time.Second}, RemediationStrategy: v1alpha1.OutOfServiceTaintRemediationStrategy,
+		SharedParameters: map[v1alpha1.ParameterName]string{"--action": "off", "--ip": "bmc.example", "--systems-uri": "/redfish/v1/Systems/1"}, SharedSecretName: &name,
+	}}, v1alpha1.SafetyConfig{Enabled: true, CredentialNamespace: "bmc", TrustedNHCCreator: "system:serviceaccount:operators:nhc", CA: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})}, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "bmc", UID: "secret-a", ResourceVersion: "1"}, Data: map[string][]byte{"username": []byte("user"), "password": []byte("password")}}
+}
+
+func safetyIdentityAnnotations(name, uid, uuid string) map[string]string {
+	return map[string]string{commonAnnotations.NodeNameAnnotation: name, commonAnnotations.NodeUIDAnnotation: uid, commonAnnotations.NodeSystemUUIDAnnotation: uuid}
+}
+
+var _ = Describe("Safety remediation logs", func() {
+	It("records persisted lifecycle transitions without leaking configuration", func() {
+		t := GinkgoT()
+		h := newSafetyHarness(t, 1, nil)
+		far, config, secret := safetyFixture(t)
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Expect(r.Method).To(Equal(http.MethodGet))
+			_, _ = fmt.Fprintf(w, `{"UUID":"%s","PowerState":"Off"}`, safetySystemUUID)
+		}))
+		DeferCleanup(server.Close)
+		endpoint, err := url.Parse(server.URL)
+		Expect(err).NotTo(HaveOccurred())
+		host, port, err := net.SplitHostPort(endpoint.Host)
+		Expect(err).NotTo(HaveOccurred())
+		far.Spec.SharedParameters["--ip"], far.Spec.SharedParameters["--ipport"] = host, port
+		config.CA = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
+		secret.Data = map[string][]byte{"username": []byte("private-user"), "password": []byte("private-password")}
+		secret.ResourceVersion = ""
+		Expect(h.client.Create(ctx, secret)).To(Succeed())
+		current := h.getFAR(t)
+		current.Spec, current.Annotations = far.Spec, far.Annotations
+		current.Finalizers = append(current.Finalizers, "example.com/log-holder")
+		Expect(h.client.Update(ctx, current)).To(Succeed())
+		h.reconciler.Safety, h.reconciler.APIReader = config, h.client
+		var records []string
+		h.reconciler.Log = funcr.NewJSON(func(line string) {
+			if strings.Contains(line, `"phase":`) {
+				records = append(records, line)
+			}
+		}, funcr.Options{})
+		for range 6 {
+			h.reconcile(t)
+			if isReleased(h.getFAR(t)) {
+				break
+			}
+		}
+		Expect(isReleased(h.getFAR(t))).To(BeTrue())
+		count := len(records)
+		h.reconcile(t)
+		h.reconcile(t)
+		Expect(records).To(HaveLen(count), "a completed release must not generate repeated lifecycle messages")
+		Expect(h.client.Delete(ctx, h.getFAR(t))).To(Succeed())
+		for range 3 {
+			h.reconcile(t)
+		}
+		Expect(h.getFAR(t).Finalizers).To(ConsistOf("example.com/log-holder"))
+		var phases []string
+		for _, line := range records {
+			var entry map[string]any
+			Expect(json.Unmarshal([]byte(line), &entry)).To(Succeed())
+			Expect(entry).To(HaveKey("remediation"))
+			Expect(entry).To(HaveKeyWithValue("node", "worker-a"))
+			Expect(entry).To(HaveKeyWithValue("nodeUID", "node-a"))
+			phases = append(phases, entry["phase"].(string))
+		}
+		Expect(phases).To(Equal([]string{"TargetBound", "ActionAttemptReserved", "RedfishOffVerified", "IdentityBoundRelease", "CleanedUp"}))
+		joined := strings.Join(records, "\n")
+		for _, sensitive := range []string{"private-user", "private-password", server.URL, "BEGIN CERTIFICATE", "TrustDigest", "Credential"} {
+			Expect(joined).NotTo(ContainSubstring(sensitive))
+		}
+	})
+
+	It("logs a refusal once without including its sensitive error text", func() {
+		t := GinkgoT()
+		h := newSafetyHarness(t, 1, nil)
+		enableSafety(t, h)
+		var records []string
+		h.reconciler.Log = funcr.NewJSON(func(line string) {
+			if strings.Contains(line, `"phase":`) {
+				records = append(records, line)
+			}
+		}, funcr.Options{})
+		far := h.getFAR(t)
+		cause := errors.New("private-password https://user:token@bmc-private.example/?secret=config")
+		_, err := h.reconciler.failSafety(ctx, far, cause)
+		Expect(err).To(MatchError(cause))
+		_, err = h.reconciler.failSafety(ctx, h.getFAR(t), cause)
+		Expect(err).To(MatchError(cause))
+		Expect(records).To(HaveLen(1))
+		var entry map[string]any
+		Expect(json.Unmarshal([]byte(records[0]), &entry)).To(Succeed())
+		Expect(entry).To(HaveKeyWithValue("phase", "SafetyCheckRefused"))
+		Expect(entry).To(HaveKey("errorType"))
+		for _, sensitive := range []string{"private-password", "user:token", "bmc-private.example", "secret=config"} {
+			Expect(records[0]).NotTo(ContainSubstring(sensitive))
+		}
+	})
+})
