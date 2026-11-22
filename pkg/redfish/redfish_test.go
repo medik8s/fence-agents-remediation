@@ -20,9 +20,10 @@ import (
 )
 
 const testUUID = "00112233-4455-4677-8899-aabbccddeeff"
+
 const testURI = "/redfish/v1/Systems/1"
 
-func TestVerifyOff(t *testing.T) {
+var _ = Describe("Redfish Off verification", func() {
 	for _, tc := range []struct {
 		readOnly                                                                             bool
 		noReset                                                                              bool
@@ -62,9 +63,11 @@ func TestVerifyOff(t *testing.T) {
 		{name: "UUID changed after reset", uuid: testUUID, power: "On", changedUUID: true, wantErr: true},
 		{name: "target changed before reset", uuid: testUUID, power: "On", blockAction: true, wantErr: true},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
+		It(tc.name, func() {
+			t := GinkgoT()
 			var resets, redirected, readsAfterReset, readsBeforeReset atomic.Int32
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				defer GinkgoRecover()
 				if r.URL.Path == "/elsewhere" {
 					redirected.Add(1)
 					w.WriteHeader(http.StatusOK)
@@ -164,15 +167,16 @@ func TestVerifyOff(t *testing.T) {
 			}
 		})
 	}
-}
+})
 
-func TestUnavailableOrCanceled(t *testing.T) {
+var _ = Describe("Redfish unavailable or canceled requests", func() {
 	for _, canceled := range []bool{false, true} {
 		name := "unavailable"
 		if canceled {
 			name = "canceled"
 		}
-		t.Run(name, func(t *testing.T) {
+		It(name, func() {
+			t := GinkgoT()
 			var requests atomic.Int32
 			server := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { requests.Add(1) }))
 			cfg := Config{Endpoint: server.URL, SystemURI: testURI, SystemUUID: testUUID, CA: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), Timeout: 100 * time.Millisecond}
@@ -192,11 +196,13 @@ func TestUnavailableOrCanceled(t *testing.T) {
 			}
 		})
 	}
-}
+})
 
-func TestReleaseCheckNeverResets(t *testing.T) {
+var _ = It("does not reset the system during a read-only release check", func() {
+	t := GinkgoT()
 	var resets atomic.Int32
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer GinkgoRecover()
 		if r.Method != http.MethodGet {
 			resets.Add(1)
 		}
@@ -210,7 +216,7 @@ func TestReleaseCheckNeverResets(t *testing.T) {
 	if resets.Load() != 0 {
 		t.Fatal("release check issued reset")
 	}
-}
+})
 
 func TestRedfish(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -224,7 +230,8 @@ func (f requestRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 type requestErrorBody struct{ readErr, closeErr error }
 
 func (b requestErrorBody) Read([]byte) (int, error) { return 0, b.readErr }
-func (b requestErrorBody) Close() error             { return b.closeErr }
+
+func (b requestErrorBody) Close() error { return b.closeErr }
 
 var _ = Describe("Redfish request error context", func() {
 	DescribeTable("preserves the cause without printing credentials or the URL", func(stage string) {

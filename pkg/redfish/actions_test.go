@@ -8,11 +8,12 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
-	"testing"
 	"time"
+
+	. "github.com/onsi/ginkgo/v2"
 )
 
-func TestVerifyOffActions(t *testing.T) {
+var _ = Describe("Redfish Actions metadata", func() {
 	const target = testURI + "/Actions/ComputerSystem.Reset"
 	const reset = `"#ComputerSystem.Reset":{"target":"` + target + `"}`
 	const annotation = `"@odata.type":"#ComputerSystem.v1_10_0.Actions",`
@@ -52,9 +53,11 @@ func TestVerifyOffActions(t *testing.T) {
 			{name: "wrong origin", actions: `{` + annotation + `"#ComputerSystem.Reset":{"target":"https://other.example` + target + `"}}`, targetErr: true},
 			{name: "target changes on second GET", actions: `{` + annotation + reset + `}`, changeTarget: true},
 		} {
-			t.Run(mode.name+"/"+tc.name, func(t *testing.T) {
+			It(mode.name+"/"+tc.name, func() {
+				t := GinkgoT()
 				var gets, posts, guards atomic.Int32
 				server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					defer GinkgoRecover()
 					if r.Method == http.MethodPost {
 						if r.URL.Path != target {
 							t.Errorf("POST target = %q, want %q", r.URL.Path, target)
@@ -107,4 +110,4 @@ func TestVerifyOffActions(t *testing.T) {
 			})
 		}
 	}
-}
+})

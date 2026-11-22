@@ -9,11 +9,13 @@ import (
 	"reflect"
 	"testing"
 
+	. "github.com/onsi/ginkgo/v2"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 )
 
-func readYAMLObjects(t *testing.T, path string) []map[string]any {
+func readYAMLObjects(t testing.TB, path string) []map[string]any {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -104,7 +106,8 @@ func checkNodeDeletionRules(rules []any) error {
 	return nil
 }
 
-func TestShippingSchemasAndNodePermissions(t *testing.T) {
+var _ = It("ships matching runtime and bundled schemas without Node deletion grants", func() {
+	t := GinkgoTB()
 	root := filepath.Join("..", "..")
 	for _, template := range []bool{false, true} {
 		plural := "fenceagentsremediations"
@@ -171,4 +174,4 @@ func TestShippingSchemasAndNodePermissions(t *testing.T) {
 			t.Fatal("RBAC guard missed fixed-input deletion mutation")
 		}
 	}
-}
+})

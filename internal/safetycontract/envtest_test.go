@@ -2,12 +2,14 @@ package safetycontract
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
-	"testing"
+	"strings"
 	"time"
 
-	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
+	. "github.com/onsi/ginkgo/v2"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -19,6 +21,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/yaml"
 
@@ -27,7 +30,8 @@ import (
 	"github.com/medik8s/fence-agents-remediation/v5/pkg/utils"
 )
 
-func TestLocalAPISafetySchemaAndRBAC(t *testing.T) {
+var _ = It("Safety-mode API schema and RBAC", func() {
+	t := GinkgoTB()
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Fatal("explicit local KUBEBUILDER_ASSETS required")
 	}
@@ -63,7 +67,8 @@ func TestLocalAPISafetySchemaAndRBAC(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	t.Run("schema without webhooks", func(t *testing.T) {
+	By("schema without webhooks", func() {
+		t := GinkgoTB()
 		far, _, _ := safetyFixture(t)
 		far.UID = ""
 		far.Generation = 0
@@ -100,7 +105,8 @@ func TestLocalAPISafetySchemaAndRBAC(t *testing.T) {
 			t.Fatalf("legacy schema changed: %v", err)
 		}
 	})
-	t.Run("known Node UUID uniqueness", func(t *testing.T) {
+	By("known Node UUID uniqueness", func() {
+		t := GinkgoTB()
 		node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "unique-target"}}
 		if err := admin.Create(ctx, node); err != nil {
 			t.Fatal(err)
@@ -126,7 +132,8 @@ func TestLocalAPISafetySchemaAndRBAC(t *testing.T) {
 			t.Fatal("real API duplicate UUID accepted")
 		}
 	})
-	t.Run("UID and resourceVersion conditional taints", func(t *testing.T) {
+	By("UID and resourceVersion conditional taints", func() {
+		t := GinkgoTB()
 		for _, removing := range []bool{false, true} {
 			name := "conditional-add"
 			if removing {
@@ -186,7 +193,8 @@ func TestLocalAPISafetySchemaAndRBAC(t *testing.T) {
 			}
 		}
 	})
-	t.Run("namespaced read grants", func(t *testing.T) {
+	By("namespaced read grants", func() {
+		t := GinkgoTB()
 		var role rbacv1.Role
 		data, err := os.ReadFile(filepath.Join("..", "..", "config", "rbac", "safety", "credential_role.yaml"))
 		if err != nil {
@@ -287,9 +295,10 @@ func TestLocalAPISafetySchemaAndRBAC(t *testing.T) {
 			}
 		}
 	})
-}
+})
 
-func TestSafetyCleanupAfterDeleteOnAPIServer(t *testing.T) {
+var _ = DescribeTable("cleans up after the API server increases generation on delete", func(retained, rejectWrite bool) {
+	t := GinkgoTB()
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Fatal("explicit local KUBEBUILDER_ASSETS required")
 	}
@@ -329,6 +338,10 @@ func TestSafetyCleanupAfterDeleteOnAPIServer(t *testing.T) {
 	}
 	far, _, _ := safetyFixture(t)
 	far.ObjectMeta = metav1.ObjectMeta{Name: "cleanup-after-delete", Namespace: "bmc", Finalizers: []string{farapi.FARFinalizer}, Annotations: identityAnnotations(node.Name, string(node.UID), systemUUID)}
+	const otherFinalizer = "example.com/other-controller"
+	if retained {
+		far.Finalizers = append(far.Finalizers, otherFinalizer)
+	}
 	if err := admin.Create(ctx, far); err != nil {
 		t.Fatal(err)
 	}
@@ -350,9 +363,35 @@ func TestSafetyCleanupAfterDeleteOnAPIServer(t *testing.T) {
 	if deleting.Generation == snapshot.Generation {
 		t.Fatalf("the API server kept generation %d on delete; this test needs the bump", deleting.Generation)
 	}
-	reconciler := &controller.FenceAgentsRemediationReconciler{Client: admin, APIReader: admin, Log: logr.Discard(), Recorder: record.NewFakeRecorder(10)}
-	if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(far)}); err != nil {
-		t.Fatalf("cleanup after delete: %v", err)
+	var records []string
+	logger := funcr.NewJSON(func(line string) { records = append(records, line) }, funcr.Options{})
+	writer := &cleanupWriteClient{Client: admin, rejectFinalizerWrite: rejectWrite}
+	reconciler := &controller.FenceAgentsRemediationReconciler{Client: writer, APIReader: admin, Log: logger, Recorder: record.NewFakeRecorder(10)}
+	cleanupMessages := func() int {
+		return strings.Count(strings.Join(records, "\n"), `"phase":"CleanedUp"`)
+	}
+	request := ctrl.Request{NamespacedName: client.ObjectKeyFromObject(far)}
+	if rejectWrite {
+		if _, err := reconciler.Reconcile(ctx, request); err == nil {
+			t.Fatal("cleanup accepted a rejected finalizer write")
+		}
+		if cleanupMessages() != 0 {
+			t.Fatal("cleanup was logged before its finalizer write succeeded")
+		}
+		if err := admin.Get(ctx, client.ObjectKeyFromObject(far), deleting); err != nil {
+			t.Fatal(err)
+		}
+		if !controllerutil.ContainsFinalizer(deleting, farapi.FARFinalizer) {
+			t.Fatal("the rejected update removed the FAR finalizer")
+		}
+	}
+	for range 3 {
+		if _, err := reconciler.Reconcile(ctx, request); err != nil {
+			t.Fatalf("cleanup after delete: %v", err)
+		}
+	}
+	if count := cleanupMessages(); count != 1 {
+		t.Errorf("CleanedUp logged %d times for one completed cleanup", count)
 	}
 	if err := admin.Get(ctx, client.ObjectKeyFromObject(node), node); err != nil {
 		t.Fatal(err)
@@ -361,7 +400,56 @@ func TestSafetyCleanupAfterDeleteOnAPIServer(t *testing.T) {
 	if utils.TaintExists(node.Spec.Taints, &oos) || utils.TaintExists(node.Spec.Taints, &remediation) {
 		t.Errorf("remediation taints left on the Node: %v", node.Spec.Taints)
 	}
-	if err := admin.Get(ctx, client.ObjectKeyFromObject(far), deleting); !apierrors.IsNotFound(err) {
+	if retained {
+		node.Spec.Taints = append(node.Spec.Taints, oos, remediation)
+		if err := admin.Update(ctx, node); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := reconciler.Reconcile(ctx, request); err != nil {
+			t.Fatal(err)
+		}
+		if err := admin.Get(ctx, client.ObjectKeyFromObject(node), node); err != nil {
+			t.Fatal(err)
+		}
+		if utils.TaintExists(node.Spec.Taints, &oos) || utils.TaintExists(node.Spec.Taints, &remediation) {
+			t.Fatal("suppressing the duplicate log bypassed the existing taint cleanup")
+		}
+		if cleanupMessages() != 1 {
+			t.Fatal("cleanup without our finalizer produced another lifecycle event")
+		}
+		if err := admin.Get(ctx, client.ObjectKeyFromObject(far), deleting); err != nil {
+			t.Fatal(err)
+		}
+		if len(deleting.Finalizers) != 1 || deleting.Finalizers[0] != otherFinalizer {
+			t.Fatalf("other controller's finalizer was not retained: %v", deleting.Finalizers)
+		}
+		deleting.Finalizers = nil
+		if err := admin.Update(ctx, deleting); err != nil {
+			t.Fatal(err)
+		}
+	} else if err := admin.Get(ctx, client.ObjectKeyFromObject(far), deleting); !apierrors.IsNotFound(err) {
 		t.Errorf("remediation still present: %v", err)
 	}
+},
+	Entry("without another finalizer", false, false),
+	Entry("while another controller retains the object", true, false),
+	Entry("after a finalizer write is rejected", true, true),
+)
+
+func hasOOS(node *corev1.Node) bool {
+	taint := utils.CreateOutOfServiceTaint()
+	return utils.TaintExists(node.Spec.Taints, &taint)
+}
+
+type cleanupWriteClient struct {
+	client.Client
+	rejectFinalizerWrite bool
+}
+
+func (c *cleanupWriteClient) Update(ctx context.Context, obj client.Object, options ...client.UpdateOption) error {
+	if _, ok := obj.(*farapi.FenceAgentsRemediation); ok && c.rejectFinalizerWrite {
+		c.rejectFinalizerWrite = false
+		return errors.New("cleanup finalizer write rejected")
+	}
+	return c.Client.Update(ctx, obj, options...)
 }
