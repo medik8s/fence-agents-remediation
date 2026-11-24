@@ -16,16 +16,23 @@ package controller
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/medik8s/fence-agents-remediation/v5/api/v1alpha1"
 	"github.com/medik8s/fence-agents-remediation/v5/pkg/cli"
@@ -201,3 +208,31 @@ func verifySuccess(fart *v1alpha1.FenceAgentsRemediationTemplate) {
 		g.Expect(cond.Reason).To(Equal(ReasonValidationSucceeded))
 	}, "5s", "200ms").Should(Succeed())
 }
+
+var _ = It("never executes a generic agent for a safety template", func() {
+	t := GinkgoT()
+	far, config, secret := safetyFixture(t)
+	tmpl := &v1alpha1.FenceAgentsRemediationTemplate{ObjectMeta: far.ObjectMeta}
+	tmpl.Spec.Template.Spec = far.Spec
+	tmpl.Spec.Template.Spec.NodeParameters = map[v1alpha1.ParameterName]map[v1alpha1.NodeName]string{"--ip": {"worker-a": "bmc.example"}}
+	sample := intstr.FromInt32(1)
+	tmpl.Spec.StatusValidationSample = &sample
+	scheme := runtime.NewScheme()
+	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(tmpl).WithObjects(tmpl, secret).Build()
+	var calls atomic.Int32
+	recorder := record.NewFakeRecorder(10)
+	executor := cli.NewFakeExecuter(c, func(context.Context, []string) (string, string, error) { calls.Add(1); return "ON", "", nil }, recorder)
+	r := &FenceAgentsRemediationTemplateReconciler{Client: c, Log: logr.Discard(), Executor: executor, Recorder: recorder, Safety: config}
+	if _, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: client.ObjectKeyFromObject(tmpl)}); err == nil {
+		t.Error("unsafe template sampling accepted")
+	}
+	if calls.Load() != 0 {
+		t.Fatal("safety template executed generic agent")
+	}
+})

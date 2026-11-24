@@ -50,10 +50,12 @@ import (
 // FenceAgentsRemediationReconciler reconciles a FenceAgentsRemediation object
 type FenceAgentsRemediationReconciler struct {
 	client.Client
-	Log      logr.Logger
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-	Executor *cli.Executer
+	Log       logr.Logger
+	Scheme    *runtime.Scheme
+	Recorder  record.EventRecorder
+	Executor  *cli.Executer
+	APIReader client.Reader
+	Safety    v1alpha1.SafetyConfig
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -100,6 +102,10 @@ func (r *FenceAgentsRemediationReconciler) Reconcile(ctx context.Context, req ct
 		}
 		r.Log.Error(err, "Failed to get FenceAgentsRemediation CR")
 		return emptyResult, err
+	}
+
+	if r.Safety.Enabled || far.Spec.SafetyPolicy != "" || far.Status.SafetySnapshot != nil || far.Status.OffProof != nil {
+		return r.reconcileSafety(ctx, req)
 	}
 
 	// At the end of each Reconcile we try to update CR's status

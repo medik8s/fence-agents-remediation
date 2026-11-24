@@ -30,4 +30,4 @@ export GOEXPERIMENT="${GOEXPERIMENT}"
 
 # detect target arch from Go toolchain, default to amd64
 GOARCH=$(go env GOARCH)
-GOOS=linux GOARCH=${GOARCH:-amd64} go build -o manager cmd/main.go
+GOOS=linux GOARCH=${GOARCH:-amd64} go build -o manager ./cmd

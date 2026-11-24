@@ -107,6 +107,12 @@ spec:
                           agent execution
                         pattern: ^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$
                         type: string
+                      safetyPolicy:
+                        description: SafetyPolicy opts into identity-bound Redfish
+                          Off verification.
+                        enum:
+                        - RedfishOffV1
+                        type: string
                       sharedSecretName:
                         description: |-
                           SharedSecretName is the name of the Secret which contains shared fence agent parameters.

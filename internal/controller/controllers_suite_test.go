@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -64,6 +65,7 @@ var (
 
 // peekLogger allows to inspect operator's log for testing purpose.
 type peekLogger struct {
+	mu   sync.Mutex
 	logs []string
 }
 
@@ -72,11 +74,15 @@ func (p *peekLogger) Write(b []byte) (n int, err error) {
 	if err != nil {
 		return n, err
 	}
+	p.mu.Lock()
 	p.logs = append(p.logs, string(b))
+	p.mu.Unlock()
 	return n, err
 }
 
 func (p *peekLogger) Contains(s string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	for _, log := range p.logs {
 		if strings.Contains(log, s) {
 			return true
@@ -87,6 +93,8 @@ func (p *peekLogger) Contains(s string) bool {
 
 // CountOccurences returns number of occurences of string s in logs.
 func (p *peekLogger) CountOccurences(s string) int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	count := 0
 	for _, log := range p.logs {
 		if strings.Contains(log, s) {
@@ -97,6 +105,8 @@ func (p *peekLogger) CountOccurences(s string) int {
 }
 
 func (p *peekLogger) Clear() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.logs = make([]string, 0)
 }
 
@@ -187,3 +197,39 @@ func controlledRun(ctx context.Context, command []string) (stdout, stderr string
 
 	return "", "", mockError
 }
+
+var _ = Describe("Controller test logger", func() {
+	It("supports concurrent writes, searches, counts and resets", func() {
+		logger := &peekLogger{}
+		start := make(chan struct{})
+		var workers sync.WaitGroup
+		for mode := range 4 {
+			workers.Add(1)
+			go func() {
+				defer GinkgoRecover()
+				defer workers.Done()
+				<-start
+				for range 128 {
+					switch mode {
+					case 0:
+						_, err := logger.Write([]byte("concurrent-entry\n"))
+						Expect(err).NotTo(HaveOccurred())
+					case 1:
+						logger.Contains("concurrent-entry")
+					case 2:
+						logger.CountOccurences("concurrent-entry")
+					case 3:
+						logger.Clear()
+					}
+				}
+			}()
+		}
+		close(start)
+		workers.Wait()
+		logger.Clear()
+		_, err := logger.Write([]byte("final-entry"))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(logger.Contains("final-entry")).To(BeTrue())
+		Expect(logger.CountOccurences("final-entry")).To(Equal(1))
+	})
+})
